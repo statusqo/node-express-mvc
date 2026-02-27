@@ -1,0 +1,13 @@
+- const footerMenu = menus && menus.footer ? menus.footer : []
+
+if footerMenu && footerMenu.length
+  nav(class="footer-nav" aria-label="Footer navigation")
+    ul(class="footer-links")
+      each link in footerMenu
+        li(class="footer-link-item")
+          a(class="footer-link" href=link.url target=link.target || "_self")= link.label
+          if link.children && link.children.length
+            ul(class="footer-sublinks")
+              each child in link.children
+                li
+                  a(class="footer-sublink" href=child.url target=child.target || "_self")= child.label

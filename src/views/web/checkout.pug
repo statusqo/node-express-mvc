@@ -1,0 +1,134 @@
+extends ../layouts/main
+
+block content
+  h1 Checkout
+  if !lines || lines.length === 0
+    p Your cart is empty.
+    a(href="/cart") View cart
+  else
+    section(style="margin-bottom:1.5rem; padding:1rem; border:1px solid #e0e0e0; border-radius:8px; background:#fafafa")
+      h2(style="margin:0 0 0.75rem 0; font-size:1.1rem") Order summary
+      ul(style="list-style:none; padding:0; margin:0")
+        each line in lines
+          - const variant = line.ProductVariant || {}
+          - const product = variant.Product || {}
+          - const priceRow = variant.ProductPrices && variant.ProductPrices[0]
+          - const title = line.title || (product && product.title) || variant.title || ''
+          - const price = line.price != null ? Number(line.price) : (priceRow ? Number(priceRow.amount) : 0)
+          - const qty = line.quantity || 1
+          - const lineSubtotal = price * qty
+          - const currency = priceRow && priceRow.currency ? priceRow.currency : (checkoutCurrency || 'USD')
+          li(style="padding:0.35rem 0; display:flex; justify-content:space-between")
+            span= title + " × " + qty
+            span= (lineSubtotal).toFixed(2) + " " + currency
+      div(style="margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid #e0e0e0; display:flex; justify-content:space-between; font-weight:600")
+        span Total to pay
+        span#checkoutTotalDisplay= (checkoutTotal != null ? Number(checkoutTotal).toFixed(2) : '0.00') + " " + (checkoutCurrency || 'USD')
+      p(style="margin:0.5rem 0 0; font-size:0.9rem; color:#555") You will be charged exactly this amount when you click Place order.
+
+    form#checkoutForm(action="/checkout" method="post" data-stripe-key=(stripePublishableKey || '') data-user-logged-in=(user ? '1' : '') data-requires-address=(requiresAddress ? '1' : '0'))
+      if user
+        p(style="margin-bottom:1rem; padding:0.75rem; background:#e8f4fd; border-radius:6px; font-size:0.95rem")
+          | You can 
+          a(href="/account") save your address in your account
+          |  to speed up future checkouts.
+
+      h3(style="margin-top:1rem") Contact &amp; delivery details
+      div(style="margin-bottom:0.75rem")
+        label(for="forename") Forename *
+        input#forename(name="forename" type="text" required value=(user && user.forename) || '')
+      div(style="margin-bottom:0.75rem")
+        label(for="surname") Surname
+        input#surname(name="surname" type="text" value=(user && user.surname) || '')
+      div(style="margin-bottom:0.75rem")
+        label(for="email") Email *
+        input#email(name="email" type="email" required value=(user && user.email) || '')
+      div(style="margin-bottom:0.75rem")
+        label(for="mobile") Mobile
+        input#mobile(name="mobile" type="tel" value=(user && user.mobile) || '')
+
+      if requiresAddress
+        h3(style="margin-top:1rem") Delivery address
+        div(style="margin-bottom:0.75rem")
+          label(for="deliveryLine1") Address line 1 *
+          input#deliveryLine1(name="deliveryLine1" type="text" required value=(deliveryAddress && deliveryAddress.line1))
+        div(style="margin-bottom:0.75rem")
+          label(for="deliveryLine2") Address line 2
+          input#deliveryLine2(name="deliveryLine2" type="text" value=(deliveryAddress && deliveryAddress.line2))
+        div(style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem; margin-bottom:0.75rem")
+          div
+            label(for="deliveryCity") City *
+            input#deliveryCity(name="deliveryCity" type="text" required value=(deliveryAddress && deliveryAddress.city))
+          div
+            label(for="deliveryPostcode") Postcode *
+            input#deliveryPostcode(name="deliveryPostcode" type="text" required value=(deliveryAddress && deliveryAddress.postcode))
+        div(style="margin-bottom:0.75rem")
+          label(for="deliveryState") State / Region
+          input#deliveryState(name="deliveryState" type="text" value=(deliveryAddress && deliveryAddress.state))
+        div(style="margin-bottom:0.75rem")
+          label(for="deliveryCountry") Country *
+          input#deliveryCountry(name="deliveryCountry" type="text" required value=(deliveryAddress && deliveryAddress.country))
+
+      h3(style="margin-top:1rem") Payment
+      if stripePublishableKey
+        p(style="margin-bottom:0.75rem; font-size:0.95rem") Payment is processed securely by Stripe. Your card details never touch our servers.
+        if paymentMethods && paymentMethods.length > 0
+          div(style="margin-bottom:0.75rem")
+            label(style="display:block; font-size:0.9rem; margin-bottom:0.35rem") Pay with
+            div(style="display:flex; flex-direction:column; gap:0.35rem")
+              label(style="display:flex; align-items:center; gap:0.5rem; cursor:pointer")
+                input#paySavedCard(type="radio" name="payWith" value="saved" checked=(paymentMethods.length > 0))
+                | Use a saved card
+              label(style="display:flex; align-items:center; gap:0.5rem; cursor:pointer")
+                input#payNewCard(type="radio" name="payWith" value="new")
+                | Use a new card
+            div#savedCardSelect(style="margin-top:0.5rem; margin-left:1.5rem")
+              select#savedPaymentMethod(name="savedPaymentMethod" style="min-width:12rem; padding:0.35rem")
+                each pm in paymentMethods
+                  option(value=pm.gatewayToken)= (pm.brand || 'Card') + ' ****' + (pm.last4 || '????') + (pm.isDefault ? ' (Default)' : '')
+        div#cardElementWrap(style="margin-top:0.75rem; padding:0.75rem; border:1px solid #ccc; border-radius:6px; margin-bottom:0.5rem; background:#fff")
+          div#card-element
+        input#saveCardHidden(type="hidden" name="saveCard" value="0")
+        if user
+          div.saveCardRow(style="margin-top:0.5rem; margin-bottom:0.5rem")
+            label(style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.95rem")
+              input#saveCardCheckbox(name="saveCardCheckbox" type="checkbox" value="1")
+              | Save this card for later
+        div#cardErrors(style="color:#c00; font-size:0.9rem; margin-bottom:1rem" role="alert")
+      else
+        p(style="margin-bottom:1rem; padding:0.75rem; background:#f0f7ff; border-radius:6px; font-size:0.9rem; color:#333")
+          | Payment gateway is not configured. After you click &quot;Place order&quot;, you will see your order and can complete payment when Stripe is set up.
+
+      h3(style="margin-top:1rem") Billing address
+      if requiresAddress
+        div(style="margin-bottom:0.75rem")
+          label(style="display:flex; align-items:center; gap:0.5rem; cursor:pointer")
+            input#sameAsDelivery(name="sameAsDelivery" type="checkbox" value="1" checked=sameAsDelivery)
+            | Same as delivery
+      div#billingFields
+        div(style="margin-bottom:0.75rem")
+          label(for="billingLine1") Address line 1 *
+          input#billingLine1(name="billingLine1" type="text" value=(sameAsDelivery && deliveryAddress ? deliveryAddress.line1 : (billingAddress && billingAddress.line1)))
+        div(style="margin-bottom:0.75rem")
+          label(for="billingLine2") Address line 2
+          input#billingLine2(name="billingLine2" type="text" value=(sameAsDelivery && deliveryAddress ? deliveryAddress.line2 : (billingAddress && billingAddress.line2)))
+        div(style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem; margin-bottom:0.75rem")
+          div
+            label(for="billingCity") City *
+            input#billingCity(name="billingCity" type="text" value=(sameAsDelivery && deliveryAddress ? deliveryAddress.city : (billingAddress && billingAddress.city)))
+          div
+            label(for="billingPostcode") Postcode *
+            input#billingPostcode(name="billingPostcode" type="text" value=(sameAsDelivery && deliveryAddress ? deliveryAddress.postcode : (billingAddress && billingAddress.postcode)))
+        div(style="margin-bottom:0.75rem")
+          label(for="billingState") State / Region
+          input#billingState(name="billingState" type="text" value=(sameAsDelivery && deliveryAddress ? deliveryAddress.state : (billingAddress && billingAddress.state)))
+        div(style="margin-bottom:0.75rem")
+          label(for="billingCountry") Country *
+          input#billingCountry(name="billingCountry" type="text" value=(sameAsDelivery && deliveryAddress ? deliveryAddress.country : (billingAddress && billingAddress.country)))
+
+      button#placeOrderBtn(type="submit" class="button" style="margin-top:1rem") Place order
+
+block append scripts
+  if stripePublishableKey
+    script(src="https://js.stripe.com/v3/")
+  script(src="/public/js/checkout.js")

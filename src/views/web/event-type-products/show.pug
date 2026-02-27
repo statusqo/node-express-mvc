@@ -1,0 +1,43 @@
+extends ../../layouts/main
+
+block content
+  article
+    h1= product.title
+    if product.description
+      div(style="margin:1rem 0")= product.description
+    - const variant = product.ProductVariants && product.ProductVariants[0]
+    - const priceRow = variant && variant.ProductPrices && variant.ProductPrices[0]
+    - const priceAmount = priceRow ? Number(priceRow.amount) : null
+    - const currency = priceRow ? priceRow.currency : 'USD'
+    if priceAmount != null
+      p(style="font-size:1.25rem") #{Number(priceAmount).toFixed(2)} #{currency}
+
+    if events && events.length
+      h2(style="font-size:1.25rem; margin-top:1.5rem") Sessions
+      ul(style="list-style:none; padding:0; margin:0")
+        each ev in events
+          - const seatsRemaining = ev.ProductVariant && ev.ProductVariant.quantity != null ? Number(ev.ProductVariant.quantity) : 0
+          - const hasStock = ev.productVariantId && seatsRemaining > 0
+          li(style="border:1px solid #eee; padding:0.75rem; margin-bottom:0.5rem; display:flex; flex-wrap:wrap; align-items:center; gap:0.5rem")
+            span= ev.startDate ? ev.startDate : '—'
+            if ev.startTime
+              span(style="margin-left:0.5rem")= String(ev.startTime).substring(0, 5)
+            if ev.location
+              span(style="margin-left:0.5rem; color:#666")= ev.location
+            if ev.capacity != null
+              span(style="margin-left:0.5rem; color:#666") Capacity: #{ev.capacity}
+            if ev.ProductVariant && ev.ProductVariant.quantity != null
+              span(style="margin-left:0.5rem; color:#666") Seats remaining: #{seatsRemaining}
+            if ev.productVariantId
+              if hasStock
+                form.js-add-to-cart-form(action="/cart/add" method="post" style="display:inline; margin-left:auto")
+                  input(type="hidden" name="productVariantId" value=ev.productVariantId)
+                  input(type="hidden" name="quantity" value="1")
+                  button(type="submit" class="button" style="padding:0.35rem 0.75rem; font-size:0.9rem") Add to cart
+                a.button(href="/" + sectionPath + "/" + product.slug + "/register?eventId=" + ev.id style="margin-left:0.5rem; padding:0.35rem 0.75rem; font-size:0.9rem; display:inline-block") Register now
+              else
+                span(style="margin-left:auto; color:#999; font-size:0.9rem") Sold out
+    else
+      p(style="margin-top:1rem") No sessions scheduled yet. Check back later.
+
+  a(href="/" + sectionPath) Back to #{typeLabel}

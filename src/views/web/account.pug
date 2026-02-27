@@ -1,0 +1,149 @@
+extends ../layouts/main
+
+block append links
+  link(rel="stylesheet" href="/public/css/account.css")
+  style.
+    .js-billing-hidden { display: none !important; }
+
+block append scripts
+  script(src="/public/js/account.js")
+  if stripePublishableKey
+    script(src="https://js.stripe.com/v3/")
+  script(src="/public/js/addresses-profile.js")
+  if stripePublishableKey
+    script(src="/public/js/account-payment-methods.js" data-stripe-key=stripePublishableKey)
+
+block content
+  h1 Account
+  if user
+    p You are logged in as #{user.email}
+    form(action="/auth/logout" method="post" style="margin-bottom:1em")
+      button.button(type="submit") Log out
+
+    h2(style="margin-top:1.5rem") Contact details
+    form(action="/account/profile" method="post" style="margin-bottom:1rem")
+      div(style="margin-bottom:0.5rem")
+        label(for="profileForename") Forename
+        input#profileForename(name="forename" type="text" value=user.forename || '' style="margin-left:0.5rem")
+      div(style="margin-bottom:0.5rem")
+        label(for="profileSurname") Surname
+        input#profileSurname(name="surname" type="text" value=user.surname || '' style="margin-left:0.5rem")
+      div(style="margin-bottom:0.5rem")
+        label(for="profileMobile") Mobile
+        input#profileMobile(name="mobile" type="tel" value=user.mobile || '' style="margin-left:0.5rem")
+      button.button(type="submit") Save
+
+    h2(style="margin-top:1.5rem") Delivery &amp; billing address
+    if errors && errors.length
+      ul(style="color:red; margin-bottom:1rem")
+        each e in errors
+          li= e.path ? (e.path + ": " + (e.message || "invalid")) : (e.message || "invalid")
+
+    if delivery && delivery.line1
+      div#addressView(style="margin-bottom:1.5rem")
+        h3(style="margin-top:0.5rem") Delivery address
+        p(style="margin:0.25rem 0")= delivery.line1
+        if delivery.line2
+          p(style="margin:0.25rem 0")= delivery.line2
+        p(style="margin:0.25rem 0")= [delivery.city, delivery.state, delivery.postcode].filter(Boolean).join(', ')
+        p(style="margin:0.25rem 0")= delivery.country
+
+        h3(style="margin-top:1rem") Billing address
+        if sameAsDelivery
+          p(style="margin:0.25rem 0") Same as delivery address
+        else if billing && billing.line1
+          p(style="margin:0.25rem 0")= billing.line1
+          if billing.line2
+            p(style="margin:0.25rem 0")= billing.line2
+          p(style="margin:0.25rem 0")= [billing.city, billing.state, billing.postcode].filter(Boolean).join(', ')
+          p(style="margin:0.25rem 0")= billing.country
+
+        button#editAddressBtn(type="button" class="button" style="margin-top:1rem") Edit
+
+    div#addressFormWrap(style=(delivery && delivery.line1 ? "display:none" : ""))
+      form(action="/account/addresses/save-profile" method="post" id="addressForm")
+        h3(style="margin-top:0.5rem") Delivery address
+        div(style="margin-bottom:0.75rem")
+          label(for="deliveryLine1") Address line 1 *
+          input#deliveryLine1(name="deliveryLine1" type="text" required value=delivery && delivery.line1)
+        div(style="margin-bottom:0.75rem")
+          label(for="deliveryLine2") Address line 2
+          input#deliveryLine2(name="deliveryLine2" type="text" value=delivery && delivery.line2)
+        div(style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem; margin-bottom:0.75rem")
+          div
+            label(for="deliveryCity") City *
+            input#deliveryCity(name="deliveryCity" type="text" required value=delivery && delivery.city)
+          div
+            label(for="deliveryPostcode") Postcode *
+            input#deliveryPostcode(name="deliveryPostcode" type="text" required value=delivery && delivery.postcode)
+        div(style="margin-bottom:0.75rem")
+          label(for="deliveryState") State / Region
+          input#deliveryState(name="deliveryState" type="text" value=delivery && delivery.state)
+        div(style="margin-bottom:0.75rem")
+          label(for="deliveryCountry") Country *
+          input#deliveryCountry(name="deliveryCountry" type="text" required value=delivery && delivery.country)
+
+        div(style="margin-top:1.25rem; margin-bottom:0.75rem")
+          label(style="display:flex; align-items:center; gap:0.5rem; cursor:pointer")
+            input#sameAsDelivery(name="sameAsDelivery" type="checkbox" value="1" checked=sameAsDelivery)
+            | Same as delivery address
+        div#billingSection(class=(sameAsDelivery ? "js-billing-hidden" : ""))
+          h3(style="margin-top:0; margin-bottom:0.75rem") Billing address
+          div#billingFields(style="margin-bottom:0.75rem")
+            div(style="margin-bottom:0.75rem")
+              label(for="billingLine1") Address line 1 *
+              input#billingLine1(name="billingLine1" type="text" value=billing && billing.line1)
+            div(style="margin-bottom:0.75rem")
+              label(for="billingLine2") Address line 2
+              input#billingLine2(name="billingLine2" type="text" value=billing && billing.line2)
+            div(style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem; margin-bottom:0.75rem")
+              div
+                label(for="billingCity") City *
+                input#billingCity(name="billingCity" type="text" value=billing && billing.city)
+              div
+                label(for="billingPostcode") Postcode *
+                input#billingPostcode(name="billingPostcode" type="text" value=billing && billing.postcode)
+            div(style="margin-bottom:0.75rem")
+              label(for="billingState") State / Region
+              input#billingState(name="billingState" type="text" value=billing && billing.state)
+            div(style="margin-bottom:0.75rem")
+              label(for="billingCountry") Country *
+              input#billingCountry(name="billingCountry" type="text" value=billing && billing.country)
+
+        button.button(type="submit" style="margin-top:1rem") Save addresses
+
+    h2(style="margin-top:1.5rem") Payment methods
+    if !paymentMethods || paymentMethods.length === 0
+      p You have no saved payment methods yet.
+      p(style="margin-top:0.5rem; color:#555; font-size:0.95rem")
+        | When you pay at checkout with a card, you can choose to save it for future orders. You can also add a card below. Saved cards appear here so you can set a default or remove them. Payment is handled securely by Stripe.
+    else
+      ul(style="list-style:none; padding:0")
+        each pm in paymentMethods
+          li(style="border:1px solid #ddd; padding:1rem; margin-bottom:0.5rem")
+            span= (pm.brand || "Card") + " ****" + (pm.last4 || "????")
+            if pm.isDefault
+              span(style="margin-left:0.5rem") (Default)
+            div(style="margin-top:0.5rem")
+              if !pm.isDefault
+                form(action="/account/payment-methods/" + pm.id + "/default" method="post" style="display:inline")
+                  button.button(type="submit") Set default
+              form(action="/account/payment-methods/" + pm.id + "/delete" method="post" style="display:inline; margin-left:0.5rem")
+                button.button(type="submit") Remove
+
+    if stripePublishableKey
+      div(style="margin-top:1rem; padding:1rem; border:1px solid #ddd; border-radius:8px; background:#fafafa")
+        h3(style="margin:0 0 0.5rem 0; font-size:1rem") Add a card
+        p(style="margin:0 0 0.75rem 0; font-size:0.9rem; color:#555") Your card is stored securely by Stripe.
+        div#addCardElementWrap(style="padding:0.75rem; border:1px solid #ccc; border-radius:6px; margin-bottom:0.5rem; background:#fff")
+          div#add-card-element
+        div#addCardErrors(style="color:#c00; font-size:0.9rem; margin-bottom:0.5rem" role="alert")
+        button#saveCardBtn(type="button" class="button") Save card
+
+    h2(style="margin-top:1.5rem") Orders
+    p
+      a(href="/orders") My orders
+
+  else
+    p Not logged in.
+

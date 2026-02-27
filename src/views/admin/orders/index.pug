@@ -1,0 +1,118 @@
+extends ../../layouts/admin
+
+block append links
+    link(rel='preconnect' href='https://fonts.googleapis.com')
+    link(rel='preconnect' href='https://fonts.gstatic.com' crossorigin)
+
+block content
+    .da-page
+
+        if flash && flash.message
+            p.admin-flash(class='admin-flash-' + (flash.type || 'info'))= flash.message
+
+        //- ── Page header ─────────────────────────────────────────────
+        .da-page-header
+            .da-page-header-left
+                h1.da-page-title Orders
+                p.da-page-subtitle= orders ? orders.length + ' result' + (orders.length !== 1 ? 's' : '') : '0 results'
+
+        //- ── Filter bar ──────────────────────────────────────────────
+        form.da-filter-bar(method='get' action=(adminPrefix || '') + '/orders')
+            .da-filter-head
+                span.da-filter-head-label Filters
+                a.da-filter-clear(href=(adminPrefix || '') + '/orders') Clear all
+
+            .da-filter-group
+                label.da-filter-group-label(for='filter-paymentStatus') Payment status
+                select#filter-paymentStatus.da-form-select(name='paymentStatus')
+                    option(value='' selected=(!filters.paymentStatus)) All
+                    each s in validPaymentStatuses
+                        option(value=s selected=(filters.paymentStatus === s))= s.charAt(0).toUpperCase() + s.slice(1)
+
+            .da-filter-group
+                label.da-filter-group-label(for='filter-fulfillmentStatus') Fulfillment
+                select#filter-fulfillmentStatus.da-form-select(name='fulfillmentStatus')
+                    option(value='' selected=(!filters.fulfillmentStatus)) All
+                    each s in validFulfillmentStatuses
+                        option(value=s selected=(filters.fulfillmentStatus === s))= s.charAt(0).toUpperCase() + s.slice(1)
+
+            .da-filter-group
+                label.da-filter-group-label(for='filter-refundRequest') Refund
+                select#filter-refundRequest.da-form-select(name='refundRequest')
+                    option(value='' selected=(!filters.refundRequest)) All
+                    option(value='pending' selected=(filters.refundRequest === 'pending')) Pending refund
+
+            .da-filter-group
+                label.da-filter-group-label(for='filter-dateFrom') From
+                input#filter-dateFrom.da-form-input(
+                    type='date'
+                    name='dateFrom'
+                    value=filters.dateFrom || ''
+                )
+
+            .da-filter-group
+                label.da-filter-group-label(for='filter-dateTo') To
+                input#filter-dateTo.da-form-input(
+                    type='date'
+                    name='dateTo'
+                    value=filters.dateTo || ''
+                )
+
+            .da-filter-actions
+                button.da-btn.da-btn--primary(type='submit')
+                    svg(xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                        polygon(points='22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3')
+                    | Apply
+
+        //- ── Orders table ────────────────────────────────────────────
+        .da-panel
+            .da-table-scroll
+                table.da-table(role='table' aria-label='Orders list')
+                    thead
+                        tr
+                            th(scope='col') Order ID
+                            th.da-col-customer(scope='col') Customer
+                            th(scope='col') Payment
+                            th(scope='col') Fulfillment
+                            th.da-col-created(scope='col') Total
+                            th.da-col-created(scope='col') Date
+                            th(scope='col' style='text-align:right') Actions
+                    tbody
+                        if orders && orders.length
+                            each order in orders
+                                - var payClass = ({paid:'success',pending:'warning',failed:'danger',refunded:'info',cancelled:'neutral'})[order.paymentStatus] || 'neutral'
+                                - var fulClass = ({fulfilled:'success',pending:'warning',partially_fulfilled:'info',unfulfilled:'neutral',cancelled:'neutral'})[order.fulfillmentStatus] || 'neutral'
+                                tr
+                                    td
+                                        span.da-cell-mono= order.id ? order.id.slice(0, 8) + '…' : '—'
+                                    td.da-col-customer
+                                        span.da-cell-secondary= order.email || (order.userId ? 'User #' + order.userId : 'Guest')
+                                    td
+                                        if order.paymentStatus
+                                            span.da-badge(class='da-badge--' + payClass)= order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)
+                                        else
+                                            span.da-cell-muted —
+                                    td
+                                        if order.fulfillmentStatus
+                                            span.da-badge(class='da-badge--' + fulClass)= order.fulfillmentStatus.charAt(0).toUpperCase() + order.fulfillmentStatus.slice(1).replace(/_/g, ' ')
+                                        else
+                                            span.da-cell-muted —
+                                    td.da-col-created
+                                        span.da-cell-secondary= order.total != null ? Number(order.total).toFixed(2) + ' ' + (order.currency || 'USD') : '—'
+                                    td.da-col-created
+                                        span.da-cell-muted= order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '—'
+                                    td
+                                        .da-cell-actions
+                                            a.da-row-btn.da-row-btn--edit(
+                                                href=(adminPrefix || '') + '/orders/' + order.id + '/edit'
+                                                aria-label='Edit order ' + (order.id ? order.id.slice(0, 8) : '')
+                                            ) Edit
+                        else
+                            tr
+                                td(colspan='7')
+                                    .da-table-empty
+                                        svg(xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true' style='color:var(--ds-text-3);margin-bottom:0.25rem')
+                                            path(d='M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z')
+                                            line(x1='3' y1='6' x2='21' y2='6')
+                                            path(d='M16 10a4 4 0 0 1-8 0')
+                                        span No orders found matching your filters.

@@ -1,0 +1,83 @@
+extends ../../layouts/admin
+include ../../fragments/admin/media-picker-section
+
+block append links
+    link(rel='preconnect' href='https://fonts.googleapis.com')
+    link(rel='preconnect' href='https://fonts.gstatic.com' crossorigin)
+
+block content
+    .da-page
+
+        //- ── Page header ─────────────────────────────────────────────
+        .da-page-header
+            .da-page-header-left
+                h1.da-page-title= isEdit ? 'Edit Collection' : 'New Collection'
+                p.da-page-subtitle= isEdit && collection && collection.title ? collection.title : 'Define a collection and attach media'
+            .da-page-header-right
+                a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/collections')
+                    svg(xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                        polyline(points='15 18 9 12 15 6')
+                    | Back to Collections
+
+        if error
+            p.admin-flash.admin-flash-error= error
+
+        //- ── Form ─────────────────────────────────────────────────────
+        .da-card(style='max-width: 640px;')
+            form(
+                method='post'
+                action=isEdit ? (adminPrefix || '') + '/collections/' + collection.id + '/edit' : (adminPrefix || '') + '/collections/new'
+            )
+                .da-card-body
+                    .da-form-section
+                        h2.da-form-section-label Details
+                        .da-form-group
+                            label.da-form-label(for='title')
+                                | Title
+                                span.req *
+                            input#title.da-form-input(
+                                type='text'
+                                name='title'
+                                required
+                                value=collection ? collection.title : ''
+                                placeholder='Collection title'
+                                autofocus
+                            )
+                        .da-form-group
+                            label.da-form-label(for='slug') Slug
+                            input#slug.da-form-input(
+                                type='text'
+                                name='slug'
+                                value=collection ? collection.slug : ''
+                                placeholder='Auto-generated from title if left blank'
+                            )
+                            p.da-form-hint Leave blank to generate from title. Lowercase letters, numbers, and hyphens only.
+                        .da-form-group
+                            label.da-form-label(for='description') Description
+                            textarea#description.da-form-input(
+                                name='description'
+                                rows='4'
+                                placeholder='Optional description'
+                            )= collection ? collection.description : ''
+
+                    .da-form-section
+                        h2.da-form-section-label Media
+                        +mediaPickerSection({
+                            inputName: 'mediaIds[]',
+                            attachedMedia: attachedMedia || [],
+                            uploadsBaseUrl: uploadsBaseUrl || '/uploads',
+                            apiUrl: (adminPrefix || '') + '/api/media',
+                            label: 'Media',
+                            hint: 'Select media to attach to this collection. Upload new files on the Media page, then select them here.'
+                        })
+
+                    .da-form-section
+                        h2.da-form-section-label Visibility
+                        .da-form-group
+                            label.admin-checkbox
+                                input(type='checkbox' name='active' value='on' checked=(collection === null || collection.active))
+                                | Active
+
+                .da-card-footer
+                    button.da-btn.da-btn--primary(type='submit')= isEdit ? 'Update' : 'Create'
+                    a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/collections') Cancel

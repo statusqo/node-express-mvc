@@ -1,0 +1,26 @@
+extends ../layouts/main
+
+block content
+  h1 Login
+  if error
+    p(style="color:red") #{error}
+
+  form(action="/auth/login" method="post")
+    if returnTo
+      input(type="hidden" name="returnTo" value=returnTo)
+    label(for="identifier") Username or Email
+    input#identifier(type="text" name="identifier" required)
+    
+    label(for="password") Password
+    input#password(type="password" name="password" required)
+    
+    button(type="submit") Sign in
+
+  if googleAuthEnabled
+    p Or
+    - const googleHref = returnTo ? "/auth/google?returnTo=" + encodeURIComponent(returnTo) : "/auth/google"
+    p
+      a(href=googleHref) Sign in with Google
+
+  p Don't have an account? 
+    a(href="/auth/register") Register

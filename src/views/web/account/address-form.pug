@@ -1,0 +1,39 @@
+extends ../../layouts/main
+
+block content
+  h1= title
+  p
+    a(href="/account") Back to account
+
+  if errors && errors.length
+    ul(style="color:red")
+      each e in errors
+        li= e.path + ": " + (e.message || "invalid")
+
+  form(action=address && address.id ? "/account/addresses/" + address.id : "/account/addresses" method="post")
+    label(for="label") Label (e.g. Home, Work)
+    input#label(type="text" name="label" value=address && address.label)
+    br
+    label(for="line1") Address line 1 *
+    input#line1(type="text" name="line1" required value=address && address.line1)
+    br
+    label(for="line2") Address line 2
+    input#line2(type="text" name="line2" value=address && address.line2)
+    br
+    label(for="city") City *
+    input#city(type="text" name="city" required value=address && address.city)
+    br
+    label(for="state") State / Region
+    input#state(type="text" name="state" value=address && address.state)
+    br
+    label(for="postcode") Postcode *
+    input#postcode(type="text" name="postcode" required value=address && address.postcode)
+    br
+    label(for="country") Country *
+    input#country(type="text" name="country" required value=address && address.country)
+    br
+    label
+      input(type="checkbox" name="isDefault" value="1" checked=address && address.isDefault)
+      | Default address
+    br
+    button(type="submit")= address && address.id ? "Update" : "Add address"

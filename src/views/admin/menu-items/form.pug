@@ -1,0 +1,116 @@
+extends ../../layouts/admin
+
+block append links
+    link(rel='preconnect' href='https://fonts.googleapis.com')
+    link(rel='preconnect' href='https://fonts.gstatic.com' crossorigin)
+
+block content
+    .da-page
+
+        //- ── Page header ─────────────────────────────────────────────
+        .da-page-header
+            .da-page-header-left
+                h1.da-page-title= isEdit ? 'Edit Menu Item' : 'New Menu Item'
+                p.da-page-subtitle= isEdit && menuItem && menuItem.label ? menuItem.label : 'Add a link to a menu'
+            .da-page-header-right
+                a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/menu-items' + (menuSlug ? '?menu=' + menuSlug : ''))
+                    svg(xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                        polyline(points='15 18 9 12 15 6')
+                    | Back to Menu Items
+
+        if error
+            p.admin-flash.admin-flash-error= error
+
+        //- ── Form ─────────────────────────────────────────────────────
+        .da-card(style='max-width: 640px;')
+            form(
+                method='post'
+                action=isEdit ? (adminPrefix || '') + '/menu-items/' + menuItem.id + '/edit' : (adminPrefix || '') + '/menu-items/new'
+            )
+                .da-card-body
+                    .da-form-section
+                        h2.da-form-section-label Navigation
+                        .da-form-group
+                            label.da-form-label(for='menuId')
+                                | Menu
+                                span.req *
+                            select#menuId.da-form-input(name='menuId' required)
+                                each m in menusList
+                                    option(value=m.id selected=(menuId === m.id || (menuItem && menuItem.menuId === m.id)))= m.name + ' (' + m.slug + ')'
+                        .da-form-group
+                            label.da-form-label(for='parentId') Parent item
+                            select#parentId.da-form-input(name='parentId')
+                                option(value='') — None (top level) —
+                                each p in parentOptions
+                                    option(value=p.id selected=(menuItem && menuItem.parentId === p.id))= p.label
+                        .da-form-group
+                            label.da-form-label(for='order') Order
+                            input#order.da-form-input(
+                                type='number'
+                                name='order'
+                                min='0'
+                                value=menuItem ? menuItem.order : 0
+                            )
+
+                    .da-form-section
+                        h2.da-form-section-label Link
+                        .da-form-group
+                            label.da-form-label(for='label')
+                                | Label
+                                span.req *
+                            input#label.da-form-input(
+                                type='text'
+                                name='label'
+                                required
+                                value=menuItem ? menuItem.label : ''
+                                placeholder='Link text'
+                            )
+                        .da-form-group
+                            label.da-form-label(for='url')
+                                | URL
+                                span.req *
+                            input#url.da-form-input(
+                                type='text'
+                                name='url'
+                                required
+                                value=menuItem ? menuItem.url : ''
+                                placeholder='/products or https://...'
+                            )
+                        .da-form-row
+                            .da-form-group
+                                label.da-form-label(for='target') Open in
+                                select#target.da-form-input(name='target')
+                                    option(value='' selected=(!menuItem || !menuItem.target)) Same tab (_self)
+                                    option(value='_blank' selected=(menuItem && menuItem.target === '_blank')) New tab (_blank)
+                            .da-form-group
+                                label.da-form-label(for='method') Method
+                                select#method.da-form-input(name='method')
+                                    option(value='GET' selected=(!menuItem || !menuItem.method || menuItem.method === 'GET')) GET (link)
+                                    option(value='POST' selected=(menuItem && menuItem.method === 'POST')) POST (form, e.g. Logout)
+
+                    .da-form-section
+                        h2.da-form-section-label Display
+                        .da-form-group
+                            label.da-form-label(for='icon') Icon class
+                            input#icon.da-form-input(
+                                type='text'
+                                name='icon'
+                                value=menuItem ? menuItem.icon : ''
+                                placeholder='e.g. fa-user, fa-cart-shopping'
+                            )
+                        .da-form-group
+                            label.da-form-label(for='slug') Slug
+                            input#slug.da-form-input(
+                                type='text'
+                                name='slug'
+                                value=menuItem ? menuItem.slug : ''
+                                placeholder='Reserved: account, cart — for special navbar behaviour'
+                            )
+                        .da-form-group
+                            label.admin-checkbox
+                                input(type='checkbox' name='active' value='on' checked=(menuItem === null || menuItem.active))
+                                | Active
+
+                .da-card-footer
+                    button.da-btn.da-btn--primary(type='submit')= isEdit ? 'Update' : 'Create'
+                    a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/menu-items' + (menuSlug ? '?menu=' + menuSlug : '')) Cancel

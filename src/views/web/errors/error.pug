@@ -1,0 +1,10 @@
+extends ../../layouts/main
+
+block content
+  h1 #{status} - #{title}
+  p #{message}
+  if detail
+    pre.error-detail= detail
+  if stack
+    pre.error-stack= stack
+  a(href="/") Back home

@@ -1,0 +1,46 @@
+extends ../../layouts/main
+
+block content
+  article
+    h1= collection.title
+    if collection.media && collection.media.length
+      div(style="margin:1rem 0; display:flex; flex-wrap:wrap; gap:0.75rem")
+        each m in collection.media
+          - const isImage = m.mimeType && m.mimeType.startsWith('image/')
+          if isImage
+            img(src=m.url alt=m.alt || m.filename || collection.title style="max-width:280px; max-height:210px; object-fit:contain; border-radius:6px; border:1px solid #eee")
+          else
+            a(href=m.url target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:0.5rem; padding:0.5rem 0.75rem; background:#f5f5f5; border-radius:6px; text-decoration:none; color:#333")
+              span(style="font-size:0.9rem")= m.filename || m.path || 'File'
+    if collection.description
+      div(style="margin:1rem 0")= collection.description
+  h2 Products
+  if products && products.length
+    ul(style="list-style:none; padding:0")
+      each product in products
+        - const variant = product.ProductVariants && product.ProductVariants[0]
+        - const priceRow = variant && variant.ProductPrices && variant.ProductPrices[0]
+        - const price = priceRow ? Number(priceRow.amount) : null
+        - const defaultVariantId = variant ? variant.id : null
+        - const firstMedia = product.media && product.media.length ? product.media[0] : null
+        - const isImage = firstMedia && firstMedia.mimeType && firstMedia.mimeType.startsWith('image/')
+        li(style="border:1px solid #ddd; padding:1rem; margin-bottom:0.5rem; display:flex; gap:1rem; align-items:flex-start")
+          if firstMedia && isImage
+            a(href="/products/" + product.slug style="flex-shrink:0")
+              img(src=firstMedia.url alt=firstMedia.alt || product.title style="width:120px; height:90px; object-fit:contain; display:block; border-radius:4px")
+          else if firstMedia
+            a(href="/products/" + product.slug style="flex-shrink:0; width:120px; height:90px; background:#f0f0f0; display:flex; align-items:center; justify-content:center; border-radius:4px; font-size:0.85rem; text-decoration:none; color:#333") File
+          div(style="flex:1; min-width:0")
+            strong= product.title
+            if price != null
+              span  #{Number(price).toFixed(2)} #{priceRow && priceRow.currency ? priceRow.currency : 'USD'}
+            if defaultVariantId
+              form.js-add-to-cart-form(action="/cart/add" method="post" style="display:inline; margin-left:0.5rem")
+                input(type="hidden" name="productVariantId" value=defaultVariantId)
+                input(type="hidden" name="quantity" value="1")
+                button(type="submit") Add to cart
+            if product.slug
+              a(href="/products/" + product.slug style="margin-left:0.5rem") View
+  else
+    p No products in this collection.
+  a(href="/collections") Back to collections

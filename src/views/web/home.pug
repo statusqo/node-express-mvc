@@ -1,0 +1,24 @@
+extends ../layouts/main
+
+block append metas
+  meta(name="description" content="")
+  meta(name="keywords" content="")
+
+block append links
+  link(rel="stylesheet" href="/public/css/home.css")
+
+block append scripts
+  script(src="/public/js/home.js")
+
+block content
+  section(class="hero")
+    div(class="hero-content")
+      div(class="hero-content-inner")
+        h1(class="hero-title") Shop
+        p(class="hero-description") A simple ecommerce template. Browse products and collections.
+        a(class="hero-button" href="/products") Shop products
+  section(class="services")
+    div(class="services-content")
+      div(class="services-content-inner")
+        h2(class="services-title") Featured
+        p(class="services-description") Explore our products and collections.

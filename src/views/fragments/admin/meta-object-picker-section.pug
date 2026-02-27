@@ -1,0 +1,61 @@
+//- Meta object picker component (COMPONENT_STANDARD)
+//- Usage: include this file, then +metaObjectPickerSection({ inputName, attachedMetaObjects, apiUrl, label?, hint? })
+//- attachedMetaObjects: [ { id, name, type, definitionPairs: [ { key, type, value } ], values: { key: value } } ]
+mixin metaObjectPickerSection(options)
+  - const inputName = options.inputName || 'metaObjectIds[]'
+  - const attachedMetaObjects = options.attachedMetaObjects || []
+  - const apiUrl = options.apiUrl || ''
+  - const label = options.label != null ? options.label : 'Meta Objects'
+  - const hint = options.hint
+  div.admin-meta-object-picker-section(
+    data-meta-object-picker
+    data-input-name=inputName
+    data-api-url=apiUrl
+  )
+    div.admin-form-group
+      label= label
+      if hint
+        p.admin-form-hint.admin-meta-object-picker-hint= hint
+    div.admin-meta-object-picker-attached
+      each mo in attachedMetaObjects
+        div.admin-meta-object-picker-item(data-meta-object-id=mo.id)
+          div.admin-meta-object-picker-item-header
+            h3.admin-meta-object-picker-title= mo.name + (mo.type ? ' (' + mo.type + ')' : '')
+            button.admin-meta-object-picker-remove(type="button" data-action="remove-meta-object" aria-label="Remove") Remove
+          input(type="hidden" name=inputName value=mo.id)
+          if mo.definitionPairs && mo.definitionPairs.length
+            div.admin-meta-object-picker-values(data-meta-object-id=mo.id)
+              each pair in mo.definitionPairs
+                - const currentVal = mo.values && mo.values[pair.key]
+                - const inputVal = currentVal != null ? currentVal : (pair.value || '')
+                - const attrType = pair.type || 'string'
+                div.admin-form-group
+                  label(for="metaObjectValues-" + mo.id + "-" + pair.key)= pair.key
+                  if attrType === 'text'
+                    textarea(id="metaObjectValues-" + mo.id + "-" + pair.key name="metaObjectValues[" + mo.id + "][" + pair.key + "]" rows="3" placeholder=pair.value || '')= inputVal
+                  else if attrType === 'boolean'
+                    label.admin-checkbox(style="display:inline-flex; margin:0")
+                      input(type="hidden" name="metaObjectValues[" + mo.id + "][" + pair.key + "]" value="false")
+                      input(type="checkbox" id="metaObjectValues-" + mo.id + "-" + pair.key name="metaObjectValues[" + mo.id + "][" + pair.key + "]" value="true" checked=(inputVal === 'true' || inputVal === 'on' || inputVal === '1'))
+                      | Yes
+                  else if attrType === 'number'
+                    input(type="number" id="metaObjectValues-" + mo.id + "-" + pair.key name="metaObjectValues[" + mo.id + "][" + pair.key + "]" value=inputVal placeholder=pair.value || '' step="any")
+                  else if attrType === 'date'
+                    input(type="date" id="metaObjectValues-" + mo.id + "-" + pair.key name="metaObjectValues[" + mo.id + "][" + pair.key + "]" value=inputVal placeholder=pair.value || '')
+                  else if attrType === 'url'
+                    input(type="url" id="metaObjectValues-" + mo.id + "-" + pair.key name="metaObjectValues[" + mo.id + "][" + pair.key + "]" value=inputVal placeholder=pair.value || '')
+                  else if attrType === 'email'
+                    input(type="email" id="metaObjectValues-" + mo.id + "-" + pair.key name="metaObjectValues[" + mo.id + "][" + pair.key + "]" value=inputVal placeholder=pair.value || '')
+                  else
+                    input(type="text" id="metaObjectValues-" + mo.id + "-" + pair.key name="metaObjectValues[" + mo.id + "][" + pair.key + "]" value=inputVal placeholder=pair.value || '')
+          else
+            p.admin-form-hint.admin-meta-object-picker-no-definition No definition. Add fields in Meta Objects admin.
+    button.admin-btn.admin-meta-object-picker-open(type="button" data-action="open-meta-object-picker") Select meta objects
+    div.admin-meta-object-picker-modal(role="dialog" aria-modal="true" aria-labelledby="meta-object-picker-title" hidden)
+      div.admin-meta-object-picker-modal-overlay(data-action="close-meta-object-picker")
+      div.admin-meta-object-picker-modal-box
+        h2#meta-object-picker-title.admin-meta-object-picker-modal-title Select meta objects
+        div.admin-meta-object-picker-list
+        div.admin-meta-object-picker-modal-actions
+          button.admin-btn.admin-btn-primary.admin-meta-object-picker-add-selected(type="button" data-action="add-selected-meta-objects") Add selected
+          button.admin-btn.admin-meta-object-picker-cancel(type="button" data-action="close-meta-object-picker") Cancel

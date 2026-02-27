@@ -1,0 +1,53 @@
+- const sidebarMenu = menus && menus['admin-sidebar'] ? menus['admin-sidebar'] : []
+- const getItems = sidebarMenu.filter(item => !item.method || item.method === 'GET')
+- const postItems = sidebarMenu.filter(item => item.method === 'POST')
+
+div(class="dash-nav")
+    div(class="dash-brand")
+        a(href=(adminPrefix || '') + "/") Admin Panel
+
+    ul(class="dash-menu")
+        if getItems && getItems.length
+            each item in getItems
+                li(class="dash-item")
+                    a(class="dash-link" href=(adminPrefix || '') + item.url)= item.label
+        else
+            li(class="dash-item")
+                a(class="dash-link" href=(adminPrefix || '') + "/") Dashboard
+            li(class="dash-item")
+                a(class="dash-link" href=(adminPrefix || '') + "/users") Users
+            li(class="dash-item")
+                a(class="dash-link" href=(adminPrefix || '') + "/orders") Orders
+            li(class="dash-item")
+                a(class="dash-link" href=(adminPrefix || '') + "/refund-requests") Refund Requests
+            li(class="dash-item")
+                a(class="dash-link" href=(adminPrefix || '') + "/products") Products
+            li(class="dash-item")
+                a(class="dash-link" href=(adminPrefix || '') + "/product-types") Product Types
+            li(class="dash-item")
+                a(class="dash-link" href=(adminPrefix || '') + "/collections") Collections
+            li(class="dash-item")
+                a(class="dash-link" href=(adminPrefix || '') + "/webinars") Webinars
+            li(class="dash-item")
+                a(class="dash-link" href=(adminPrefix || '') + "/seminars") Seminars
+            li(class="dash-item")
+                a(class="dash-link" href=(adminPrefix || '') + "/classrooms") Classrooms
+            li(class="dash-item")
+                a(class="dash-link" href=(adminPrefix || '') + "/zoom/connect") Connect Zoom
+            li(class="dash-item")
+                a(class="dash-link" href=(adminPrefix || '') + "/media") Media
+            li(class="dash-item")
+                a(class="dash-link" href=(adminPrefix || '') + "/meta-objects") Meta Objects
+            li(class="dash-item")
+                a(class="dash-link" href=(adminPrefix || '') + "/blog") Blog
+            li(class="dash-item")
+                a(class="dash-link" href=(adminPrefix || '') + "/menus") Menus
+    if postItems && postItems.length
+        div(class="dash-footer")
+            each item in postItems
+                form(action=item.url method="POST" class="dash-form-inline")
+                    button(type="submit" class="dash-logout")= item.label
+    else
+        div(class="dash-footer")
+            form(action="/auth/logout" method="POST")
+                button(type="submit" class="dash-logout") Logout

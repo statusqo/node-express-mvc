@@ -1,0 +1,83 @@
+extends ../../layouts/admin
+
+block append links
+    link(rel='preconnect' href='https://fonts.googleapis.com')
+    link(rel='preconnect' href='https://fonts.gstatic.com' crossorigin)
+
+block content
+    .da-page
+
+        //- ── Page header ─────────────────────────────────────────────
+        .da-page-header
+            .da-page-header-left
+                h1.da-page-title= isEdit ? 'Edit Menu' : 'New Menu'
+                p.da-page-subtitle= isEdit && menu && menu.name ? menu.name : 'Define a navigation menu'
+            .da-page-header-right
+                a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/menus')
+                    svg(xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                        polyline(points='15 18 9 12 15 6')
+                    | Back to Menus
+
+        if error
+            p.admin-flash.admin-flash-error= error
+
+        //- ── Form ─────────────────────────────────────────────────────
+        .da-card(style='max-width: 640px;')
+            form(
+                method='post'
+                action=isEdit ? (adminPrefix || '') + '/menus/' + menu.id + '/edit' : (adminPrefix || '') + '/menus/new'
+            )
+                .da-card-body
+                    .da-form-section
+                        h2.da-form-section-label Details
+                        .da-form-group
+                            label.da-form-label(for='name')
+                                | Name
+                                span.req *
+                            input#name.da-form-input(
+                                type='text'
+                                name='name'
+                                required
+                                value=menu ? menu.name : ''
+                                placeholder='Main Navigation'
+                                autofocus
+                            )
+                        .da-form-group
+                            label.da-form-label(for='slug')
+                                | Slug
+                                span.req *
+                            input#slug.da-form-input(
+                                type='text'
+                                name='slug'
+                                required
+                                value=menu ? menu.slug : ''
+                                placeholder='e.g. header, footer'
+                            )
+                            p.da-form-hint Used in code to render this menu.
+                        .da-form-group
+                            label.da-form-label(for='description') Description
+                            input#description.da-form-input(
+                                type='text'
+                                name='description'
+                                value=menu ? menu.description : ''
+                                placeholder='Optional'
+                            )
+                        .da-form-group
+                            label.da-form-label(for='order') Order
+                            input#order.da-form-input(
+                                type='number'
+                                name='order'
+                                min='0'
+                                value=menu ? menu.order : 0
+                            )
+
+                    .da-form-section
+                        h2.da-form-section-label Visibility
+                        .da-form-group
+                            label.admin-checkbox
+                                input(type='checkbox' name='active' value='on' checked=(menu === null || menu.active))
+                                | Active
+
+                .da-card-footer
+                    button.da-btn.da-btn--primary(type='submit')= isEdit ? 'Update' : 'Create'
+                    a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/menus') Cancel

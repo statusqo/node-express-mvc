@@ -1,0 +1,82 @@
+extends ../../layouts/main
+
+block content
+  article
+    h1 Register: #{product.title}
+    if product.description
+      p(style="margin:0.5rem 0")= product.description
+    if priceAmount != null
+      p(style="font-size:1.125rem; margin-bottom:1rem") #{Number(priceAmount).toFixed(2)} #{currency} per session
+
+    if flash && flash.message
+      p(style="color:#c00; margin:0.5rem 0")= flash.message
+
+    form#eventRegisterForm(
+      method="post"
+      action="#"
+      data-stripe-key=(stripePublishableKey || '')
+      data-section-path=sectionPath
+      data-product-slug=product.slug
+      data-place-order-url=("/" + sectionPath + "/" + product.slug + "/place-order")
+      data-user-logged-in=(user ? '1' : '')
+    )
+      input(type="hidden" name="eventId" value=event.id)
+      section(style="margin-bottom:1rem; padding:0.75rem; border:1px solid #e0e0e0; border-radius:6px; background:#fafafa")
+        h2(style="font-size:1.1rem; margin:0 0 0.5rem 0") You're registering for
+        p(style="margin:0; font-size:1rem")
+          span= event.startDate ? event.startDate : '—'
+          if event.startTime
+            span(style="margin-left:0.5rem")= String(event.startTime).substring(0, 5)
+          if event.location
+            span(style="margin-left:0.5rem; color:#666")= event.location
+        p(style="margin:0.5rem 0 0; font-size:0.95rem; color:#555") #{seatsRemaining} seat(s) remaining
+
+      h2(style="font-size:1.1rem; margin-top:1.25rem") Your details
+      div(style="margin-bottom:0.75rem")
+        label(for="email") Email *
+        input#email(type="email" name="email" required value=(user && user.email ? user.email : "") style="display:block; width:100%; max-width:20rem; margin-top:0.25rem; padding:0.35rem")
+      div(style="margin-bottom:0.75rem")
+        label(for="forename") First name
+        input#forename(type="text" name="forename" value=(user && user.forename ? user.forename : (user && user.username ? user.username : "")) style="display:block; width:100%; max-width:20rem; margin-top:0.25rem; padding:0.35rem")
+      div(style="margin-bottom:0.75rem")
+        label(for="surname") Last name
+        input#surname(type="text" name="surname" value=(user && user.surname ? user.surname : "") style="display:block; width:100%; max-width:20rem; margin-top:0.25rem; padding:0.35rem")
+
+      if stripePublishableKey
+        h2(style="font-size:1.1rem; margin-top:1.25rem") Payment
+        p(style="margin-bottom:0.75rem; font-size:0.95rem") Payment is processed securely by Stripe. Your card details never touch our servers.
+        if paymentMethods && paymentMethods.length > 0
+          div(style="margin-bottom:0.75rem")
+            label(style="display:block; font-size:0.9rem; margin-bottom:0.35rem") Pay with
+            div(style="display:flex; flex-direction:column; gap:0.35rem")
+              label(style="display:flex; align-items:center; gap:0.5rem; cursor:pointer")
+                input#paySavedCard(type="radio" name="payWith" value="saved" checked=(paymentMethods.length > 0))
+                | Use a saved card
+              label(style="display:flex; align-items:center; gap:0.5rem; cursor:pointer")
+                input#payNewCard(type="radio" name="payWith" value="new")
+                | Use a new card
+            div#savedCardSelect(style="margin-top:0.5rem; margin-left:1.5rem")
+              select#savedPaymentMethod(name="savedPaymentMethod" style="min-width:12rem; padding:0.35rem")
+                each pm in paymentMethods
+                  option(value=pm.gatewayToken)= (pm.brand || 'Card') + ' ****' + (pm.last4 || '????') + (pm.isDefault ? ' (Default)' : '')
+        div#cardElementWrap(style="margin-top:0.75rem; padding:0.75rem; border:1px solid #ccc; border-radius:6px; margin-bottom:0.5rem; background:#fff")
+          div#card-element
+        input#saveCardHidden(type="hidden" name="saveCard" value="0")
+        if user
+          div.saveCardRow(style="margin-top:0.5rem; margin-bottom:0.5rem")
+            label(style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.95rem")
+              input#saveCardCheckbox(name="saveCardCheckbox" type="checkbox" value="1")
+              | Save this card for later
+        div#cardErrors(style="color:#c00; font-size:0.9rem; margin-bottom:1rem" role="alert")
+      else
+        p(style="margin-bottom:1rem; padding:0.75rem; background:#f0f7ff; border-radius:6px; font-size:0.9rem; color:#333")
+          | Payment gateway is not configured. Please try again later.
+
+      button#payBtn(type="submit" class="button" style="margin-top:1rem; padding:0.75rem 1.5rem") Pay and register
+
+  a(href="/" + sectionPath + "/" + product.slug style="display:inline-block; margin-top:1rem") Back to #{product.title}
+
+block append scripts
+  if stripePublishableKey
+    script(src="https://js.stripe.com/v3/")
+  script(src="/public/js/event-register.js")

@@ -1,0 +1,189 @@
+.courses-list {
+  list-style: none;
+  padding: 0;
+  margin: 1.5rem 0;
+}
+
+.course-item {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  background: #fff;
+}
+
+.course-item.cancelled {
+  opacity: 0.6;
+  background: #f5f5f5;
+}
+
+.course-item.completed {
+  border-color: #4caf50;
+}
+
+.course-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.course-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.course-date {
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.course-item-body {
+  margin-bottom: 0.75rem;
+}
+
+.course-description {
+  margin: 0.5rem 0;
+  color: #555;
+}
+
+.course-item-meta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.course-status {
+  text-transform: capitalize;
+}
+
+.course-paid {
+  color: #4caf50;
+  font-weight: 600;
+}
+
+.button-cancel {
+  background: #dc3545;
+  color: #fff;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.button-cancel:hover {
+  background: #c82333;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, visibility 0.25s ease;
+  z-index: 2000;
+}
+
+.modal-overlay.is-open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.95);
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  z-index: 2001;
+  transition: transform 0.25s ease;
+}
+
+.modal-overlay.is-open .modal {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem;
+  border-bottom: 1px solid #ddd;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: #555;
+  padding: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close:hover {
+  color: #000;
+}
+
+.modal-body {
+  padding: 1.25rem;
+}
+
+.modal-course-title {
+  font-weight: 600;
+  font-size: 1.1rem;
+  margin: 0.5rem 0;
+}
+
+.modal-warning {
+  color: #dc3545;
+  font-weight: 600;
+  margin: 1rem 0;
+}
+
+.modal-footer {
+  padding: 1.25rem;
+  border-top: 1px solid #ddd;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.button-secondary {
+  background: transparent;
+  color: #000;
+  border: 2px solid #000;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.button-secondary:hover {
+  background: #000;
+  color: #fff;
+}

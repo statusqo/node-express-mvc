@@ -1,0 +1,46 @@
+doctype html
+html
+  head
+    title #{title} | Admin
+
+    block metas
+      meta(charset="utf-8")
+      meta(name="viewport" content="width=device-width, initial-scale=1")
+
+    block links
+      link(rel="stylesheet" href="/public/css/main.css")
+      link(rel="stylesheet" href="/public/css/admin-dark.css")
+      link(rel="stylesheet" href="/public/css/admin-navbar.css")
+      link(rel="stylesheet" href="/public/css/footer.css")
+      
+    block scripts
+      script(src="/public/js/admin-media-picker.js")
+      script(src="/public/js/admin-meta-object-picker.js")
+
+  body
+    div(class="admin-layout")
+      aside(class="admin-sidebar")
+        include ../fragments/admin/dash-nav
+      
+      main(class="admin-content")
+        header.admin-header
+            div(class="admin-header-breadcrumbs")
+              if adminBackUrl
+                a.admin-back(href=adminBackUrl title="Back" aria-label="Back")
+                  span.admin-back-icon ‹
+              if adminSlug
+                nav.admin-breadcrumb(aria-label="Breadcrumb")
+                  - var parts = adminSlug.split('/')
+                  each part, i in parts
+                    if i > 0
+                      span.admin-breadcrumb-sep ›
+                    if i === parts.length - 1
+                      span.admin-breadcrumb-current= part
+                    else
+                      span.admin-breadcrumb-ancestor= part
+            if adminIsDashboard && user
+              div(class="admin-header-welcome")
+                span.admin-header-greeting Welcome,&nbsp;
+                span.admin-header-username= user.username
+        div(class="content-wrapper")
+            block content

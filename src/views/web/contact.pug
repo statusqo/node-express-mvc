@@ -1,0 +1,25 @@
+extends ../layouts/main
+
+block append links
+  link(rel="stylesheet" href="/public/css/contact.css")
+
+block content
+  h1 Contact
+  if ok
+    p(style="color: green") Thanks! Your message has been sent.
+  if fail
+    p(style="color: red") Please check your details and try again.
+  form(action="/api/contact" method="post")
+    // Honeypot (hidden)
+    input(type="text" name="website" autocomplete="off" tabindex="-1" style="position:absolute;left:-9999px;")
+
+    label(for="name") Name
+    input#name(type="text" name="name" required)
+
+    label(for="email") Email
+    input#email(type="email" name="email" required)
+
+    label(for="message") Message
+    textarea#message(name="message" rows="6" required)
+
+    button(type="submit") Send

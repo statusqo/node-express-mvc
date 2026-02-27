@@ -1,0 +1,81 @@
+/* Rate limit (429) page – ecommerce-appropriate styling */
+
+.rate-limit-section {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 60vh;
+  padding: 3rem 1.5rem;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.rate-limit-card {
+  max-width: 520px;
+  width: 100%;
+  padding: 2.5rem;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  text-align: center;
+  border: 1px solid #e2e8f0;
+}
+
+.rate-limit-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 1.5rem;
+  background: #fff3e0;
+  border-radius: 50%;
+  color: #e65100;
+}
+
+.rate-limit-icon i {
+  font-size: 1.75rem;
+}
+
+.rate-limit-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 0.75rem;
+  color: #212529;
+  letter-spacing: -0.02em;
+}
+
+.rate-limit-message {
+  font-size: 1rem;
+  color: #495057;
+  margin: 0 0 0.5rem;
+  line-height: 1.6;
+}
+
+.rate-limit-hint {
+  font-size: 0.9375rem;
+  color: #6c757d;
+  margin: 0 0 1.75rem;
+  line-height: 1.5;
+}
+
+.rate-limit-cta {
+  display: inline-block;
+  padding: 0.75rem 1.75rem;
+  background: #000;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  text-decoration: none;
+  border-radius: 6px;
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+
+.rate-limit-cta:hover {
+  background: #333;
+  transform: translateY(-1px);
+}
+
+.rate-limit-cta:focus {
+  outline: 2px solid #000;
+  outline-offset: 2px;
+}

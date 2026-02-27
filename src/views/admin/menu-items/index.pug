@@ -1,0 +1,173 @@
+extends ../../layouts/admin
+
+block append links
+    link(rel='preconnect' href='https://fonts.googleapis.com')
+    link(rel='preconnect' href='https://fonts.gstatic.com' crossorigin)
+
+block content
+    .da-page
+
+        if flash && flash.message
+            p.admin-flash(class='admin-flash-' + (flash.type || 'info'))= flash.message
+
+        //- ── Page header ─────────────────────────────────────────────
+        .da-page-header
+            .da-page-header-left
+                h1.da-page-title Menu Items
+                if selectedMenu
+                    p.da-page-subtitle= selectedMenu.name + ' (' + selectedMenu.slug + ') — ' + (items ? items.length : 0) + ' item' + ((items && items.length !== 1) ? 's' : '')
+                else
+                    p.da-page-subtitle Select a menu to edit its items
+
+            .da-page-header-right
+                if selectedMenu
+                    a.da-btn.da-btn--primary(href=(adminPrefix || '') + '/menu-items/new?menu=' + selectedMenu.slug)
+                        svg(xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                            line(x1='12' y1='5' x2='12' y2='19')
+                            line(x1='5' y1='12' x2='19' y2='12')
+                        | Add Item
+
+        //- ── Menu selector ───────────────────────────────────────────
+        .da-section
+            .da-section-header(style='flex-wrap: wrap; gap: 0.75rem;')
+                h2.da-section-title Menu
+                if menusList && menusList.length
+                    label.da-form-label(for='menu-select' style='margin: 0; font-weight: 500;') Switch menu
+                    select#menu-select.da-form-input(
+                        name='menu'
+                        data-base=(adminPrefix || '')
+                        onchange="window.location.href=this.dataset.base + '/menu-items?menu=' + this.value"
+                        style='max-width: 280px;'
+                    )
+                        each m in menusList
+                            option(value=m.slug selected=(selectedMenu && selectedMenu.slug === m.slug))= m.name + ' (' + m.slug + ')'
+                else
+                    p.admin-flash.admin-flash-info(style='margin:0') No menus yet. #[a(href=(adminPrefix || '') + '/menus/new') Create a menu] first.
+
+        if selectedMenu
+            //- ── Items table ─────────────────────────────────────────
+            .da-section
+                .da-section-header
+                    h2.da-section-title Items
+                    span.da-count= items ? items.length : 0
+
+                .da-panel
+                    .da-table-scroll
+                        table.da-table(role='table' aria-label='Menu items list')
+                            thead
+                                tr
+                                    th(scope='col') Label
+                                    th(scope='col') URL
+                                    th(scope='col') Order
+                                    th(scope='col') Icon
+                                    th(scope='col') Slug
+                                    th(scope='col') Method
+                                    th(scope='col') Status
+                                    th(scope='col' style='text-align:right') Actions
+                            tbody
+                                if items && items.length
+                                    each item in items
+                                        tr.da-row(data-item-id=item.id)
+                                            td(style=item.depth > 0 ? 'padding-left: ' + (item.depth * 24 + 12) + 'px;' : '')
+                                                span.da-cell-primary= item.label
+                                            td
+                                                span.da-cell-muted= item.url
+                                            td
+                                                span.da-cell-muted= item.order
+                                            td= item.icon || '—'
+                                            td
+                                                if item.slug
+                                                    span.da-cell-mono= item.slug
+                                                else
+                                                    | —
+                                            td
+                                                span.da-cell-mono= item.method || 'GET'
+                                            td
+                                                if item.active
+                                                    span.da-badge.da-badge--success Active
+                                                else
+                                                    span.da-badge.da-badge--neutral Inactive
+                                            td
+                                                .da-cell-actions
+                                                    a.da-row-btn.da-row-btn--edit(href=(adminPrefix || '') + '/menu-items/' + item.id + '/edit' aria-label='Edit ' + item.label) Edit
+                                                    .da-delete-wrap(aria-label='Delete menu item actions')
+                                                        button.da-row-btn.da-row-btn--delete.da-delete-trigger(
+                                                            type='button'
+                                                            aria-label='Delete ' + item.label
+                                                            aria-expanded='false'
+                                                        ) Delete
+                                                        .da-confirm-group(role='group' aria-label='Confirm deletion')
+                                                            button.da-row-btn.da-row-btn--cancel.da-delete-cancel(
+                                                                type='button'
+                                                                aria-label='Cancel deletion'
+                                                            ) No
+                                                            span.da-confirm-sep(aria-hidden='true')
+                                                            form.da-form-inline.da-delete-form(
+                                                                method='post'
+                                                                action=(adminPrefix || '') + '/menu-items/' + item.id + '/delete'
+                                                            )
+                                                                button.da-row-btn.da-row-btn--confirm(
+                                                                    type='submit'
+                                                                    aria-label='Confirm delete ' + item.label
+                                                                ) Yes, delete
+                                else
+                                    tr
+                                        td(colspan='8')
+                                            .da-table-empty No items in this menu yet.
+
+        else if menusList && menusList.length
+            .da-section
+                .da-panel
+                    p.admin-flash.admin-flash-info(style='margin: 0;') Select a menu from the dropdown above to edit its items.
+
+block append scripts
+    script.
+        (function () {
+            'use strict';
+            function initDeleteFlow() {
+                document.querySelectorAll('.da-delete-trigger').forEach(function (trigger) {
+                    trigger.addEventListener('click', function () {
+                        var row = trigger.closest('tr.da-row');
+                        if (!row) return;
+                        row.classList.add('da-row--confirming');
+                        trigger.setAttribute('aria-expanded', 'true');
+                        var cancel = row.querySelector('.da-delete-cancel');
+                        if (cancel) setTimeout(function () { cancel.focus(); }, 200);
+                    });
+                });
+                document.querySelectorAll('.da-delete-cancel').forEach(function (cancel) {
+                    cancel.addEventListener('click', function () {
+                        var row = cancel.closest('tr.da-row');
+                        if (!row) return;
+                        row.classList.remove('da-row--confirming');
+                        var trigger = row.querySelector('.da-delete-trigger');
+                        if (trigger) {
+                            trigger.setAttribute('aria-expanded', 'false');
+                            setTimeout(function () { trigger.focus(); }, 200);
+                        }
+                    });
+                });
+                document.querySelectorAll('.da-delete-form').forEach(function (form) {
+                    form.addEventListener('submit', function (e) {
+                        e.preventDefault();
+                        var row = form.closest('tr');
+                        if (!row) { form.submit(); return; }
+                        row.classList.add('da-row--removing');
+                        setTimeout(function () { form.submit(); }, 340);
+                    });
+                });
+            }
+            document.addEventListener('keydown', function (e) {
+                if (e.key !== 'Escape') return;
+                document.querySelectorAll('tr.da-row--confirming').forEach(function (row) {
+                    row.classList.remove('da-row--confirming');
+                    var trigger = row.querySelector('.da-delete-trigger');
+                    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+                });
+            });
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initDeleteFlow);
+            } else {
+                initDeleteFlow();
+            }
+        })();

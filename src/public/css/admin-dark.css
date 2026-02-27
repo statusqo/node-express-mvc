@@ -1,0 +1,2344 @@
+/* ═══════════════════════════════════════════════════════════════════
+   ADMIN DARK — Shared dark-mode design system for admin pages
+   Mirrors the dashboard.css design tokens. Include via block append links.
+   ═══════════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap');
+
+/* ── Design tokens (same values as dashboard.css) ─────────────────── */
+:root {
+    --ds-bg:              #0B0B0F;
+    --ds-surface:         #15161C;
+    --ds-surface-2:       #1C1D26;
+    --ds-surface-3:       #22232F;
+
+    --ds-border:          rgba(255, 255, 255, 0.06);
+    --ds-border-accent:   rgba(76, 94, 255, 0.35);
+
+    --ds-accent:          #4C5EFF;
+    --ds-accent-light:    #6B7CFF;
+    --ds-accent-dim:      rgba(76, 94, 255, 0.14);
+    --ds-accent-glow:     rgba(76, 94, 255, 0.28);
+
+    --ds-success:         #22C55E;
+    --ds-success-dim:     rgba(34, 197, 94, 0.12);
+    --ds-warning:         #F59E0B;
+    --ds-warning-dim:     rgba(245, 158, 11, 0.12);
+    --ds-danger:          #EF4444;
+    --ds-danger-dim:      rgba(239, 68, 68, 0.12);
+    --ds-info:            #38BDF8;
+    --ds-info-dim:        rgba(56, 189, 248, 0.12);
+
+    --ds-text-1:          #F0F0F5;
+    --ds-text-2:          #9899A6;
+    --ds-text-3:          #5B5F7A;
+
+    --ds-radius-sm:       10px;
+    --ds-radius-md:       16px;
+    --ds-radius-lg:       20px;
+
+    --ds-ease:            cubic-bezier(0.2, 0, 0, 1);
+
+    --ds-shadow-card:     0 2px 14px rgba(0, 0, 0, 0.38);
+    --ds-shadow-hover:    0 10px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--ds-border-accent);
+}
+
+/* ── Reset main.css generic styles within dark admin context ──────── */
+.da-page form {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: none;
+}
+
+/* Reset only submit buttons that are not .da-btn (page actions use .da-btn and keep their padding) */
+.da-page button[type="submit"]:not(.da-btn) {
+    background: none;
+    color: inherit;
+    padding: 0;
+    border: none;
+}
+
+/* ── Dark background for layout shell ─────────────────────────────── */
+body:has(.admin-layout),
+body:has(.admin-layout) .admin-content,
+body:has(.admin-layout) .content-wrapper {
+    background: var(--ds-bg);
+    min-height: 100vh;
+    overflow-y: auto;
+}
+
+/* ── Admin header & breadcrumbs (dark dashboard style) ──────────────── */
+body:has(.admin-layout) .admin-header {
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1.75rem;
+    gap: 1rem;
+    border-bottom: 1px solid var(--ds-border);
+    background: var(--ds-bg);
+}
+
+body:has(.admin-layout) .admin-header-breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    min-width: 0;
+}
+
+body:has(.admin-layout) .admin-back {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    background: var(--ds-surface-2);
+    border: 1px solid var(--ds-border);
+    border-radius: 6px;
+    color: var(--ds-text-2);
+    text-decoration: none;
+    flex-shrink: 0;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+body:has(.admin-layout) .admin-back:hover {
+    background: var(--ds-surface-3);
+    border-color: var(--ds-border-accent);
+    color: var(--ds-text-1);
+    text-decoration: none;
+}
+
+body:has(.admin-layout) .admin-back-icon {
+    font-size: 1.1rem;
+    font-weight: 700;
+    line-height: 1;
+    display: block;
+    margin-left: -1px;
+}
+
+body:has(.admin-layout) .admin-breadcrumb {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+body:has(.admin-layout) .admin-breadcrumb-ancestor {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--ds-text-2);
+    white-space: nowrap;
+}
+
+body:has(.admin-layout) .admin-breadcrumb-sep {
+    font-size: 0.75rem;
+    color: var(--ds-text-3);
+    user-select: none;
+    flex-shrink: 0;
+}
+
+body:has(.admin-layout) .admin-breadcrumb-current {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ds-text-1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+body:has(.admin-layout) .admin-header-welcome {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    font-size: 0.875rem;
+    flex-shrink: 0;
+}
+
+body:has(.admin-layout) .admin-header-greeting {
+    color: var(--ds-text-2);
+    font-weight: 400;
+}
+
+body:has(.admin-layout) .admin-header-username {
+    color: var(--ds-text-1);
+    font-weight: 600;
+}
+
+/* ── Flash messages ───────────────────────────────────────────────── */
+.da-page .admin-flash {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.875rem 1.25rem;
+    border-radius: var(--ds-radius-md);
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+    border: 1px solid transparent;
+}
+.da-page .admin-flash-success { background: var(--ds-success-dim); color: var(--ds-success); border-color: rgba(34, 197, 94, 0.2); }
+.da-page .admin-flash-error   { background: var(--ds-danger-dim);  color: var(--ds-danger);  border-color: rgba(239, 68, 68, 0.2); }
+.da-page .admin-flash-info    { background: var(--ds-info-dim);    color: var(--ds-info);    border-color: rgba(56, 189, 248, 0.2); }
+.da-page .admin-flash-warning { background: var(--ds-warning-dim); color: var(--ds-warning); border-color: rgba(245, 158, 11, 0.2); }
+
+/* ── Page container ───────────────────────────────────────────────── */
+.da-page {
+    font-family: 'Inter', 'Manrope', system-ui, -apple-system, sans-serif;
+    padding: 1.5rem 2rem 3rem;
+    color: var(--ds-text-1);
+    max-width: 1600px;
+}
+
+/* ── Page header ──────────────────────────────────────────────────── */
+.da-page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+}
+
+.da-page-header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.da-page-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--ds-text-1);
+    margin: 0;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+}
+
+.da-page-subtitle {
+    font-size: 13px;
+    color: var(--ds-text-3);
+    font-weight: 500;
+    margin: 0;
+}
+
+.da-page-header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    flex-wrap: wrap;
+}
+
+/* ── Section ──────────────────────────────────────────────────────── */
+.da-section {
+    margin-bottom: 2rem;
+}
+
+.da-section:last-child { margin-bottom: 0; }
+
+.da-section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.875rem;
+}
+
+.da-section-title {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--ds-text-3);
+    margin: 0;
+}
+
+/* ── Count badge (in section headers) ────────────────────────────── */
+.da-count {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--ds-surface-2);
+    color: var(--ds-text-3);
+    border: 1px solid var(--ds-border);
+}
+
+/* ── Status badges ────────────────────────────────────────────────── */
+.da-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.da-badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+}
+.da-badge--success { background: var(--ds-success-dim); color: var(--ds-success); }
+.da-badge--warning { background: var(--ds-warning-dim); color: var(--ds-warning); }
+.da-badge--danger  { background: var(--ds-danger-dim);  color: var(--ds-danger);  }
+.da-badge--info    { background: var(--ds-info-dim);    color: var(--ds-info);    }
+.da-badge--neutral { background: var(--ds-surface-3);   color: var(--ds-text-3); }
+.da-badge--neutral::before { display: none; }
+
+/* ── Panel (card surface) ─────────────────────────────────────────── */
+.da-panel {
+    background: var(--ds-surface);
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius-lg);
+    box-shadow: var(--ds-shadow-card);
+    overflow: hidden;
+}
+
+/* ── Table ────────────────────────────────────────────────────────── */
+.da-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.da-page .da-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.da-page .da-table thead th {
+    padding: 0.75rem 1.25rem;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--ds-text-3);
+    text-align: left;
+    border-bottom: 1px solid var(--ds-border);
+    background: var(--ds-surface);
+    white-space: nowrap;
+}
+
+.da-page .da-table tbody tr {
+    transition: background 180ms var(--ds-ease);
+}
+
+.da-page .da-table tbody tr:hover {
+    background: var(--ds-surface-2);
+}
+
+.da-page .da-table tbody td {
+    padding: 0.875rem 1.25rem;
+    color: var(--ds-text-1);
+    border-bottom: 1px solid var(--ds-border);
+    vertical-align: middle;
+}
+
+.da-page .da-table tbody tr:last-child td { border-bottom: none; }
+
+.da-cell-primary {
+    font-weight: 500;
+    color: var(--ds-text-1);
+}
+
+.da-cell-secondary {
+    color: var(--ds-text-2);
+    font-size: 13px;
+}
+
+.da-cell-muted {
+    color: var(--ds-text-3);
+    font-size: 13px;
+}
+
+.da-cell-mono {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 12px;
+    color: var(--ds-accent);
+    font-weight: 600;
+}
+
+.da-table-empty {
+    padding: 3.5rem 1.25rem;
+    text-align: center;
+    color: var(--ds-text-3);
+    font-size: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* ── Actions column (avoid wide empty gap to the right) ────────────── */
+.da-page .da-table th.da-col-actions,
+.da-page .da-table td.da-col-actions {
+    width: 1%;
+    white-space: nowrap;
+    text-align: right;
+}
+
+/* ── Actions cell ─────────────────────────────────────────────────── */
+.da-cell-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DELETE CONFIRMATION — Animated reveal
+   ═══════════════════════════════════════════════════════════════════
+
+   Structure (inside .da-cell-actions):
+
+     div.da-delete-wrap
+       button.da-delete-trigger   ← "Delete" (visible by default)
+       div.da-confirm-group       ← "No  |  Yes, delete" (hidden)
+         button.da-btn-no
+         form.da-form-inline
+           button.da-btn-yes
+
+   JS adds/removes `da-row--confirming` on the <tr>.
+   The CSS transition handles the animated crossfade.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.da-delete-wrap {
+    /* CSS grid overlay: both children share the same "zone" cell  */
+    display: inline-grid;
+    grid-template-areas: "zone";
+    align-items: center;
+    justify-items: end;
+}
+
+.da-delete-trigger,
+.da-confirm-group {
+    grid-area: zone;
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    transition: opacity 180ms var(--ds-ease), transform 180ms var(--ds-ease);
+}
+
+/* Default: trigger visible */
+.da-delete-trigger {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+}
+
+/* Default: confirm group hidden, shifted right */
+.da-confirm-group {
+    opacity: 0;
+    transform: translateX(10px);
+    pointer-events: none;
+    /* Prevent hidden confirm buttons from affecting row height */
+    height: 0;
+    overflow: hidden;
+}
+
+/* Confirming state: crossfade; collapse trigger so it doesn't reserve space */
+tr.da-row--confirming .da-delete-trigger {
+    opacity: 0;
+    transform: translateX(-10px);
+    pointer-events: none;
+    width: 0;
+    min-width: 0;
+    overflow: hidden;
+}
+
+tr.da-row--confirming .da-confirm-group {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+    /* Allow confirmation group to size normally when visible */
+    height: auto;
+    overflow: visible;
+}
+
+/* Inline confirm form — reset main.css form styles */
+.da-page .da-form-inline {
+    display: inline;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: none;
+}
+
+/* ── Row removal animation (triggered by JS before form submit) ────── */
+@keyframes row-exit {
+    0%   { opacity: 1; transform: translateX(0) scaleY(1); }
+    60%  { opacity: 0; transform: translateX(-16px) scaleY(1); }
+    100% { opacity: 0; transform: translateX(-16px) scaleY(0); }
+}
+
+tr.da-row--removing {
+    transform-origin: top;
+    animation: row-exit 350ms var(--ds-ease) forwards;
+    pointer-events: none;
+}
+
+/* ── Row entry animation (for newly added rows) ───────────────────── */
+@keyframes row-enter {
+    from { opacity: 0; transform: translateX(-12px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+tr.da-row--entering {
+    animation: row-enter 280ms var(--ds-ease) both;
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────── */
+
+/* Base button — overrides main.css .admin-btn */
+.da-page .da-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1.125rem;
+    border-radius: var(--ds-radius-sm);
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'Inter', 'Manrope', inherit;
+    text-decoration: none;
+    cursor: pointer;
+    border: 1px solid transparent;
+    white-space: nowrap;
+    transition:
+        background 180ms var(--ds-ease),
+        box-shadow 180ms var(--ds-ease),
+        transform 180ms var(--ds-ease),
+        border-color 180ms var(--ds-ease),
+        color 180ms var(--ds-ease);
+}
+
+.da-page .da-btn:active { transform: scale(0.97); }
+
+.da-page .da-btn--primary {
+    background: var(--ds-accent);
+    color: #fff;
+}
+.da-page .da-btn--primary:hover {
+    background: var(--ds-accent-light);
+    box-shadow: 0 4px 18px var(--ds-accent-glow);
+    color: #fff;
+}
+
+.da-page .da-btn--secondary {
+    background: var(--ds-surface-2);
+    color: var(--ds-text-2);
+    border-color: var(--ds-border);
+}
+.da-page .da-btn--secondary:hover {
+    background: var(--ds-surface-3);
+    color: var(--ds-text-1);
+    border-color: var(--ds-border-accent);
+}
+
+.da-page .da-btn--danger {
+    background: var(--ds-danger-dim);
+    color: var(--ds-danger);
+    border-color: rgba(239, 68, 68, 0.2);
+}
+.da-page .da-btn--danger:hover {
+    background: var(--ds-danger);
+    color: #fff;
+    border-color: var(--ds-danger);
+}
+
+/* Dashboard home (.dash-page) uses .da-btn for integrations; mirror .da-page button styles */
+.dash-page .da-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1.125rem;
+    border-radius: var(--ds-radius-sm);
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'Inter', 'Manrope', inherit;
+    text-decoration: none;
+    cursor: pointer;
+    border: 1px solid transparent;
+    white-space: nowrap;
+    transition:
+        background 180ms var(--ds-ease),
+        box-shadow 180ms var(--ds-ease),
+        transform 180ms var(--ds-ease),
+        border-color 180ms var(--ds-ease),
+        color 180ms var(--ds-ease);
+}
+.dash-page .da-btn:active { transform: scale(0.97); }
+.dash-page .da-btn--primary {
+    background: var(--ds-accent);
+    color: #fff;
+}
+.dash-page .da-btn--primary:hover {
+    background: var(--ds-accent-light);
+    box-shadow: 0 4px 18px var(--ds-accent-glow);
+    color: #fff;
+}
+.dash-page .da-btn--secondary {
+    background: var(--ds-surface-2);
+    color: var(--ds-text-2);
+    border-color: var(--ds-border);
+}
+.dash-page .da-btn--secondary:hover {
+    background: var(--ds-surface-3);
+    color: var(--ds-text-1);
+    border-color: var(--ds-border-accent);
+}
+
+/* Compact row-action buttons (inside table cells) */
+.da-page .da-row-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.3rem 0.75rem;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    border: 1px solid transparent;
+    white-space: nowrap;
+    line-height: 1.4;
+    background: none;
+    transition:
+        background 160ms var(--ds-ease),
+        border-color 160ms var(--ds-ease),
+        color 160ms var(--ds-ease),
+        transform 160ms var(--ds-ease);
+}
+
+.da-page .da-row-btn:active { transform: scale(0.95); }
+
+.da-page .da-row-btn--edit {
+    background: var(--ds-surface-2);
+    color: var(--ds-text-2);
+    border-color: var(--ds-border);
+}
+.da-page .da-row-btn--edit:hover {
+    background: var(--ds-accent-dim);
+    color: var(--ds-accent);
+    border-color: var(--ds-border-accent);
+}
+
+.da-page .da-row-btn--delete {
+    background: transparent;
+    color: var(--ds-text-3);
+    border-color: transparent;
+}
+.da-page .da-row-btn--delete:hover {
+    background: var(--ds-danger-dim);
+    color: var(--ds-danger);
+    border-color: rgba(239, 68, 68, 0.2);
+}
+
+.da-page .da-row-btn--cancel {
+    background: transparent;
+    color: var(--ds-text-3);
+    border-color: var(--ds-border);
+}
+.da-page .da-row-btn--cancel:hover {
+    background: var(--ds-surface-2);
+    color: var(--ds-text-2);
+}
+
+.da-page .da-row-btn--confirm {
+    background: var(--ds-danger-dim);
+    color: var(--ds-danger);
+    border-color: rgba(239, 68, 68, 0.25);
+}
+.da-page .da-row-btn--confirm:hover {
+    background: var(--ds-danger);
+    color: #fff;
+    border-color: var(--ds-danger);
+}
+
+/* Confirm separator line */
+.da-confirm-sep {
+    width: 1px;
+    height: 16px;
+    background: var(--ds-border);
+    flex-shrink: 0;
+}
+
+/* ── Cards (form, aside, info panels) ────────────────────────────── */
+.da-card {
+    background: var(--ds-surface);
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius-lg);
+    box-shadow: var(--ds-shadow-card);
+    overflow: hidden;
+}
+
+.da-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 1.125rem 1.5rem;
+    border-bottom: 1px solid var(--ds-border);
+}
+
+.da-card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ds-text-1);
+    margin: 0;
+    letter-spacing: -0.01em;
+}
+
+.da-card-body {
+    padding: 1.5rem;
+}
+
+.da-card-footer {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--ds-border);
+    background: var(--ds-surface-2);
+}
+
+/* ── Form layout grid ─────────────────────────────────────────────── */
+.da-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 1.5rem;
+    align-items: start;
+}
+
+.da-form-main {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.da-form-aside {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+/* ── Form sections ────────────────────────────────────────────────── */
+.da-form-section {
+    margin-bottom: 1.75rem;
+}
+
+.da-form-section:last-child { margin-bottom: 0; }
+
+.da-form-section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ds-text-3);
+    margin: 0 0 1.125rem;
+    display: block;
+}
+
+/* ── Form groups & inputs ─────────────────────────────────────────── */
+.da-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    margin-bottom: 1rem;
+}
+
+.da-form-group:last-child { margin-bottom: 0; }
+
+.da-page .da-form-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ds-text-2);
+    display: block;
+}
+
+.da-page .da-form-label .req {
+    color: var(--ds-danger);
+    margin-left: 3px;
+}
+
+.da-page .da-form-input {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--ds-surface-2);
+    border: 1px solid var(--ds-border);
+    color: var(--ds-text-1);
+    border-radius: var(--ds-radius-sm);
+    padding: 0.625rem 0.875rem;
+    font-size: 14px;
+    font-family: 'Inter', 'Manrope', inherit;
+    outline: none;
+    margin: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    transition:
+        border-color 180ms var(--ds-ease),
+        box-shadow 180ms var(--ds-ease);
+}
+
+.da-page .da-form-input:focus {
+    border-color: var(--ds-border-accent);
+    box-shadow: 0 0 0 3px var(--ds-accent-dim);
+}
+
+.da-page .da-form-input::placeholder { color: var(--ds-text-3); }
+
+.da-page .da-form-hint {
+    font-size: 12px;
+    color: var(--ds-text-3);
+    margin: 0;
+}
+
+/* ── Custom checkbox ──────────────────────────────────────────────── */
+.da-page .da-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ds-text-2);
+    user-select: none;
+    width: fit-content;
+}
+
+.da-page .da-checkbox input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    border: 1.5px solid var(--ds-border);
+    border-radius: 5px;
+    background: var(--ds-surface-2);
+    cursor: pointer;
+    position: relative;
+    margin: 0;
+    padding: 0;
+    transition: background 160ms var(--ds-ease), border-color 160ms var(--ds-ease);
+}
+
+.da-page .da-checkbox input[type="checkbox"]:checked {
+    background: var(--ds-accent);
+    border-color: var(--ds-accent);
+}
+
+.da-page .da-checkbox input[type="checkbox"]:checked::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 5px;
+    width: 5px;
+    height: 9px;
+    border: 2px solid #fff;
+    border-top: none;
+    border-left: none;
+    transform: rotate(45deg);
+}
+
+.da-page .da-checkbox input[type="checkbox"]:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--ds-accent-dim);
+    border-color: var(--ds-border-accent);
+}
+
+/* ── Form actions row ─────────────────────────────────────────────── */
+.da-form-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+/* ── Password reset expandable section ────────────────────────────── */
+.da-reset-trigger-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.da-reset-desc {
+    font-size: 13px;
+    color: var(--ds-text-3);
+    margin: 0;
+    line-height: 1.5;
+    flex: 1;
+}
+
+.da-reset-fields {
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition:
+        max-height 380ms cubic-bezier(0.16, 1, 0.3, 1),
+        opacity 260ms var(--ds-ease);
+}
+
+.da-reset-fields.da-reset-fields--open {
+    max-height: 500px;
+    opacity: 1;
+}
+
+.da-reset-fields-inner {
+    padding-top: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.da-reset-error {
+    font-size: 13px;
+    color: var(--ds-danger);
+    display: none;
+    margin: 0;
+    padding: 0.625rem 0.875rem;
+    background: var(--ds-danger-dim);
+    border-radius: var(--ds-radius-sm);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.da-reset-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+/* ── Aside detail list (addresses, payment methods) ──────────────── */
+.da-detail-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.da-detail-item {
+    padding: 0.875rem 0;
+    border-bottom: 1px solid var(--ds-border);
+}
+
+.da-detail-item:last-child { border-bottom: none; }
+
+.da-detail-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--ds-text-3);
+    margin: 0 0 5px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.da-detail-line {
+    font-size: 13px;
+    color: var(--ds-text-2);
+    line-height: 1.55;
+}
+
+.da-aside-empty {
+    font-size: 13px;
+    color: var(--ds-text-3);
+    text-align: center;
+    padding: 1.5rem 0;
+}
+
+/* ── Divider ──────────────────────────────────────────────────────── */
+.da-divider {
+    height: 1px;
+    background: var(--ds-border);
+    margin: 1.5rem 0;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   FILTER BAR — reusable GET filter form (orders, products, etc.)
+   ══════════════════════════════════════════════════════════════════ */
+
+.da-page .da-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 1rem;
+    background: var(--ds-surface);
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius-lg);
+    padding: 1.125rem 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--ds-shadow-card);
+    /* Reset main.css form styles */
+    max-width: none;
+    margin-top: 0;
+}
+
+.da-filter-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: 0 0 100%;
+    margin-bottom: 0.125rem;
+}
+
+.da-filter-head-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ds-text-3);
+}
+
+.da-filter-clear {
+    font-size: 12px;
+    color: var(--ds-text-3);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 180ms var(--ds-ease);
+}
+.da-filter-clear:hover { color: var(--ds-accent); }
+
+.da-filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    flex: 1;
+    min-width: 130px;
+    max-width: 200px;
+}
+
+.da-filter-group-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--ds-text-3);
+    white-space: nowrap;
+}
+
+.da-filter-actions {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.5rem;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+/* ── Select input ──────────────────────────────────────────────────── */
+
+.da-page .da-form-select {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--ds-surface-2);
+    border: 1px solid var(--ds-border);
+    color: var(--ds-text-1);
+    border-radius: var(--ds-radius-sm);
+    padding: 0.625rem 2.25rem 0.625rem 0.875rem;
+    font-size: 14px;
+    font-family: 'Inter', 'Manrope', inherit;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    /* Custom chevron arrow in dark gray */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235B5F7A' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.875rem center;
+    margin: 0;
+    transition:
+        border-color 180ms var(--ds-ease),
+        box-shadow 180ms var(--ds-ease);
+}
+
+.da-page .da-form-select:focus {
+    border-color: var(--ds-border-accent);
+    box-shadow: 0 0 0 3px var(--ds-accent-dim);
+}
+
+/* Dark option styling — best-effort (OS controlled in most browsers) */
+.da-page .da-form-select option {
+    background: #1C1D26;
+    color: #F0F0F5;
+}
+
+/* Date inputs share the same look as text inputs */
+.da-page .da-form-input[type="date"] {
+    color-scheme: dark;
+}
+
+/* ── Read-only display fields ─────────────────────────────────────── */
+
+.da-readonly-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    margin-bottom: 1rem;
+}
+.da-readonly-group:last-child { margin-bottom: 0; }
+
+.da-readonly-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--ds-text-3);
+}
+
+.da-readonly-value {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    min-height: 42px;
+    padding: 0.625rem 0.875rem;
+    background: var(--ds-surface-3);
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius-sm);
+    font-size: 14px;
+    color: var(--ds-text-2);
+    line-height: 1.5;
+    word-break: break-word;
+    user-select: text;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   REFUND REQUEST CARDS — used on orders/edit aside
+   ══════════════════════════════════════════════════════════════════ */
+
+.da-refund-card {
+    background: var(--ds-surface-2);
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius-md);
+    padding: 1.125rem;
+    margin-bottom: 0.875rem;
+}
+.da-refund-card:last-child { margin-bottom: 0; }
+
+.da-refund-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.da-refund-meta {
+    font-size: 12px;
+    color: var(--ds-text-3);
+    margin-bottom: 4px;
+    line-height: 1.55;
+}
+.da-refund-meta:last-of-type { margin-bottom: 0; }
+
+.da-refund-meta strong {
+    color: var(--ds-text-2);
+    font-weight: 500;
+}
+
+.da-refund-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.875rem;
+    padding-top: 0.875rem;
+    border-top: 1px solid var(--ds-border);
+    align-items: center;
+}
+
+/* Partial refund inline form */
+.da-page .da-partial-form {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    border-radius: 0;
+}
+
+.da-partial-input {
+    width: 5.5rem;
+    padding: 0.3rem 0.625rem;
+    background: var(--ds-surface-3);
+    border: 1px solid var(--ds-border);
+    color: var(--ds-text-1);
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: 'Inter', 'Manrope', inherit;
+    outline: none;
+    margin: 0;
+    box-sizing: border-box;
+    transition: border-color 180ms var(--ds-ease), box-shadow 180ms var(--ds-ease);
+}
+
+.da-partial-input:focus {
+    border-color: var(--ds-border-accent);
+    box-shadow: 0 0 0 3px var(--ds-accent-dim);
+}
+
+.da-partial-input::placeholder { color: var(--ds-text-3); }
+
+.da-refund-empty {
+    font-size: 13px;
+    color: var(--ds-text-3);
+    text-align: center;
+    padding: 1.5rem 0;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+    .da-form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .da-form-aside {
+        /* On tablet: aside becomes a 2-col grid of cards */
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .da-page {
+        padding: 1rem 1rem 2.5rem;
+    }
+
+    .da-page-title { font-size: 22px; }
+
+    .da-page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.875rem;
+    }
+
+    .da-page-header-right {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .da-form-aside {
+        grid-template-columns: 1fr;
+    }
+
+    /* Filter bar — stack vertically */
+    .da-page .da-filter-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.875rem;
+    }
+
+    .da-filter-group {
+        max-width: none;
+        flex: 1 1 100%;
+    }
+
+    .da-filter-actions {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .da-filter-actions .da-btn {
+        flex: 1;
+        justify-content: center;
+    }
+
+    /* Hide Created column on small screens */
+    .da-col-created { display: none; }
+}
+
+@media (max-width: 520px) {
+    .da-page { padding: 0.875rem 0.875rem 2rem; }
+    .da-page-title { font-size: 20px; }
+
+    .da-page .da-table thead th,
+    .da-page .da-table tbody td {
+        padding: 0.75rem 0.875rem;
+    }
+
+    .da-page .da-btn {
+        padding: 0.45rem 0.875rem;
+        font-size: 12px;
+    }
+
+    /* Only show Email + Actions on very small screens */
+    .da-col-username { display: none; }
+
+    .da-card-body { padding: 1.125rem; }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   REFUND REQUESTS INDEX — table cell components
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Linked order cell: stacks mono ID + email */
+.da-order-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.da-order-link {
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    transition: opacity 160ms var(--ds-ease);
+}
+
+.da-order-link:hover { opacity: 0.75; }
+.da-order-link:hover .da-cell-mono { text-decoration: underline; }
+
+.da-order-email {
+    font-size: 12px;
+    color: var(--ds-text-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+}
+
+/* Truncated reason text with full text in tooltip */
+.da-reason-text {
+    font-size: 13px;
+    color: var(--ds-text-2);
+    max-width: 200px;
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: default;
+}
+
+/* Stacked date + time */
+.da-date-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.da-date-time {
+    font-size: 11px;
+    color: var(--ds-text-3);
+}
+
+/* Pending row — left warning accent inset border */
+.da-page .da-table tbody tr.da-row--pending {
+    box-shadow: inset 3px 0 0 var(--ds-warning);
+}
+
+/* Responsive column hiding for refund requests table */
+@media (max-width: 900px) {
+    .da-col-type { display: none; }
+}
+
+@media (max-width: 640px) {
+    .da-col-reason { display: none; }
+    .da-order-email { display: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   PRODUCTS — index column hiding + form layout
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Responsive column hiding for products table */
+@media (max-width: 768px) {
+    .da-col-slug  { display: none; }
+}
+@media (max-width: 520px) {
+    .da-col-price { display: none; }
+}
+
+/* Stacked card form layout */
+.da-product-form-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    max-width: 780px;
+}
+
+/* Actions row at bottom of form */
+.da-product-form-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 0.5rem 0 1.5rem;
+}
+
+/* Horizontal row of form groups (pricing, shipping) */
+.da-form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+}
+
+/* Textarea variant */
+.da-page textarea.da-form-input {
+    resize: vertical;
+    line-height: 1.55;
+    min-height: 80px;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   FRAGMENT COMPAT — admin-* classes within .da-page context
+   Styles bare form elements rendered by media/meta-object pickers.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Form group container */
+.da-page .admin-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    margin-bottom: 1rem;
+}
+.da-page .admin-form-group:last-child { margin-bottom: 0; }
+
+/* Label inside fragment form groups */
+.da-page .admin-form-group > label:not(.admin-checkbox):not(.da-checkbox) {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ds-text-2);
+    display: block;
+}
+
+/* Bare inputs / selects / textareas from fragment markup */
+.da-page .admin-form-group input[type="text"],
+.da-page .admin-form-group input[type="number"],
+.da-page .admin-form-group input[type="email"],
+.da-page .admin-form-group input[type="url"],
+.da-page .admin-form-group input[type="date"],
+.da-page .admin-form-group input[type="password"],
+.da-page .admin-form-group select,
+.da-page .admin-form-group textarea {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--ds-surface-2);
+    border: 1px solid var(--ds-border);
+    color: var(--ds-text-1);
+    border-radius: var(--ds-radius-sm);
+    padding: 0.625rem 0.875rem;
+    font-size: 14px;
+    font-family: 'Inter', 'Manrope', inherit;
+    outline: none;
+    margin: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    transition:
+        border-color 180ms var(--ds-ease),
+        box-shadow 180ms var(--ds-ease);
+}
+
+.da-page .admin-form-group input:focus,
+.da-page .admin-form-group select:focus,
+.da-page .admin-form-group textarea:focus {
+    border-color: var(--ds-border-accent);
+    box-shadow: 0 0 0 3px var(--ds-accent-dim);
+}
+
+.da-page .admin-form-group textarea { resize: vertical; line-height: 1.55; }
+.da-page .admin-form-group ::placeholder { color: var(--ds-text-3); }
+
+/* Hint text */
+.da-page .admin-form-hint,
+.da-page .admin-media-picker-hint,
+.da-page .admin-meta-object-picker-hint {
+    font-size: 12px;
+    color: var(--ds-text-3);
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* admin-btn used by picker open buttons (not already da-btn) */
+.da-page .admin-btn:not(.da-btn) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1.125rem;
+    border-radius: var(--ds-radius-sm);
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'Inter', 'Manrope', inherit;
+    text-decoration: none;
+    cursor: pointer;
+    border: 1px solid var(--ds-border);
+    background: var(--ds-surface-2);
+    color: var(--ds-text-2);
+    white-space: nowrap;
+    transition:
+        background 180ms var(--ds-ease),
+        color 180ms var(--ds-ease),
+        border-color 180ms var(--ds-ease);
+}
+.da-page .admin-btn:not(.da-btn):hover {
+    background: var(--ds-surface-3);
+    color: var(--ds-text-1);
+    border-color: var(--ds-border-accent);
+}
+.da-page .admin-btn.admin-btn-primary:not(.da-btn) {
+    background: var(--ds-accent);
+    color: #fff;
+    border-color: transparent;
+}
+.da-page .admin-btn.admin-btn-primary:not(.da-btn):hover {
+    background: var(--ds-accent-light);
+    box-shadow: 0 4px 18px var(--ds-accent-glow);
+}
+
+/* admin-checkbox (used in meta object boolean fields) */
+.da-page .admin-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ds-text-2);
+    user-select: none;
+}
+.da-page .admin-checkbox input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    border: 1.5px solid var(--ds-border);
+    border-radius: 5px;
+    background: var(--ds-surface-2);
+    cursor: pointer;
+    position: relative;
+    margin: 0;
+    padding: 0;
+    transition: background 160ms var(--ds-ease), border-color 160ms var(--ds-ease);
+}
+.da-page .admin-checkbox input[type="checkbox"]:checked {
+    background: var(--ds-accent);
+    border-color: var(--ds-accent);
+}
+.da-page .admin-checkbox input[type="checkbox"]:checked::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 5px;
+    width: 5px;
+    height: 9px;
+    border: 2px solid #fff;
+    border-top: none;
+    border-left: none;
+    transform: rotate(45deg);
+}
+.da-page .admin-checkbox input[type="checkbox"]:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--ds-accent-dim);
+    border-color: var(--ds-border-accent);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   MEDIA PICKER — fragment styles within .da-page
+   ══════════════════════════════════════════════════════════════════ */
+
+.da-page .admin-media-picker-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.875rem;
+}
+
+.da-page .admin-media-picker-attached {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.625rem;
+}
+
+.da-page .admin-media-picker-attached-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.625rem;
+    background: var(--ds-surface-3);
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius-sm);
+    width: 108px;
+    transition: border-color 180ms var(--ds-ease);
+}
+.da-page .admin-media-picker-attached-item:hover {
+    border-color: var(--ds-border-accent);
+}
+
+.da-page .admin-media-picker-thumb {
+    width: 80px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 6px;
+}
+
+.da-page .admin-media-picker-placeholder {
+    width: 80px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--ds-surface-2);
+    border-radius: 6px;
+    font-size: 11px;
+    color: var(--ds-text-3);
+}
+
+.da-page .admin-media-picker-filename {
+    font-size: 11px;
+    color: var(--ds-text-3);
+    text-align: center;
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.da-page .admin-media-picker-remove {
+    font-size: 11px;
+    color: var(--ds-danger);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    font-family: inherit;
+    border-radius: 4px;
+    transition: background 160ms var(--ds-ease);
+}
+.da-page .admin-media-picker-remove:hover {
+    background: var(--ds-danger-dim);
+}
+
+/* Media picker modal */
+.da-page .admin-media-picker-modal[hidden] { display: none; }
+.da-page .admin-media-picker-modal:not([hidden]) {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+.da-page .admin-media-picker-modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+}
+.da-page .admin-media-picker-modal-box {
+    position: relative;
+    background: var(--ds-surface);
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius-lg);
+    box-shadow: var(--ds-shadow-hover);
+    padding: 1.5rem;
+    max-width: 660px;
+    width: 92vw;
+    max-height: 82vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.da-page .admin-media-picker-modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ds-text-1);
+    margin: 0;
+}
+.da-page .admin-media-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 0.625rem;
+}
+.da-page .admin-media-picker-modal-actions {
+    display: flex;
+    gap: 0.625rem;
+    border-top: 1px solid var(--ds-border);
+    padding-top: 1rem;
+    margin-top: auto;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   META OBJECT PICKER — fragment styles within .da-page
+   ══════════════════════════════════════════════════════════════════ */
+
+.da-page .admin-meta-object-picker-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.875rem;
+}
+
+.da-page .admin-meta-object-picker-attached {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.da-page .admin-meta-object-picker-item {
+    background: var(--ds-surface-3);
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius-md);
+    padding: 1rem;
+}
+
+.da-page .admin-meta-object-picker-item-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.875rem;
+}
+
+.da-page .admin-meta-object-picker-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ds-text-1);
+    margin: 0;
+}
+
+.da-page .admin-meta-object-picker-remove {
+    font-size: 12px;
+    color: var(--ds-danger);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    font-family: inherit;
+    border-radius: 6px;
+    transition: background 160ms var(--ds-ease);
+}
+.da-page .admin-meta-object-picker-remove:hover {
+    background: var(--ds-danger-dim);
+}
+
+.da-page .admin-meta-object-picker-values {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.da-page .admin-meta-object-picker-no-definition {
+    font-size: 12px;
+    color: var(--ds-text-3);
+    margin: 0;
+}
+
+/* Meta object picker modal */
+.da-page .admin-meta-object-picker-modal[hidden] { display: none; }
+.da-page .admin-meta-object-picker-modal:not([hidden]) {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+.da-page .admin-meta-object-picker-modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+}
+.da-page .admin-meta-object-picker-modal-box {
+    position: relative;
+    background: var(--ds-surface);
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius-lg);
+    box-shadow: var(--ds-shadow-hover);
+    padding: 1.5rem;
+    max-width: 540px;
+    width: 92vw;
+    max-height: 82vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.da-page .admin-meta-object-picker-modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ds-text-1);
+    margin: 0;
+}
+.da-page .admin-meta-object-picker-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.da-page .admin-meta-object-picker-modal-actions {
+    display: flex;
+    gap: 0.625rem;
+    border-top: 1px solid var(--ds-border);
+    padding-top: 1rem;
+    margin-top: auto;
+}
+
+/* ── Fix 1: Picker open buttons should not stretch full width ─────── */
+.da-page .admin-media-picker-open,
+.da-page .admin-meta-object-picker-open {
+    align-self: flex-start;
+}
+
+/* ── Fix 2: Meta object picker list items (JS-rendered) ──────────── */
+.da-page .admin-meta-object-picker-list-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--ds-surface-2);
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius-sm);
+    cursor: pointer;
+    transition:
+        background 160ms var(--ds-ease),
+        border-color 160ms var(--ds-ease);
+}
+.da-page .admin-meta-object-picker-list-item:hover {
+    background: var(--ds-surface-3);
+    border-color: var(--ds-border-accent);
+}
+.da-page .admin-meta-object-picker-list-item:has(input:checked) {
+    background: var(--ds-accent-dim);
+    border-color: var(--ds-border-accent);
+}
+
+/* Checkbox inside list item */
+.da-page .admin-meta-object-picker-list-item input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    border: 1.5px solid var(--ds-border);
+    border-radius: 4px;
+    background: var(--ds-surface-3);
+    cursor: pointer;
+    position: relative;
+    margin: 0;
+    padding: 0;
+    flex-shrink: 0;
+    transition: background 160ms var(--ds-ease), border-color 160ms var(--ds-ease);
+}
+.da-page .admin-meta-object-picker-list-item input[type="checkbox"]:checked {
+    background: var(--ds-accent);
+    border-color: var(--ds-accent);
+}
+.da-page .admin-meta-object-picker-list-item input[type="checkbox"]:checked::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    width: 5px;
+    height: 8px;
+    border: 2px solid #fff;
+    border-top: none;
+    border-left: none;
+    transform: rotate(45deg);
+}
+
+.da-page .admin-meta-object-picker-list-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ds-text-1);
+    line-height: 1.4;
+}
+
+/* ── Fix 2: Media picker grid items (JS-rendered) ────────────────── */
+.da-page .admin-media-picker-grid-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem;
+    background: var(--ds-surface-2);
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius-sm);
+    cursor: pointer;
+    position: relative;
+    transition:
+        border-color 160ms var(--ds-ease),
+        background 160ms var(--ds-ease);
+}
+.da-page .admin-media-picker-grid-item:hover {
+    border-color: var(--ds-border-accent);
+    background: var(--ds-surface-3);
+}
+.da-page .admin-media-picker-grid-item:has(input:checked) {
+    border-color: var(--ds-accent);
+    background: var(--ds-accent-dim);
+    box-shadow: 0 0 0 2px var(--ds-accent-glow);
+}
+
+/* Checkbox positioned top-right in grid item */
+.da-page .admin-media-picker-grid-item input[type="checkbox"] {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid var(--ds-border);
+    border-radius: 4px;
+    background: rgba(11, 11, 15, 0.7);
+    cursor: pointer;
+    margin: 0;
+    padding: 0;
+    flex-shrink: 0;
+    transition: background 160ms var(--ds-ease), border-color 160ms var(--ds-ease);
+}
+.da-page .admin-media-picker-grid-item input[type="checkbox"]:checked {
+    background: var(--ds-accent);
+    border-color: var(--ds-accent);
+}
+.da-page .admin-media-picker-grid-item input[type="checkbox"]:checked::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    width: 5px;
+    height: 8px;
+    border: 2px solid #fff;
+    border-top: none;
+    border-left: none;
+    transform: rotate(45deg);
+}
+
+.da-page .admin-media-picker-grid-thumb {
+    width: 100%;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 4px;
+    display: block;
+}
+.da-page .admin-media-picker-grid-placeholder {
+    width: 100%;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--ds-surface-3);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--ds-text-3);
+}
+.da-page .admin-media-picker-grid-filename {
+    font-size: 11px;
+    color: var(--ds-text-3);
+    text-align: center;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Error messages in pickers */
+.da-page .admin-meta-object-picker-error,
+.da-page .admin-media-picker-error {
+    font-size: 13px;
+    color: var(--ds-danger);
+    padding: 0.75rem 1rem;
+    background: var(--ds-danger-dim);
+    border-radius: var(--ds-radius-sm);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    margin: 0;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   NARROW FORM WRAPPER — single-card forms (product types, etc.)
+   ══════════════════════════════════════════════════════════════════ */
+
+.da-pt-form-wrap {
+    max-width: 560px;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   EVENT TYPE PRODUCTS — index hint
+   ══════════════════════════════════════════════════════════════════ */
+
+.da-events-type-hint {
+    font-size: 13px;
+    color: var(--ds-text-3);
+    margin: 0 0 1.25rem;
+    line-height: 1.6;
+}
+.da-events-type-hint-link {
+    color: var(--ds-accent);
+    text-decoration: none;
+}
+.da-events-type-hint-link:hover {
+    text-decoration: underline;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   EVENTS PAGE — sticky header
+   ══════════════════════════════════════════════════════════════════ */
+
+.da-page-header--sticky {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    margin-left: calc(-1 * var(--da-page-px, 1.5rem));
+    margin-right: calc(-1 * var(--da-page-px, 1.5rem));
+    padding-left: var(--da-page-px, 1.5rem);
+    padding-right: var(--da-page-px, 1.5rem);
+    background: var(--ds-bg);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--ds-border);
+    margin-bottom: 1.25rem;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   EVENTS PAGE — toolbar
+   ══════════════════════════════════════════════════════════════════ */
+
+.da-events-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+}
+.da-events-toolbar-left,
+.da-events-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.da-save-cancel-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   EVENTS PAGE — empty state
+   ══════════════════════════════════════════════════════════════════ */
+
+.da-events-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 3rem 1.5rem;
+    color: var(--ds-text-3);
+    font-size: 13px;
+    text-align: center;
+}
+.da-events-empty svg {
+    opacity: 0.4;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   EVENTS TABLE — compact inputs for new-row template
+   ══════════════════════════════════════════════════════════════════ */
+
+.da-event-input {
+    width: 100%;
+    padding: 0.2rem 0.4rem;
+    font-size: 12px;
+    line-height: 1.4;
+    background: var(--ds-surface);
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius-sm);
+    color: var(--ds-text-1);
+    color-scheme: dark;
+    outline: none;
+    transition: border-color 0.15s var(--ds-ease);
+    box-sizing: border-box;
+    min-width: 0;
+}
+.da-event-input:focus {
+    border-color: var(--ds-accent);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.18);
+}
+.da-event-input[type="number"] {
+    -moz-appearance: textfield;
+}
+.da-event-input[type="number"]::-webkit-inner-spin-button,
+.da-event-input[type="number"]::-webkit-outer-spin-button {
+    opacity: 0.4;
+}
+
+.da-event-checkbox {
+    width: 15px;
+    height: 15px;
+    accent-color: var(--ds-accent);
+    cursor: pointer;
+    display: block;
+    margin: 0 auto;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   EVENTS TABLE — meeting sync badges
+   ══════════════════════════════════════════════════════════════════ */
+
+.da-sync-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+    min-width: 1.25rem;
+    cursor: default;
+}
+.da-sync-badge--synced {
+    color: var(--ds-success);
+}
+.da-sync-badge--not-synced {
+    color: var(--ds-text-3);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   EVENTS TABLE — row action buttons
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Re-sync button — info / cyan tint */
+.da-row-btn--resync {
+    color: var(--ds-info, #06b6d4);
+    border-color: transparent;
+    background: transparent;
+}
+.da-row-btn--resync:hover {
+    background: rgba(6, 182, 212, 0.1);
+    border-color: rgba(6, 182, 212, 0.3);
+    color: var(--ds-info, #06b6d4);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   EVENTS TABLE — da-table--events tweaks
+   ══════════════════════════════════════════════════════════════════ */
+
+.da-table--events th,
+.da-table--events td {
+    white-space: nowrap;
+}
+.da-table--events td:last-child {
+    text-align: right;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   MEDIA PAGE — upload zone & preview (dark overrides)
+   ══════════════════════════════════════════════════════════════════ */
+
+.da-page .admin-upload-zone {
+    border-color: var(--ds-border);
+    background: var(--ds-surface-2);
+}
+.da-page .admin-upload-zone:hover {
+    border-color: var(--ds-border-accent);
+    background: var(--ds-accent-dim);
+}
+.da-page .admin-upload-zone-icon {
+    color: var(--ds-text-3);
+}
+.da-page .admin-upload-zone:hover .admin-upload-zone-icon {
+    color: var(--ds-accent);
+}
+.da-page .admin-upload-zone-label {
+    color: var(--ds-text-1);
+}
+.da-page .admin-upload-zone-hint {
+    color: var(--ds-text-3);
+}
+.da-page .admin-upload-zone-selected {
+    color: var(--ds-accent);
+}
+.da-page .admin-media-preview {
+    border-color: var(--ds-border);
+}
+.da-page .admin-media-preview-placeholder {
+    background: var(--ds-surface-2);
+    border-color: var(--ds-border);
+    color: var(--ds-text-3);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   META OBJECTS — definition card (dark overrides)
+   ══════════════════════════════════════════════════════════════════ */
+
+.da-page .admin-table-card.admin-definition-card {
+    background: var(--ds-surface-2);
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius-lg);
+}
+.da-page .admin-definition-header {
+    background: var(--ds-surface-3);
+    color: var(--ds-text-3);
+    border-bottom-color: var(--ds-border);
+}
+.da-page .definition-row {
+    border-bottom-color: var(--ds-border);
+    color: var(--ds-text-2);
+}
+.da-page .definition-row:hover {
+    background: var(--ds-surface-3);
+}
+.da-page .definition-row .definition-key,
+.da-page .definition-row .definition-type {
+    border-color: var(--ds-border);
+    background: var(--ds-surface);
+    color: var(--ds-text-1);
+}
+.da-page .definition-row .definition-key:focus,
+.da-page .definition-row .definition-type:focus {
+    border-color: var(--ds-border-accent);
+    box-shadow: 0 0 0 3px var(--ds-accent-dim);
+}
+.da-page .admin-definition-footer {
+    background: var(--ds-surface);
+    border-top-color: var(--ds-border);
+}
+
+/* Attribute definition: Remove confirmation (same as table Delete) */
+.da-page .definition-row--confirming .da-definition-remove-trigger {
+    opacity: 0;
+    pointer-events: none;
+    width: 0;
+    min-width: 0;
+    overflow: hidden;
+}
+.da-page .definition-row--confirming .da-confirm-group {
+    opacity: 1;
+    pointer-events: auto;
+    height: auto;
+    overflow: visible;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   EVENTS FORM
+   ══════════════════════════════════════════════════════════════════ */
+
+.da-events-form {
+    /* let the form be a plain wrapper, panel handles visuals */
+    display: contents;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   POST BODY — full HTML + CSS (AI-ready "magic" field)
+   Distinct teal/emerald "power editor" styling
+   ══════════════════════════════════════════════════════════════════ */
+
+.da-post-body-section {
+    margin-top: 1.5rem;
+}
+
+.da-post-body-editor {
+    --body-teal: #0d9488;
+    --body-teal-dim: rgba(13, 148, 136, 0.15);
+    --body-teal-glow: rgba(13, 148, 136, 0.35);
+    --body-bg: #0c1919;
+    --body-border: rgba(20, 184, 166, 0.35);
+    --body-inner: rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: linear-gradient(165deg, #0f1f1e 0%, #0a1616 45%, #071212 100%);
+    border: 1px solid var(--body-border);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    position: relative;
+    box-shadow:
+        0 0 0 1px var(--body-inner) inset,
+        0 4px 24px -8px rgba(0, 0, 0, 0.5),
+        0 0 40px -12px var(--body-teal-glow);
+}
+
+/* Left accent bar — full height of editor, visible only when Body is focused */
+.da-post-body-editor::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    border-radius: 12px 0 0 12px;
+    background: linear-gradient(180deg, var(--body-teal), #14b8a6, #2dd4bf);
+    box-shadow: 0 0 12px var(--body-teal-glow);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+.da-post-body-editor:focus-within::after {
+    opacity: 1;
+}
+
+/* Override .da-page .da-form-label { display: block } so Body + badge stay flex */
+.da-page .da-form-label.da-post-body-label {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: #99f6e4;
+    text-shadow: 0 0 20px rgba(153, 246, 228, 0.15);
+}
+
+.da-post-body-badge {
+    display: inline-block;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #0c1919;
+    background: linear-gradient(135deg, #2dd4bf, #0d9488);
+    padding: 0.25rem 0.6rem;
+    border-radius: 6px;
+    box-shadow: 0 0 12px rgba(45, 212, 191, 0.4);
+}
+
+.da-post-body-hint {
+    font-size: 0.8125rem;
+    color: #5eead4;
+    opacity: 0.85;
+    line-height: 1.45;
+}
+
+.da-post-body-input {
+    font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    min-height: 18rem;
+    resize: vertical;
+    border: 1px solid var(--body-border);
+    background: transparent;
+    color: #ccfbf1;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    width: 100%;
+    box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.da-post-body-input::placeholder {
+    color: #0d9488;
+    opacity: 0.5;
+}
+
+.da-post-body-input:hover:not(:focus) {
+    border-color: rgba(20, 184, 166, 0.5);
+}
+
+.da-post-body-input:focus {
+    outline: none;
+    border-color: #fff;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15);
+}

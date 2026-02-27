@@ -1,0 +1,139 @@
+extends ../../layouts/admin
+
+block append links
+    link(rel='preconnect' href='https://fonts.googleapis.com')
+    link(rel='preconnect' href='https://fonts.gstatic.com' crossorigin)
+
+block content
+    .da-page
+
+        if flash && flash.message
+            p.admin-flash(class='admin-flash-' + (flash.type || 'info'))= flash.message
+
+        //- ── Page header ─────────────────────────────────────────────
+        .da-page-header
+            .da-page-header-left
+                h1.da-page-title Collections
+                p.da-page-subtitle= (collections ? collections.length : 0) + ' collection' + ((collections && collections.length !== 1) ? 's' : '')
+
+            .da-page-header-right
+                a.da-btn.da-btn--primary(href=(adminPrefix || '') + '/collections/new')
+                    svg(xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                        line(x1='12' y1='5' x2='12' y2='19')
+                        line(x1='5' y1='12' x2='19' y2='12')
+                    | Add Collection
+
+        //- ── Collections table ───────────────────────────────────────
+        .da-section
+            .da-section-header
+                h2.da-section-title All collections
+                span.da-count= collections ? collections.length : 0
+
+            .da-panel
+                .da-table-scroll
+                    table.da-table(role='table' aria-label='Collections list')
+                        thead
+                            tr
+                                th(scope='col') Title
+                                th(scope='col') Slug
+                                th(scope='col') Status
+                                th(scope='col' style='text-align:right') Actions
+                        tbody
+                            if collections && collections.length
+                                each c in collections
+                                    tr.da-row(data-collection-id=c.id)
+                                        td
+                                            span.da-cell-primary= c.title
+                                        td
+                                            span.da-cell-mono= c.slug || '—'
+                                        td
+                                            if c.active
+                                                span.da-badge.da-badge--success Active
+                                            else
+                                                span.da-badge.da-badge--neutral Inactive
+                                        td
+                                            .da-cell-actions
+                                                a.da-row-btn.da-row-btn--edit(href=(adminPrefix || '') + '/collections/' + c.id + '/edit' aria-label='Edit ' + c.title) Edit
+                                                .da-delete-wrap(aria-label='Delete collection actions')
+                                                    button.da-row-btn.da-row-btn--delete.da-delete-trigger(
+                                                        type='button'
+                                                        aria-label='Delete ' + c.title
+                                                        aria-expanded='false'
+                                                    ) Delete
+                                                    .da-confirm-group(role='group' aria-label='Confirm deletion')
+                                                        button.da-row-btn.da-row-btn--cancel.da-delete-cancel(
+                                                            type='button'
+                                                            aria-label='Cancel deletion'
+                                                        ) No
+                                                        span.da-confirm-sep(aria-hidden='true')
+                                                        form.da-form-inline.da-delete-form(
+                                                            method='post'
+                                                            action=(adminPrefix || '') + '/collections/' + c.id + '/delete'
+                                                        )
+                                                            button.da-row-btn.da-row-btn--confirm(
+                                                                type='submit'
+                                                                aria-label='Confirm delete ' + c.title
+                                                            ) Yes, delete
+                            else
+                                tr
+                                    td(colspan='4')
+                                        .da-table-empty No collections yet.
+
+block append scripts
+    script.
+        (function () {
+            'use strict';
+
+            /* ── Delete confirmation flow (same as Users page) ───────── */
+
+            function initDeleteFlow() {
+                document.querySelectorAll('.da-delete-trigger').forEach(function (trigger) {
+                    trigger.addEventListener('click', function () {
+                        var row = trigger.closest('tr.da-row');
+                        if (!row) return;
+                        row.classList.add('da-row--confirming');
+                        trigger.setAttribute('aria-expanded', 'true');
+                        var cancel = row.querySelector('.da-delete-cancel');
+                        if (cancel) setTimeout(function () { cancel.focus(); }, 200);
+                    });
+                });
+
+                document.querySelectorAll('.da-delete-cancel').forEach(function (cancel) {
+                    cancel.addEventListener('click', function () {
+                        var row = cancel.closest('tr.da-row');
+                        if (!row) return;
+                        row.classList.remove('da-row--confirming');
+                        var trigger = row.querySelector('.da-delete-trigger');
+                        if (trigger) {
+                            trigger.setAttribute('aria-expanded', 'false');
+                            setTimeout(function () { trigger.focus(); }, 200);
+                        }
+                    });
+                });
+
+                document.querySelectorAll('.da-delete-form').forEach(function (form) {
+                    form.addEventListener('submit', function (e) {
+                        e.preventDefault();
+                        var row = form.closest('tr');
+                        if (!row) { form.submit(); return; }
+                        row.classList.add('da-row--removing');
+                        setTimeout(function () { form.submit(); }, 340);
+                    });
+                });
+            }
+
+            document.addEventListener('keydown', function (e) {
+                if (e.key !== 'Escape') return;
+                document.querySelectorAll('tr.da-row--confirming').forEach(function (row) {
+                    row.classList.remove('da-row--confirming');
+                    var trigger = row.querySelector('.da-delete-trigger');
+                    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+                });
+            });
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initDeleteFlow);
+            } else {
+                initDeleteFlow();
+            }
+        })();

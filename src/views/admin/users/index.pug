@@ -1,0 +1,200 @@
+extends ../../layouts/admin
+
+block append links
+    link(rel='preconnect' href='https://fonts.googleapis.com')
+    link(rel='preconnect' href='https://fonts.gstatic.com' crossorigin)
+
+block content
+    .da-page
+
+        if flash && flash.message
+            p.admin-flash(class='admin-flash-' + (flash.type || 'info'))= flash.message
+
+        //- ── Page header ─────────────────────────────────────────────
+        .da-page-header
+            .da-page-header-left
+                h1.da-page-title Users
+                p.da-page-subtitle
+                    | #{(admins ? admins.length : 0) + (users ? users.length : 0)} total members
+
+            .da-page-header-right
+                a.da-btn.da-btn--primary(href=(adminPrefix || '') + '/users/new')
+                    svg(xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                        line(x1='12' y1='5' x2='12' y2='19')
+                        line(x1='5' y1='12' x2='19' y2='12')
+                    | Add User
+
+        //- ── Admins section ──────────────────────────────────────────
+        .da-section
+            .da-section-header
+                h2.da-section-title Admins
+                span.da-count= admins ? admins.length : 0
+
+            .da-panel
+                .da-table-scroll
+                    table.da-table(role='table' aria-label='Admin users')
+                        thead
+                            tr
+                                th(scope='col') Email
+                                th.da-col-username(scope='col') Username
+                                th.da-col-created(scope='col') Created
+                                th(scope='col' style='text-align:right') Actions
+                        tbody
+                            if admins && admins.length
+                                each u in admins
+                                    tr.da-row(data-user-id=u.id)
+                                        td
+                                            span.da-cell-primary= u.email
+                                        td.da-col-username
+                                            span.da-cell-secondary= u.username || '—'
+                                        td.da-col-created
+                                            span.da-cell-muted= u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '—'
+                                        td
+                                            .da-cell-actions
+                                                a.da-row-btn.da-row-btn--edit(href=(adminPrefix || '') + '/users/' + u.id + '/edit' aria-label='Edit ' + u.email) Edit
+                                                .da-delete-wrap(aria-label='Delete user actions')
+                                                    button.da-row-btn.da-row-btn--delete.da-delete-trigger(
+                                                        type='button'
+                                                        aria-label='Delete ' + u.email
+                                                        aria-expanded='false'
+                                                    ) Delete
+                                                    .da-confirm-group(role='group' aria-label='Confirm deletion')
+                                                        button.da-row-btn.da-row-btn--cancel.da-delete-cancel(
+                                                            type='button'
+                                                            aria-label='Cancel deletion'
+                                                        ) No
+                                                        span.da-confirm-sep(aria-hidden='true')
+                                                        form.da-form-inline.da-delete-form(
+                                                            method='post'
+                                                            action=(adminPrefix || '') + '/users/' + u.id + '/delete'
+                                                        )
+                                                            button.da-row-btn.da-row-btn--confirm(
+                                                                type='submit'
+                                                                aria-label='Confirm delete ' + u.email
+                                                            ) Yes, delete
+                            else
+                                tr
+                                    td(colspan='4')
+                                        .da-table-empty No admins yet.
+
+        //- ── Regular users section ───────────────────────────────────
+        .da-section
+            .da-section-header
+                h2.da-section-title Users
+                span.da-count= users ? users.length : 0
+
+            .da-panel
+                .da-table-scroll
+                    table.da-table(role='table' aria-label='Regular users')
+                        thead
+                            tr
+                                th(scope='col') Email
+                                th.da-col-username(scope='col') Username
+                                th.da-col-created(scope='col') Created
+                                th(scope='col' style='text-align:right') Actions
+                        tbody
+                            if users && users.length
+                                each u in users
+                                    tr.da-row(data-user-id=u.id)
+                                        td
+                                            span.da-cell-primary= u.email
+                                        td.da-col-username
+                                            span.da-cell-secondary= u.username || '—'
+                                        td.da-col-created
+                                            span.da-cell-muted= u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '—'
+                                        td
+                                            .da-cell-actions
+                                                a.da-row-btn.da-row-btn--edit(href=(adminPrefix || '') + '/users/' + u.id + '/edit' aria-label='Edit ' + u.email) Edit
+                                                .da-delete-wrap(aria-label='Delete user actions')
+                                                    button.da-row-btn.da-row-btn--delete.da-delete-trigger(
+                                                        type='button'
+                                                        aria-label='Delete ' + u.email
+                                                        aria-expanded='false'
+                                                    ) Delete
+                                                    .da-confirm-group(role='group' aria-label='Confirm deletion')
+                                                        button.da-row-btn.da-row-btn--cancel.da-delete-cancel(
+                                                            type='button'
+                                                            aria-label='Cancel deletion'
+                                                        ) No
+                                                        span.da-confirm-sep(aria-hidden='true')
+                                                        form.da-form-inline.da-delete-form(
+                                                            method='post'
+                                                            action=(adminPrefix || '') + '/users/' + u.id + '/delete'
+                                                        )
+                                                            button.da-row-btn.da-row-btn--confirm(
+                                                                type='submit'
+                                                                aria-label='Confirm delete ' + u.email
+                                                            ) Yes, delete
+                            else
+                                tr
+                                    td(colspan='4')
+                                        .da-table-empty No users yet.
+
+block append scripts
+    script.
+        (function () {
+            'use strict';
+
+            /* ── Delete confirmation flow ─────────────────────────── */
+
+            function initDeleteFlow() {
+                document.querySelectorAll('.da-delete-trigger').forEach(function (trigger) {
+                    trigger.addEventListener('click', function () {
+                        var row = trigger.closest('tr.da-row');
+                        if (!row) return;
+                        row.classList.add('da-row--confirming');
+                        trigger.setAttribute('aria-expanded', 'true');
+                        // Focus the "No" button for accessibility
+                        var cancel = row.querySelector('.da-delete-cancel');
+                        if (cancel) setTimeout(function () { cancel.focus(); }, 200);
+                    });
+                });
+
+                document.querySelectorAll('.da-delete-cancel').forEach(function (cancel) {
+                    cancel.addEventListener('click', function () {
+                        var row = cancel.closest('tr.da-row');
+                        if (!row) return;
+                        row.classList.remove('da-row--confirming');
+                        var trigger = row.querySelector('.da-delete-trigger');
+                        if (trigger) {
+                            trigger.setAttribute('aria-expanded', 'false');
+                            setTimeout(function () { trigger.focus(); }, 200);
+                        }
+                    });
+                });
+
+                /* Animate row exit before form submission */
+                document.querySelectorAll('.da-delete-form').forEach(function (form) {
+                    form.addEventListener('submit', function (e) {
+                        e.preventDefault();
+                        var row = form.closest('tr');
+                        if (!row) { form.submit(); return; }
+
+                        row.classList.add('da-row--removing');
+
+                        // Wait for exit animation (350ms) then submit
+                        setTimeout(function () {
+                            form.submit();
+                        }, 340);
+                    });
+                });
+            }
+
+            /* ── Keyboard: Escape cancels confirming state ────────── */
+
+            document.addEventListener('keydown', function (e) {
+                if (e.key !== 'Escape') return;
+                document.querySelectorAll('tr.da-row--confirming').forEach(function (row) {
+                    row.classList.remove('da-row--confirming');
+                    var trigger = row.querySelector('.da-delete-trigger');
+                    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+                });
+            });
+
+            /* ── Init ─────────────────────────────────────────────── */
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initDeleteFlow);
+            } else {
+                initDeleteFlow();
+            }
+        })();

@@ -1,0 +1,13 @@
+extends ../../layouts/admin
+
+block content
+  .da-page
+    .da-card(style="max-width: 40rem;")
+      .da-card-body
+        h1.da-page-title(style="margin-bottom: 0.5rem") #{status} - #{title}
+        p(style="margin-bottom: 1rem")= message
+        if detail
+          pre.error-detail(style="background: var(--ds-bg-2, #1f2937); padding: 0.75rem; overflow: auto; font-size: 0.85rem; margin-bottom: 1rem; border-radius: 6px")= detail
+        if stack
+          pre.error-stack(style="background: var(--ds-bg-2, #1f2937); padding: 0.75rem; overflow: auto; font-size: 0.75rem; white-space: pre-wrap; margin-bottom: 1rem; border-radius: 6px")= stack
+        a.da-btn.da-btn--secondary(href=(adminPrefix || "") + "/") Back to dashboard

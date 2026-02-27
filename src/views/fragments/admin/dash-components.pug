@@ -1,0 +1,151 @@
+//- ═══════════════════════════════════════════════════════════════════
+//- ADMIN DASHBOARD — Reusable Pug Mixins (dash-components.pug)
+//-
+//- Include this file at the top of any admin page that uses these
+//- components to preserve visual integrity across the dashboard UI:
+//-
+//-   include ../fragments/admin/dash-components
+//-
+//- Available mixins:
+//-   +kpiCard(href, stat, label, icon, variant)
+//-   +statusBadge(status)
+//-   +alertItem(type, message, time, href)
+//-   +dashPanel(title, actionHref, actionLabel)
+//-   +dashIcon(name)
+//- ═══════════════════════════════════════════════════════════════════
+
+
+//- ── KPI Card ──────────────────────────────────────────────────────
+//- Renders a clickable metric card.
+//-
+//- @param {string}       href     - Destination URL
+//- @param {number}       stat     - Numeric value to display & animate
+//- @param {string}       label    - Human-readable metric name
+//- @param {string}       icon     - Icon key (see +dashIcon below)
+//- @param {string}       variant  - Color variant: accent | success | warning | danger | info
+mixin kpiCard(href, stat, label, icon, variant)
+    a.dash-kpi-card(href=href class='dash-kpi-card--' + (variant || 'accent') aria-label=label + ': ' + (stat || 0))
+        .dash-kpi-header
+            .dash-kpi-icon(aria-hidden='true')
+                +dashIcon(icon)
+        p.dash-kpi-stat(data-counter=stat)= stat || 0
+        p.dash-kpi-label= label
+        .dash-kpi-footer
+            span Manage
+            svg(xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                polyline(points='9 18 15 12 9 6')
+
+
+//- ── Status Badge ──────────────────────────────────────────────────
+//- Renders a coloured pill badge for order/request status.
+//-
+//- @param {string} status - e.g. "paid", "pending", "shipped", "refunded"
+mixin statusBadge(status)
+    - var s = (status || '').toLowerCase().trim()
+    - var cls = ({'paid':'paid','complete':'complete','completed':'complete','pending':'pending','shipped':'shipped','delivered':'shipped','refunded':'refunded','refund':'refund'})[s] || 'pending'
+    span.dash-badge(class='dash-badge--' + cls)= status || 'Unknown'
+
+
+//- ── Alert Item ────────────────────────────────────────────────────
+//- Renders a single alert row inside the notifications panel.
+//-
+//- @param {string}       type     - Dot colour: order | refund | warning | info
+//- @param {string}       message  - Alert copy
+//- @param {string}       time     - Relative time label (e.g. "2 min ago")
+//- @param {string}       [href]   - Optional CTA link (makes the time label a link)
+mixin alertItem(type, message, time, href)
+    .dash-alert-item
+        .dash-alert-dot(class='dash-alert-dot--' + (type || 'info') aria-hidden='true')
+        .dash-alert-body
+            p.dash-alert-msg= message
+            if href
+                a.dash-alert-time(href=href)= time || 'View →'
+            else
+                span.dash-alert-time= time || 'Just now'
+
+
+//- ── Panel wrapper ─────────────────────────────────────────────────
+//- Renders a panel card with header and optional action link.
+//- Place body content inside the block.
+//-
+//- @param {string}       title       - Panel heading
+//- @param {string}       [actionHref]  - Header action link URL
+//- @param {string}       [actionLabel] - Header action link text (default: "View all")
+mixin dashPanel(title, actionHref, actionLabel)
+    section.dash-panel
+        .dash-panel-header
+            h2.dash-panel-title= title
+            if actionHref
+                a.dash-panel-action(href=actionHref)= (actionLabel || 'View all') + ' →'
+        block
+
+
+//- ── Inline SVG Icons ──────────────────────────────────────────────
+//- Renders a Feather-style SVG icon by name.
+//-
+//- Supported names:
+//-   box | layers | shopping-bag | users | refresh |
+//-   video | presentation | book | bell | check-circle
+mixin dashIcon(name)
+    case name
+        when 'box'
+            svg(xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                path(d='M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z')
+                polyline(points='3.27 6.96 12 12.01 20.73 6.96')
+                line(x1='12' y1='22.08' x2='12' y2='12')
+
+        when 'layers'
+            svg(xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                polygon(points='12 2 2 7 12 12 22 7 12 2')
+                polyline(points='2 17 12 22 22 17')
+                polyline(points='2 12 12 17 22 12')
+
+        when 'shopping-bag'
+            svg(xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                path(d='M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z')
+                line(x1='3' y1='6' x2='21' y2='6')
+                path(d='M16 10a4 4 0 0 1-8 0')
+
+        when 'users'
+            svg(xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                path(d='M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2')
+                circle(cx='9' cy='7' r='4')
+                path(d='M23 21v-2a4 4 0 0 0-3-3.87')
+                path(d='M16 3.13a4 4 0 0 1 0 7.75')
+
+        when 'refresh'
+            svg(xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                polyline(points='1 4 1 10 7 10')
+                path(d='M3.51 15a9 9 0 1 0 .49-4.95L1 10')
+
+        when 'video'
+            svg(xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                polygon(points='23 7 16 12 23 17 23 7')
+                rect(x='1' y='5' width='15' height='14' rx='2' ry='2')
+
+        when 'presentation'
+            svg(xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                rect(x='2' y='3' width='20' height='14' rx='2' ry='2')
+                line(x1='8' y1='21' x2='16' y2='21')
+                line(x1='12' y1='17' x2='12' y2='21')
+
+        when 'book'
+            svg(xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                path(d='M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z')
+                path(d='M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z')
+
+        when 'bell'
+            svg(xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                path(d='M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9')
+                path(d='M13.73 21a2 2 0 0 1-3.46 0')
+
+        when 'check-circle'
+            svg(xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                path(d='M22 11.08V12a10 10 0 1 1-5.93-9.14')
+                polyline(points='22 4 12 14.01 9 11.01')
+
+        default
+            svg(xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                circle(cx='12' cy='12' r='10')
+                line(x1='12' y1='8' x2='12' y2='12')
+                line(x1='12' y1='16' x2='12' y2='16.01')

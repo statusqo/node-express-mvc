@@ -1,0 +1,26 @@
+extends ../layouts/main
+
+block content
+  h1 Register
+  if error
+    p(style="color:red") #{error}
+
+  form(action="/auth/register" method="post")
+    label(for="username") Username
+    input#username(type="text" name="username" required)
+
+    label(for="email") Email
+    input#email(type="email" name="email" required)
+    
+    label(for="password") Password
+    input#password(type="password" name="password" required)
+    
+    button(type="submit") Register
+
+  if googleAuthEnabled
+    p Or
+    p
+      a(href="/auth/google") Sign up with Google
+
+  p Already have an account? 
+    a(href="/auth/login") Sign in

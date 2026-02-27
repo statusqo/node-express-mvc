@@ -1,0 +1,14 @@
+extends ../../layouts/main
+
+block content
+  h1 Collections
+  if collections && collections.length
+    ul(style="list-style:none; padding:0")
+      each collection in collections
+        li(style="border:1px solid #ddd; padding:1rem; margin-bottom:0.5rem")
+          a(href="/collections/" + collection.slug)
+            strong= collection.title
+          if collection.description
+            p(style="margin:0.5rem 0")= collection.description
+  else
+    p No collections available at the moment.

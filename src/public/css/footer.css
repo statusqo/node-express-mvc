@@ -1,0 +1,39 @@
+.footer-nav {
+  padding: 1rem 0;
+}
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.footer-link-item {
+  margin: 0;
+}
+
+.footer-link,
+.footer-sublink {
+  color: inherit;
+  text-decoration: none;
+  opacity: 0.9;
+}
+
+.footer-link:hover,
+.footer-sublink:hover {
+  text-decoration: underline;
+  opacity: 1;
+}
+
+.footer-sublinks {
+  list-style: none;
+  margin: 0.25rem 0 0 0;
+  padding: 0;
+}
+
+.footer-sublinks li {
+  margin: 0.25rem 0;
+}

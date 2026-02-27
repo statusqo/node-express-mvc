@@ -1,0 +1,213 @@
+extends ../../layouts/admin
+include ../../fragments/admin/media-picker-section
+include ../../fragments/admin/meta-object-picker-section
+
+block append links
+    link(rel='preconnect' href='https://fonts.googleapis.com')
+    link(rel='preconnect' href='https://fonts.gstatic.com' crossorigin)
+
+block content
+    .da-page
+
+        //- ── Page header ─────────────────────────────────────────────
+        .da-page-header
+            .da-page-header-left
+                h1.da-page-title= isEdit ? 'Edit Product' : 'New Product'
+                p.da-page-subtitle= isEdit && product && product.title ? product.title : 'Fill in the product details below'
+            .da-page-header-right
+                a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/products')
+                    svg(xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                        polyline(points='15 18 9 12 15 6')
+                    | Back to Products
+
+        if error
+            p.admin-flash.admin-flash-error= error
+
+        //- ── Product form (single stacked-card layout) ────────────────
+        form#productForm(
+            method='post'
+            action=isEdit ? (adminPrefix || '') + '/products/' + product.id + '/edit' : (adminPrefix || '') + '/products/new'
+        )
+            .da-product-form-layout
+
+                //- ── Details ─────────────────────────────────────────
+                .da-card
+                    .da-card-header
+                        h2.da-card-title Details
+                    .da-card-body
+                        .da-form-section
+                            span.da-form-section-label Identity
+                            .da-form-group
+                                label.da-form-label(for='title')
+                                    | Title
+                                    span.req *
+                                input#title.da-form-input(
+                                    type='text'
+                                    name='title'
+                                    required
+                                    value=product ? product.title : ''
+                                    placeholder='Product title'
+                                )
+                            .da-form-group
+                                label.da-form-label(for='slug') Slug
+                                input#slug.da-form-input(
+                                    type='text'
+                                    name='slug'
+                                    value=product ? product.slug : ''
+                                    placeholder='Auto-generated from title if left blank'
+                                )
+                            .da-form-group
+                                label.da-form-label(for='description') Description
+                                textarea#description.da-form-input(
+                                    name='description'
+                                    rows='4'
+                                    placeholder='Optional description'
+                                )= product ? product.description : ''
+
+                //- ── Pricing ─────────────────────────────────────────
+                .da-card
+                    .da-card-header
+                        h2.da-card-title Pricing
+                    .da-card-body
+                        .da-form-row
+                            .da-form-group
+                                label.da-form-label(for='priceAmount') Default price
+                                input#priceAmount.da-form-input(
+                                    type='number'
+                                    name='priceAmount'
+                                    step='0.01'
+                                    min='0'
+                                    value=product && product.priceAmount != null ? product.priceAmount : ''
+                                    placeholder='0.00'
+                                )
+                            .da-form-group
+                                label.da-form-label(for='currency') Currency
+                                input#currency.da-form-input(
+                                    type='text'
+                                    name='currency'
+                                    maxlength='3'
+                                    value=product && product.currency ? product.currency : 'USD'
+                                    placeholder='USD'
+                                )
+                            .da-form-group
+                                label.da-form-label(for='quantity') Default quantity
+                                input#quantity.da-form-input(
+                                    type='number'
+                                    name='quantity'
+                                    min='0'
+                                    value=product && product.quantity != null ? product.quantity : '0'
+                                    placeholder='0 = not cartable'
+                                )
+
+                //- ── Classification ──────────────────────────────────
+                .da-card
+                    .da-card-header
+                        h2.da-card-title Classification
+                    .da-card-body
+                        .da-form-row
+                            .da-form-group
+                                label.da-form-label(for='productTypeId') Type
+                                select#productTypeId.da-form-select(name='productTypeId')
+                                    option(value='') — None —
+                                    each pt in productTypes
+                                        option(value=pt.id selected=(product && product.productTypeId === pt.id))= pt.name
+                            .da-form-group
+                                label.da-form-label(for='productCategoryId') Category
+                                select#productCategoryId.da-form-select(name='productCategoryId')
+                                    option(value='') — None —
+                                    each pc in productCategories
+                                        option(value=pc.id selected=(product && product.productCategoryId === pc.id))= pc.name
+
+                //- ── Shipping ────────────────────────────────────────
+                .da-card
+                    .da-card-header
+                        h2.da-card-title Shipping
+                    .da-card-body
+                        .da-form-group
+                            label.da-checkbox
+                                input#isPhysical(
+                                    type='checkbox'
+                                    name='isPhysical'
+                                    value='on'
+                                    checked=product === null || product === undefined || product.isPhysical !== false
+                                )
+                                | Physical product (requires delivery address at checkout)
+                        #physicalProductFields.da-form-row(style='margin-top:1rem')
+                            .da-form-group
+                                label.da-form-label(for='weight') Weight
+                                input#weight.da-form-input(
+                                    type='number'
+                                    name='weight'
+                                    step='0.001'
+                                    min='0'
+                                    value=product && product.weight != null ? product.weight : ''
+                                    placeholder='e.g. 1.5'
+                                )
+                            .da-form-group
+                                label.da-form-label(for='weightUnit') Unit
+                                select#weightUnit.da-form-select(name='weightUnit')
+                                    option(value='kg' selected=(!product || !product.weightUnit || product.weightUnit === 'kg')) kg
+                                    option(value='g' selected=(product && product.weightUnit === 'g')) g
+
+                //- ── Meta & Media ────────────────────────────────────
+                .da-card
+                    .da-card-header
+                        h2.da-card-title Meta &amp; Media
+                    .da-card-body
+                        .da-form-section
+                            span.da-form-section-label Meta Objects
+                            +metaObjectPickerSection({
+                                inputName: 'metaObjectIds[]',
+                                attachedMetaObjects: attachedMetaObjects || [],
+                                apiUrl: (adminPrefix || '') + '/api/meta-objects',
+                                label: null,
+                                hint: 'Select meta objects and fill their values below.'
+                            })
+                        .da-divider
+                        .da-form-section(style='margin-bottom:0')
+                            span.da-form-section-label Media
+                            +mediaPickerSection({
+                                inputName: 'mediaIds[]',
+                                attachedMedia: attachedMedia || [],
+                                uploadsBaseUrl: uploadsBaseUrl || '/uploads',
+                                apiUrl: (adminPrefix || '') + '/api/media',
+                                label: null,
+                                hint: 'Select media to attach to this product. Upload new files on the Media page, then select them here.'
+                            })
+
+                //- ── Visibility ──────────────────────────────────────
+                .da-card
+                    .da-card-header
+                        h2.da-card-title Visibility
+                    .da-card-body
+                        .da-form-group
+                            label.da-checkbox
+                                input(
+                                    type='checkbox'
+                                    name='active'
+                                    value='on'
+                                    checked=product === null || product.active
+                                )
+                                | Active
+                            p.da-form-hint(style='margin-top:0.5rem') Make this product visible to customers.
+
+                //- ── Form actions ─────────────────────────────────────
+                .da-product-form-actions
+                    button.da-btn.da-btn--primary(type='submit')= isEdit ? 'Update Product' : 'Create Product'
+                    a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/products') Cancel
+
+block append scripts
+    script.
+        (function () {
+            'use strict';
+            var isPhysical = document.getElementById('isPhysical');
+            var physicalFields = document.getElementById('physicalProductFields');
+
+            function togglePhysicalFields() {
+                if (!physicalFields) return;
+                physicalFields.style.display = isPhysical && isPhysical.checked ? 'grid' : 'none';
+            }
+
+            if (isPhysical) isPhysical.addEventListener('change', togglePhysicalFields);
+            togglePhysicalFields();
+        })();

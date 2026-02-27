@@ -1,0 +1,33 @@
+extends ../../layouts/main
+
+block content
+  h1 Products
+  if products && products.length
+    ul(style="list-style:none; padding:0")
+      each product in products
+        - const variant = product.ProductVariants && product.ProductVariants[0]
+        - const priceRow = variant && variant.ProductPrices && variant.ProductPrices[0]
+        - const price = priceRow ? Number(priceRow.amount) : null
+        - const defaultVariantId = variant ? variant.id : null
+        - const firstMedia = product.media && product.media.length ? product.media[0] : null
+        - const isImage = firstMedia && firstMedia.mimeType && firstMedia.mimeType.startsWith('image/')
+        li(style="border:1px solid #ddd; padding:1rem; margin-bottom:0.5rem; display:flex; gap:1rem; align-items:flex-start")
+          if firstMedia && isImage
+            a(href="/products/" + product.slug style="flex-shrink:0")
+              img(src=firstMedia.url alt=firstMedia.alt || product.title style="width:120px; height:90px; object-fit:contain; display:block; border-radius:4px")
+          else if firstMedia
+            a(href="/products/" + product.slug style="flex-shrink:0; width:120px; height:90px; background:#f0f0f0; display:flex; align-items:center; justify-content:center; border-radius:4px; font-size:0.85rem; text-decoration:none; color:#333") File
+          div(style="flex:1; min-width:0")
+            strong= product.title
+            if product.description
+              p(style="margin:0.5rem 0")= product.description
+            if price != null
+              span #{Number(price).toFixed(2)} #{priceRow && priceRow.currency ? priceRow.currency : 'USD'}
+            if product.defaultVariantId
+              form.js-add-to-cart-form(action="/cart/add" method="post" style="display:inline; margin-left:0.5rem")
+                input(type="hidden" name="productVariantId" value=product.defaultVariantId)
+                input(type="hidden" name="quantity" value="1")
+                button(type="submit") Add to cart
+            a(href="/products/" + product.slug style="margin-left:0.5rem") View
+  else
+    p No products available at the moment.

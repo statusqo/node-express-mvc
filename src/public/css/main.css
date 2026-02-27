@@ -1,0 +1,121 @@
+:root {
+    --page-content-width: 1440px;
+    --header-height: 80px;
+
+    --hero-height: 100vh;
+    --footer-height: 100vh;
+
+    --color-background-primary: #000;
+    --color-background-secondary: #fff;
+
+    --color-text-primary: #fff;
+    --color-text-secondary: #000;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: sans-serif;
+}
+
+div {
+    box-sizing: border-box;
+}
+
+header, main, footer {
+    position: relative;
+    isolation: isolate;
+}
+
+main {
+    padding: 1rem;
+    max-width: var(--page-content-width);
+    margin: 0 auto;
+}
+
+.flash {
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: 4px;
+}
+.flash-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+.flash-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+.flash-info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+
+.toast {
+    position: fixed;
+    top: calc(var(--header-height) + 1rem);
+    right: 1.5rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 500;
+    animation: toast-in 0.2s ease;
+}
+.toast-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+.toast-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+@keyframes toast-in {
+    from { opacity: 0; transform: translateY(-0.5rem); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+footer {
+    height: var(--footer-height);
+}
+
+.page {
+    width: 100%;
+}
+
+.page .page-body {
+    width: 100%;
+}
+
+.page .page-overlay {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    opacity: 0;
+    visibility: hidden;
+    background: rgb(0,0,0,0.5);
+    transition: opacity 200ms ease;
+    will-change: opacity, visibility;
+    z-index: 99;
+}
+
+/* Form Styles */
+form {
+    max-width: 400px;
+    margin: 2rem auto;
+    padding: 1rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+input {
+    width: 100%;
+    padding: 0.5rem;
+    /* margin-bottom: 1rem; */
+    box-sizing: border-box;
+}
+
+button[type="submit"] {
+    background: #000;
+    color: #fff;
+    padding: 0.5rem 1rem;
+    border: none;
+    cursor: pointer;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}

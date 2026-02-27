@@ -1,0 +1,34 @@
+doctype html
+html
+  head
+    title #{title}
+
+    block metas
+      meta(charset="utf-8")
+      meta(name="viewport" content="width=device-width, initial-scale=1")
+      meta(name="author" content="defy.dev")
+
+    block links
+      link(rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css")
+      link(rel="stylesheet" href="/public/css/nav.css")
+      link(rel="stylesheet" href="/public/css/main.css")
+      link(rel="stylesheet" href="/public/css/footer.css")
+
+    block scripts
+      script(src="/public/js/nav.js")
+      script(src="/public/js/main.js")
+      script(src="/public/js/footer.js")
+      script(src="/public/js/add-to-cart.js")
+
+  body
+    div(class="page")
+      div(class="page-body")
+        header(class="nav-header")
+          include ../fragments/web/nav
+        main(class="main-content")
+          if flash && flash.message
+            div(class="flash flash-" + flash.type role="alert" aria-live="polite")= flash.message
+          block content
+        footer(class="footer")
+          include ../fragments/web/footer
+        div(class="page-overlay")

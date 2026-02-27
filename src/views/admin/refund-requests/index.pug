@@ -1,0 +1,148 @@
+extends ../../layouts/admin
+
+block append links
+    link(rel='preconnect' href='https://fonts.googleapis.com')
+    link(rel='preconnect' href='https://fonts.gstatic.com' crossorigin)
+
+block content
+    - var pendingCount = refundRequests ? refundRequests.filter(function(r){ return r.status === 'pending'; }).length : 0
+    - var fmtDate = function(d){ return d ? new Date(d).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '—'; }
+    - var fmtTime = function(d){ return d ? new Date(d).toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'}) : ''; }
+
+    .da-page
+
+        if flash && flash.message
+            p.admin-flash(class='admin-flash-' + (flash.type || 'info'))= flash.message
+
+        //- ── Page header ─────────────────────────────────────────────
+        .da-page-header
+            .da-page-header-left
+                h1.da-page-title Refund Requests
+                p.da-page-subtitle
+                    | #{refundRequests ? refundRequests.length : 0} result#{(refundRequests && refundRequests.length !== 1) ? 's' : ''}
+                    if pendingCount > 0
+                        | &ensp;·&ensp;
+                        span(style='color:var(--ds-warning);font-weight:600') #{pendingCount} pending
+
+        //- ── Filter bar (status only) ────────────────────────────────
+        form.da-filter-bar(method='get' action=(adminPrefix || '') + '/refund-requests')
+            .da-filter-head
+                span.da-filter-head-label Filters
+                a.da-filter-clear(href=(adminPrefix || '') + '/refund-requests') Clear all
+
+            .da-filter-group
+                label.da-filter-group-label(for='filter-status') Status
+                select#filter-status.da-form-select(name='status')
+                    option(value='' selected=(!filters.status)) All statuses
+                    option(value='pending'  selected=(filters.status === 'pending'))  Pending
+                    option(value='approved' selected=(filters.status === 'approved')) Approved
+                    option(value='rejected' selected=(filters.status === 'rejected')) Rejected
+
+            .da-filter-actions
+                button.da-btn.da-btn--primary(type='submit')
+                    svg(xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                        polygon(points='22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3')
+                    | Apply
+
+        //- ── Refund requests table ───────────────────────────────────
+        .da-panel
+            .da-table-scroll
+                table.da-table(role='table' aria-label='Refund requests')
+                    thead
+                        tr
+                            th(scope='col') Status
+                            th(scope='col') Order
+                            th.da-col-type(scope='col') Type
+                            th.da-col-type(scope='col') Amount
+                            th.da-col-reason(scope='col') Reason
+                            th.da-col-created(scope='col') Requested
+                            th.da-col-created(scope='col') Processed
+                            th(scope='col' style='text-align:right') Actions
+                    tbody
+                        if refundRequests && refundRequests.length
+                            each r in refundRequests
+                                - var statusClass = ({pending:'warning', approved:'success', rejected:'danger'})[r.status] || 'neutral'
+                                - var refundType  = r.status === 'approved' ? (r.refundAmount != null ? 'Partial' : 'Full') : null
+                                - var refundAmt   = r.status === 'approved' ? (r.refundAmount != null ? Number(r.refundAmount).toFixed(2) + ' ' + (r.Order && r.Order.currency ? r.Order.currency : 'USD') : (r.Order && r.Order.total != null ? Number(r.Order.total).toFixed(2) + ' ' + (r.Order.currency || 'USD') : 'Full')) : null
+                                tr(class=r.status === 'pending' ? 'da-row--pending' : '')
+                                    //- Status
+                                    td
+                                        if r.status
+                                            span.da-badge(class='da-badge--' + statusClass)= r.status.charAt(0).toUpperCase() + r.status.slice(1)
+                                        else
+                                            span.da-cell-muted —
+
+                                    //- Order link
+                                    td
+                                        if r.Order
+                                            .da-order-cell
+                                                a.da-order-link(
+                                                    href=(adminPrefix || '') + '/orders/' + r.Order.id + '/edit'
+                                                    aria-label='View order ' + (r.Order.id ? r.Order.id.slice(0,8) : '')
+                                                )
+                                                    span.da-cell-mono= r.Order.id ? r.Order.id.slice(0, 8) + '…' : '—'
+                                                if r.Order.email
+                                                    span.da-order-email= r.Order.email
+                                        else
+                                            span.da-cell-muted —
+
+                                    //- Refund type
+                                    td.da-col-type
+                                        if refundType
+                                            span.da-cell-secondary= refundType
+                                        else
+                                            span.da-cell-muted —
+
+                                    //- Refund amount
+                                    td.da-col-type
+                                        if refundAmt
+                                            span(style='font-variant-numeric:tabular-nums;font-weight:600;color:var(--ds-text-1)')= refundAmt
+                                        else
+                                            span.da-cell-muted —
+
+                                    //- Reason (truncated)
+                                    td.da-col-reason
+                                        if r.reason
+                                            span.da-reason-text(title=r.reason)= r.reason.length > 45 ? r.reason.slice(0, 45) + '…' : r.reason
+                                        else
+                                            span.da-cell-muted —
+
+                                    //- Requested date
+                                    td.da-col-created
+                                        .da-date-cell
+                                            span.da-cell-muted= fmtDate(r.createdAt)
+                                            if r.createdAt
+                                                span.da-date-time= fmtTime(r.createdAt)
+
+                                    //- Processed date
+                                    td.da-col-created
+                                        if r.processedAt
+                                            .da-date-cell
+                                                span.da-cell-muted= fmtDate(r.processedAt)
+                                                span.da-date-time= fmtTime(r.processedAt)
+                                        else
+                                            span.da-cell-muted —
+
+                                    //- Actions
+                                    td
+                                        .da-cell-actions
+                                            if r.Order
+                                                a.da-row-btn.da-row-btn--edit(
+                                                    href=(adminPrefix || '') + '/orders/' + r.Order.id + '/edit'
+                                                    aria-label='View order for this refund request'
+                                                ) View Order
+                        else
+                            tr
+                                td(colspan='8')
+                                    .da-table-empty
+                                        svg(xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true' style='color:var(--ds-text-3)')
+                                            polyline(points='1 4 1 10 7 10')
+                                            path(d='M3.51 15a9 9 0 1 0 .49-4.95L1 10')
+                                        span= filters && filters.status ? 'No ' + filters.status + ' refund requests.' : 'No refund requests found.'
+
+block append scripts
+    script.
+        /* Highlight pending rows with a subtle left border accent */
+        document.querySelectorAll('tr.da-row--pending').forEach(function (row) {
+            row.style.setProperty('box-shadow', 'inset 3px 0 0 var(--ds-warning)', '');
+        });

@@ -1,0 +1,118 @@
+/* Admin navbar / sidebar — layout and nav fragment (dash-nav.pug).
+ * Included in admin layout: aside.admin-sidebar > include ../fragments/admin/dash-nav
+ */
+
+:root {
+    --sidebar-width: 250px;
+    --admin-header-height: 60px;
+    --color-sidebar-bg: #1a1a1a;
+    --color-sidebar-text: #e0e0e0;
+    --color-sidebar-hover: #333;
+}
+
+.admin-layout {
+    display: flex;
+    min-height: 100vh;
+}
+
+/* Sidebar — constrained to viewport height so footer (logout) is always visible */
+.admin-sidebar {
+    width: var(--sidebar-width);
+    height: 100vh;
+    max-height: 100vh;
+    background-color: var(--color-sidebar-bg);
+    color: var(--color-sidebar-text);
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: sticky;
+    top: 0;
+}
+
+.dash-nav {
+    padding: 1rem;
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.dash-brand {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-bottom: 2rem;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.dash-brand a {
+    color: #fff;
+    text-decoration: none;
+}
+
+.dash-menu {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+}
+
+.dash-item {
+    margin-bottom: 0.5rem;
+}
+
+.dash-link {
+    display: block;
+    padding: 0.75rem 1rem;
+    color: var(--color-sidebar-text);
+    text-decoration: none;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.dash-link:hover {
+    background-color: var(--color-sidebar-hover);
+    color: #fff;
+}
+
+.dash-footer {
+    padding-top: 1rem;
+    border-top: 1px solid #333;
+    flex-shrink: 0;
+}
+
+.dash-footer .dash-form-inline {
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.dash-logout {
+    width: 100%;
+    background: transparent;
+    border: 1px solid #555;
+    color: #aaa;
+    padding: 0.5rem;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.dash-logout:hover {
+    background: #333;
+    color: #fff;
+    border-color: #777;
+}
+
+/* Main content area (flex so layout works) */
+.admin-content {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}

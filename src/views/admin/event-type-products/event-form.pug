@@ -1,0 +1,109 @@
+extends ../../layouts/admin
+
+block append links
+    link(rel='preconnect' href='https://fonts.googleapis.com')
+    link(rel='preconnect' href='https://fonts.gstatic.com' crossorigin)
+
+block content
+    .da-page
+
+        //- ── Page header ─────────────────────────────────────────────
+        .da-page-header
+            .da-page-header-left
+                h1.da-page-title New Event
+                p.da-page-subtitle= product ? product.title : ''
+                    if product && (product.priceAmount != null || product.currency)
+                        |  · Default: #{product.currency || 'USD'} #{product.priceAmount != null ? product.priceAmount : '—'}
+            .da-page-header-right
+                a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/' + sectionPath + '/' + product.slug + '/events')
+                    svg(xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                        polyline(points='15 18 9 12 15 6')
+                    | Back to Events
+
+        if flash && flash.message
+            p.admin-flash(class='admin-flash-' + (flash.type || 'info'))= flash.message
+        if error
+            p.admin-flash.admin-flash-error= error
+
+        //- ── Form ─────────────────────────────────────────────────────
+        .da-card(style='max-width: 640px;')
+            form(method='post' action=(adminPrefix || '') + '/' + sectionPath + '/' + product.slug + '/events/new')
+                .da-card-body
+                    .da-form-section
+                        h2.da-form-section-label Date & time
+                        .da-form-group
+                            label.da-form-label(for='startDate')
+                                | Start date
+                                span.req *
+                            input#startDate.da-form-input(
+                                type='date'
+                                name='startDate'
+                                required
+                                value=event ? event.startDate : ''
+                                autofocus
+                            )
+                        .da-form-group
+                            label.da-form-label(for='startTime') Start time
+                            input#startTime.da-form-input(
+                                type='time'
+                                name='startTime'
+                                value=event && event.startTime ? String(event.startTime).substring(0, 5) : ''
+                            )
+                        .da-form-group
+                            label.da-form-label(for='durationMinutes') Duration (minutes)
+                            input#durationMinutes.da-form-input(
+                                type='number'
+                                name='durationMinutes'
+                                min='1'
+                                placeholder='e.g. 60'
+                                value=event && event.durationMinutes != null ? event.durationMinutes : ''
+                            )
+                            p.da-form-hint Optional. Used for display and calendar exports.
+                        .da-form-group
+                            label.da-form-label(for='timezone') Timezone
+                            input#timezone.da-form-input(type='text' name='timezone' placeholder='e.g. Europe/London' maxlength='64' readonly)
+                            p.da-form-hint Set automatically from your browser. Used for start time and Zoom.
+
+                    .da-form-section
+                        h2.da-form-section-label Location & capacity
+                        .da-form-group
+                            label.da-form-label(for='location') Location
+                            input#location.da-form-input(
+                                type='text'
+                                name='location'
+                                placeholder='e.g. Zoom or room name'
+                                maxlength='255'
+                                value=event ? event.location : ''
+                            )
+                        .da-form-group
+                            label.da-form-label(for='capacity') Capacity
+                            input#capacity.da-form-input(
+                                type='number'
+                                name='capacity'
+                                min='0'
+                                placeholder='0'
+                                value=event && event.capacity != null ? event.capacity : ''
+                            )
+                            p.da-form-hint Maximum attendees. Leave 0 for unlimited.
+                        .da-form-group
+                            label.admin-checkbox
+                                input(type='checkbox' name='isOnline' value='1' checked=(event ? event.isOnline : false))
+                                | Online event (Zoom meeting can be created when syncing)
+
+                .da-card-footer
+                    button.da-btn.da-btn--primary(type='submit') Create Event
+                    a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/' + sectionPath + '/' + product.slug + '/events') Cancel
+
+block append scripts
+    script.
+        (function () {
+            var tzInput = document.getElementById('timezone');
+            if (tzInput) {
+                try {
+                    var tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+                    tzInput.value = tz;
+                } catch (e) {
+                    tzInput.value = 'UTC';
+                }
+            }
+        })();

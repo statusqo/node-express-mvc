@@ -1,0 +1,317 @@
+extends ../../layouts/admin
+
+block append links
+    link(rel='preconnect' href='https://fonts.googleapis.com')
+    link(rel='preconnect' href='https://fonts.gstatic.com' crossorigin)
+
+block content
+    .da-page
+
+        //- ── Page header ─────────────────────────────────────────────
+        .da-page-header
+            .da-page-header-left
+                h1.da-page-title= isEdit ? 'Edit User' : 'Add User'
+                p.da-page-subtitle= isEdit ? (user && user.email ? user.email : 'Update user details') : 'Create a new account'
+            .da-page-header-right
+                a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/users')
+                    svg(xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                        polyline(points='15 18 9 12 15 6')
+                    | Back to Users
+
+        if error
+            p.admin-flash.admin-flash-error= error
+
+        //- ── Form grid: main column + aside (edit only) ──────────────
+        .da-form-grid(class=isEdit ? '' : 'da-form-grid--narrow')
+
+            //- ── Main column ─────────────────────────────────────────
+            .da-form-main
+
+                //- Account details card
+                .da-card
+                    .da-card-header
+                        h2.da-card-title Account Details
+                    .da-card-body
+                        form#userEditForm(
+                            method='post'
+                            action=isEdit ? (adminPrefix || '') + '/users/' + user.id + '/edit' : (adminPrefix || '') + '/users/new'
+                        )
+                            .da-form-section
+                                span.da-form-section-label Identity
+
+                                .da-form-group
+                                    label.da-form-label(for='email')
+                                        | Email
+                                        span.req *
+                                    input#email.da-form-input(
+                                        type='email'
+                                        name='email'
+                                        required
+                                        value=user ? user.email : ''
+                                        placeholder='user@example.com'
+                                        autocomplete='email'
+                                    )
+
+                                .da-form-group
+                                    label.da-form-label(for='username') Username
+                                    input#username.da-form-input(
+                                        type='text'
+                                        name='username'
+                                        value=user ? user.username : ''
+                                        placeholder='3–30 characters, optional'
+                                        autocomplete='username'
+                                    )
+                                    p.da-form-hint Shown publicly where applicable.
+
+                                if !isEdit
+                                    .da-form-group
+                                        label.da-form-label(for='password')
+                                            | Password
+                                            span.req *
+                                        input#password.da-form-input(
+                                            type='password'
+                                            name='password'
+                                            required
+                                            placeholder='Minimum 4 characters'
+                                            autocomplete='new-password'
+                                        )
+
+                            .da-form-section
+                                span.da-form-section-label Permissions
+
+                                .da-form-group
+                                    label.da-checkbox
+                                        input(type='checkbox' name='isAdmin' value='on' checked=user && user.isAdmin)
+                                        | Admin access
+                                    p.da-form-hint(style='margin-top:0.5rem') Grants full access to the admin panel.
+
+                            if isEdit
+                                input#hiddenPassword(type='hidden' name='password' value='')
+
+                    .da-card-footer
+                        button.da-btn.da-btn--primary(type='submit' form='userEditForm')= isEdit ? 'Save Changes' : 'Create User'
+                        a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/users') Cancel
+
+                //- Password reset card (edit only)
+                if isEdit
+                    .da-card
+                        .da-card-header
+                            h2.da-card-title Password
+                        .da-card-body
+                            .da-reset-trigger-row
+                                p.da-reset-desc
+                                    | The user's current password is securely stored.
+                                    | Use this to assign a new one.
+                                button#showResetBtn.da-btn.da-btn--secondary(type='button') Reset Password
+
+                            .da-reset-fields#resetFields
+                                .da-reset-fields-inner
+                                    .da-form-group
+                                        label.da-form-label(for='newPassword') New password
+                                        input#newPassword.da-form-input(
+                                            type='password'
+                                            placeholder='Minimum 4 characters'
+                                            autocomplete='new-password'
+                                        )
+                                    .da-form-group
+                                        label.da-form-label(for='confirmPassword') Confirm new password
+                                        input#confirmPassword.da-form-input(
+                                            type='password'
+                                            placeholder='Repeat new password'
+                                            autocomplete='new-password'
+                                        )
+                                    p#resetError.da-reset-error
+
+                                    .da-reset-actions
+                                        button#setPasswordBtn.da-btn.da-btn--primary(type='button') Set Password &amp; Save
+                                        button#cancelResetBtn.da-btn.da-btn--secondary(type='button') Cancel
+
+            //- ── Aside column (edit only) ────────────────────────────
+            if isEdit
+                .da-form-aside
+
+                    //- Addresses
+                    .da-card
+                        .da-card-header
+                            h2.da-card-title Addresses
+                        .da-card-body
+                            if addresses && addresses.length
+                                .da-detail-list
+                                    each addr in addresses
+                                        .da-detail-item
+                                            p.da-detail-label
+                                                | #{addr.label ? addr.label.charAt(0).toUpperCase() + addr.label.slice(1) : 'Address'}
+                                            p.da-detail-line= addr.line1
+                                            if addr.line2
+                                                p.da-detail-line= addr.line2
+                                            p.da-detail-line= [addr.city, addr.state, addr.postcode].filter(Boolean).join(', ')
+                                            p.da-detail-line= addr.country
+                            else
+                                p.da-aside-empty No saved addresses.
+
+                    //- Payment methods
+                    .da-card
+                        .da-card-header
+                            h2.da-card-title Payment Methods
+                        .da-card-body
+                            if paymentMethods && paymentMethods.length
+                                .da-detail-list
+                                    each pm in paymentMethods
+                                        .da-detail-item
+                                            p.da-detail-label
+                                                | #{(pm.brand || 'Card').charAt(0).toUpperCase() + (pm.brand || 'card').slice(1)} ****#{pm.last4 || '????'}
+                                                if pm.isDefault
+                                                    span.da-badge.da-badge--info(style='margin-left:0.5rem') Default
+                                            if pm.expiryMonth && pm.expiryYear
+                                                p.da-detail-line Expires #{pm.expiryMonth}/#{pm.expiryYear}
+                            else
+                                p.da-aside-empty No saved payment methods.
+
+        //- ── Orders table (edit only) ────────────────────────────────
+        if isEdit
+            .da-section(style='margin-top:2rem')
+                .da-section-header
+                    h2.da-section-title Order History
+                    if orders && orders.length
+                        span.da-count= orders.length + ' order' + (orders.length !== 1 ? 's' : '')
+
+                .da-panel
+                    .da-table-scroll
+                        table.da-table(role='table' aria-label='User order history')
+                            thead
+                                tr
+                                    th(scope='col') Order ID
+                                    th(scope='col') Payment
+                                    th(scope='col') Fulfillment
+                                    th.da-col-created(scope='col') Total
+                                    th.da-col-created(scope='col') Date
+                            tbody
+                                if orders && orders.length
+                                    each order in orders
+                                        - var payClass = ({paid:'success',pending:'warning',failed:'danger',refunded:'info',cancelled:'neutral'})[order.paymentStatus] || 'neutral'
+                                        - var fulClass = ({fulfilled:'success',pending:'warning',partially_fulfilled:'info',unfulfilled:'neutral',cancelled:'neutral'})[order.fulfillmentStatus] || 'neutral'
+                                        tr
+                                            td
+                                                span.da-cell-mono= order.id ? order.id.slice(0, 8) + '…' : '—'
+                                            td
+                                                if order.paymentStatus
+                                                    span.da-badge(class='da-badge--' + payClass)= order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)
+                                                else
+                                                    span.da-cell-muted —
+                                            td
+                                                if order.fulfillmentStatus
+                                                    span.da-badge(class='da-badge--' + fulClass)= order.fulfillmentStatus.charAt(0).toUpperCase() + order.fulfillmentStatus.slice(1).replace(/_/g, ' ')
+                                                else
+                                                    span.da-cell-muted —
+                                            td.da-col-created
+                                                span.da-cell-secondary= order.total != null ? Number(order.total).toFixed(2) + ' ' + (order.currency || 'USD') : '—'
+                                            td.da-col-created
+                                                span.da-cell-muted= order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '—'
+                                else
+                                    tr
+                                        td(colspan='5')
+                                            .da-table-empty No orders yet.
+
+block append scripts
+    script.
+        (function () {
+            'use strict';
+
+            /* ── Narrow single-column grid when no aside ─────────── */
+            var formGrid = document.querySelector('.da-form-grid--narrow');
+            if (formGrid) {
+                formGrid.style.gridTemplateColumns = '1fr';
+                formGrid.style.maxWidth = '640px';
+            }
+
+            /* ── Password reset panel ─────────────────────────────── */
+            var showResetBtn    = document.getElementById('showResetBtn');
+            var resetFields     = document.getElementById('resetFields');
+            var cancelResetBtn  = document.getElementById('cancelResetBtn');
+            var setPasswordBtn  = document.getElementById('setPasswordBtn');
+            var newPassword     = document.getElementById('newPassword');
+            var confirmPassword = document.getElementById('confirmPassword');
+            var resetError      = document.getElementById('resetError');
+            var hiddenPassword  = document.getElementById('hiddenPassword');
+            var userEditForm    = document.getElementById('userEditForm');
+
+            if (showResetBtn && resetFields) {
+                showResetBtn.addEventListener('click', function () {
+                    resetFields.classList.add('da-reset-fields--open');
+                    showResetBtn.disabled = true;
+                    showResetBtn.style.opacity = '0.38';
+                    showResetBtn.style.pointerEvents = 'none';
+                    setTimeout(function () {
+                        if (newPassword) newPassword.focus();
+                    }, 320);
+                });
+            }
+
+            if (cancelResetBtn) {
+                cancelResetBtn.addEventListener('click', function () {
+                    collapseReset();
+                });
+            }
+
+            function collapseReset() {
+                if (!resetFields) return;
+                resetFields.classList.remove('da-reset-fields--open');
+                hideError();
+                setTimeout(function () {
+                    if (newPassword)     newPassword.value = '';
+                    if (confirmPassword) confirmPassword.value = '';
+                    if (showResetBtn) {
+                        showResetBtn.disabled = false;
+                        showResetBtn.style.opacity = '';
+                        showResetBtn.style.pointerEvents = '';
+                        showResetBtn.focus();
+                    }
+                }, 320);
+            }
+
+            if (setPasswordBtn) {
+                setPasswordBtn.addEventListener('click', function () {
+                    hideError();
+                    var pw  = newPassword  ? newPassword.value  : '';
+                    var cpw = confirmPassword ? confirmPassword.value : '';
+
+                    if (!pw) {
+                        showError('Please enter a new password.');
+                        if (newPassword) newPassword.focus();
+                        return;
+                    }
+                    if (pw.length < 4) {
+                        showError('Password must be at least 4 characters.');
+                        if (newPassword) newPassword.focus();
+                        return;
+                    }
+                    if (pw !== cpw) {
+                        showError('Passwords do not match.');
+                        if (confirmPassword) confirmPassword.focus();
+                        return;
+                    }
+
+                    if (hiddenPassword) hiddenPassword.value = pw;
+                    if (userEditForm)   userEditForm.submit();
+                });
+            }
+
+            function showError(msg) {
+                if (!resetError) return;
+                resetError.textContent = msg;
+                resetError.style.display = 'block';
+            }
+
+            function hideError() {
+                if (resetError) resetError.style.display = 'none';
+            }
+
+            /* ── Escape: collapse reset panel ─────────────────────── */
+            document.addEventListener('keydown', function (e) {
+                if (e.key !== 'Escape') return;
+                if (resetFields && resetFields.classList.contains('da-reset-fields--open')) {
+                    collapseReset();
+                }
+            });
+
+        })();

@@ -1,0 +1,91 @@
+extends ../../layouts/admin
+
+block append links
+    link(rel='preconnect' href='https://fonts.googleapis.com')
+    link(rel='preconnect' href='https://fonts.gstatic.com' crossorigin)
+
+block content
+    .da-page
+
+        //- ── Page header ─────────────────────────────────────────────
+        .da-page-header
+            .da-page-header-left
+                h1.da-page-title= isEdit ? 'Edit Post' : 'New Post'
+                p.da-page-subtitle= isEdit && post && post.title ? post.title : 'Create a new blog post'
+            .da-page-header-right
+                a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/blog')
+                    svg(xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                        polyline(points='15 18 9 12 15 6')
+                    | Back to Posts
+
+        if error
+            p.admin-flash.admin-flash-error= error
+
+        //- ── Form ─────────────────────────────────────────────────────
+        .da-card(style='max-width: 720px;')
+            form(
+                method='post'
+                action=isEdit ? (adminPrefix || '') + '/blog/' + post.id + '/edit' : (adminPrefix || '') + '/blog/new'
+            )
+                .da-card-body
+                    .da-form-section
+                        h2.da-form-section-label Details
+                        .da-form-group
+                            label.da-form-label(for='title')
+                                | Title
+                                span.req *
+                            input#title.da-form-input(
+                                type='text'
+                                name='title'
+                                required
+                                value=post ? post.title : ''
+                                placeholder='Post title'
+                                autofocus
+                            )
+                        .da-form-group
+                            label.da-form-label(for='slug') Slug
+                            input#slug.da-form-input(
+                                type='text'
+                                name='slug'
+                                value=post ? post.slug : ''
+                                placeholder='Auto-generated from title if left blank'
+                            )
+                            p.da-form-hint Leave blank to generate from title.
+                        .da-form-group
+                            label.da-form-label(for='excerpt') Excerpt
+                            textarea#excerpt.da-form-input(
+                                name='excerpt'
+                                rows='2'
+                                placeholder='Short summary shown in listings'
+                            )= post ? post.excerpt : ''
+
+                    //- ── Body: full HTML + CSS (AI-ready) ─────────────────
+                    .da-form-section.da-post-body-section
+                        .da-post-body-editor
+                            label.da-form-label.da-post-body-label(for='body')
+                                | Body
+                                span.da-post-body-badge(aria-hidden='true') HTML CSS JS
+                            p.da-form-hint.da-post-body-hint
+                                | Paste complete HTML from your AI agent or design tools. Inline styles and full page markup are supported — it will render as the full post.
+                            textarea#body.da-form-input.da-post-body-input(
+                                name='body'
+                                rows='24'
+                                placeholder='<html>… or plain text'
+                                spellcheck='false'
+                                data-lpignore='true'
+                            )= post ? post.body : ''
+
+                    .da-form-section
+                        h2.da-form-section-label Visibility
+                        .da-form-group
+                            label.admin-checkbox
+                                input(type='checkbox' name='published' value='on' checked=(post && post.published))
+                                | Published
+                        .da-form-group
+                            label.admin-checkbox
+                                input(type='checkbox' name='bodyIsHtml' value='on' checked=(post && post.bodyIsHtml))
+                                | Serve as raw HTML (no site chrome)
+
+                .da-card-footer
+                    button.da-btn.da-btn--primary(type='submit')= isEdit ? 'Update' : 'Create'
+                    a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/blog') Cancel
