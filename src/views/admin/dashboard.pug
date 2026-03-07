@@ -11,9 +11,6 @@ block append scripts
 block content
     include ../fragments/admin/dash-components
 
-    if flash && flash.message
-        p.admin-flash(class='admin-flash-' + (flash.type || 'info'))= flash.message
-
     .dash-page
 
         //- ── Search Bar ───────────────────────────────────────────────

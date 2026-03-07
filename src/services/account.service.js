@@ -5,7 +5,7 @@ const { sequelize } = require("../db"); // Import sequelize instance
 const SALT_ROUNDS = 10;
 
 module.exports = {
-  async register({ email, username, password }) {
+  async register({ email, username, password, personType, companyName, companyOib }) {
     // Start a transaction
     const t = await sequelize.transaction();
     
@@ -29,7 +29,15 @@ module.exports = {
       }
 
       const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-      const user = await userRepo.create({ email, username, passwordHash }, { transaction: t });
+      const effectivePersonType = personType === 'legal' ? 'legal' : 'private';
+      const user = await userRepo.create({
+        email,
+        username,
+        passwordHash,
+        personType: effectivePersonType,
+        companyName: effectivePersonType === 'legal' ? (companyName || null) : null,
+        companyOib: effectivePersonType === 'legal' ? (companyOib || null) : null,
+      }, { transaction: t });
 
       await t.commit();
 

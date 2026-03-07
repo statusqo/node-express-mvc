@@ -12,6 +12,7 @@ const postsController = require("../../controllers/admin/posts.controller");
 const menusController = require("../../controllers/admin/menus.controller");
 const menuItemsController = require("../../controllers/admin/menuItems.controller");
 const ordersController = require("../../controllers/admin/orders.controller");
+const invoicesController = require("../../controllers/admin/invoices.controller");
 const refundRequestsController = require("../../controllers/admin/refundRequests.controller");
 const webinarsRoutes = require("./webinars.routes");
 const seminarsRoutes = require("./seminars.routes");
@@ -65,6 +66,7 @@ router.get("/orders/:id/edit", asyncHandler(ordersController.editForm));
 router.post("/orders/:id/edit", asyncHandler(ordersController.update));
 router.post("/orders/:id/refund-request/:requestId/approve", asyncHandler(ordersController.approveRefundRequest));
 router.post("/orders/:id/refund-request/:requestId/reject", asyncHandler(ordersController.rejectRefundRequest));
+router.post("/orders/:id/regenerate-invoice", asyncHandler(invoicesController.regenerateInvoice));
 
 // Users CRUD
 router.get("/users", asyncHandler(usersController.index));

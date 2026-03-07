@@ -50,7 +50,7 @@ module.exports = {
           { username: trimmed }
         ]
       },
-      attributes: ["id", "email", "username", "passwordHash", "isAdmin", "forename", "surname", "mobile", "stripeCustomerId", "createdAt", "updatedAt"],
+      attributes: ["id", "email", "username", "passwordHash", "isAdmin", "forename", "surname", "mobile", "stripeCustomerId", "personType", "companyName", "companyOib", "createdAt", "updatedAt"],
       ...options
     });
   },
@@ -63,23 +63,26 @@ module.exports = {
     });
   },
 
-  async create({ email, username, passwordHash, isAdmin, googleId, forename, surname }, options = {}) {
+  async create({ email, username, passwordHash, isAdmin, googleId, forename, surname, personType, companyName, companyOib }, options = {}) {
     const data = {
       email: String(email).toLowerCase(),
       username: username ? String(username) : null,
       passwordHash: passwordHash || null,
       isAdmin: isAdmin === true,
+      personType: personType === 'legal' ? 'legal' : 'private',
     };
     if (googleId !== undefined && googleId !== null) data.googleId = String(googleId).trim();
     if (forename !== undefined) data.forename = forename ? String(forename).trim() : null;
     if (surname !== undefined) data.surname = surname ? String(surname).trim() : null;
+    if (companyName !== undefined) data.companyName = companyName ? String(companyName).trim() : null;
+    if (companyOib !== undefined) data.companyOib = companyOib ? String(companyOib).trim() : null;
     return await User.create(data, options);
   },
 
   async update(id, data, options = {}) {
     const user = await User.findByPk(id, options);
     if (!user) return null;
-    const { email, username, passwordHash, isAdmin, forename, surname, mobile, stripeCustomerId, googleId } = data;
+    const { email, username, passwordHash, isAdmin, forename, surname, mobile, stripeCustomerId, googleId, personType, companyName, companyOib } = data;
     const updateData = {};
     if (email !== undefined) updateData.email = String(email).toLowerCase();
     if (username !== undefined) updateData.username = username ? String(username) : null;
@@ -90,6 +93,9 @@ module.exports = {
     if (mobile !== undefined) updateData.mobile = mobile ? String(mobile).trim() : null;
     if (stripeCustomerId !== undefined) updateData.stripeCustomerId = stripeCustomerId ? String(stripeCustomerId).trim() : null;
     if (googleId !== undefined) updateData.googleId = googleId ? String(googleId).trim() : null;
+    if (personType !== undefined) updateData.personType = personType === 'legal' ? 'legal' : 'private';
+    if (companyName !== undefined) updateData.companyName = companyName ? String(companyName).trim() : null;
+    if (companyOib !== undefined) updateData.companyOib = companyOib ? String(companyOib).trim() : null;
     return await user.update(updateData, options);
   },
 

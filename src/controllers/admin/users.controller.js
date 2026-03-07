@@ -87,7 +87,7 @@ module.exports = {
 
     if (!result.ok) return renderFormWithError(result.errors[0].message);
 
-    const { email, username, password, isAdmin } = result.data;
+    const { email, username, password, isAdmin, personType, companyName, companyOib } = result.data;
     const existing = await userService.findByEmail(email);
     if (existing) return renderFormWithError("A user with this email already exists.");
 
@@ -102,6 +102,9 @@ module.exports = {
       username,
       passwordHash,
       isAdmin,
+      personType,
+      companyName,
+      companyOib,
     });
     try {
       const claimed = await orderService.claimGuestOrdersByEmail(email, user.id);
@@ -193,7 +196,8 @@ module.exports = {
         });
       }
     }
-    const updateData = { email: newEmail, username: newUsername, isAdmin };
+    const { personType, companyName, companyOib } = result.data;
+    const updateData = { email: newEmail, username: newUsername, isAdmin, personType, companyName, companyOib };
     if (password) {
       updateData.passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
     }

@@ -26,4 +26,13 @@ module.exports = {
       ...options,
     });
   },
+
+  /** Count order lines directly linked to an event (e.g. to guard event deletes). */
+  async countByEventId(eventId, options = {}) {
+    if (!eventId) return 0;
+    return await OrderLine.count({
+      where: { eventId },
+      ...options,
+    });
+  },
 };

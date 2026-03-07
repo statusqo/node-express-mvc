@@ -276,6 +276,7 @@ module.exports = {
     const eventPlain = event.get ? event.get({ plain: true }) : event;
     const eventTitle = eventPlain.title || `Event ${eventPlain.startDate || ""} ${eventPlain.startTime != null ? String(eventPlain.startTime).substring(0, 5) : ""}`.trim() || "Event";
 
+    const refundErrors = [];
     for (const orderId of orderIds) {
       const result = await orderService.refundOrderForEventCancellation(orderId);
       if (result.refunded) {
@@ -290,6 +291,23 @@ module.exports = {
             });
           } catch (_) {}
         }
+      } else if (result.error === "Order is not paid.") {
+        // Void unpaid/pending orders so they cannot be completed after cancellation.
+        const order = await orderRepo.findById(orderId);
+        await orderRepo.update(orderId, { paymentStatus: "cancelled", fulfillmentStatus: "cancelled" });
+        if (order && order.email && emailService.sendEventCancellationEmail) {
+          try {
+            await emailService.sendEventCancellationEmail({
+              to: order.email,
+              eventTitle,
+              startDate: eventPlain.startDate,
+              startTime: eventPlain.startTime,
+              wasRefunded: false,
+            });
+          } catch (_) {}
+        }
+      } else if (result.error) {
+        refundErrors.push(result.error);
       }
     }
 
@@ -300,7 +318,7 @@ module.exports = {
     }
 
     await eventRepo.update(eventId, { eventStatus: "cancelled" });
-    return { cancelled: true };
+    return { cancelled: true, refundErrors };
   },
 
   /**
@@ -361,6 +379,9 @@ module.exports = {
     const event = await eventRepo.findById(id, options);
     if (!event) return { deleted: false, error: "Event not found." };
     const eventPlain = event.get ? event.get({ plain: true }) : event;
+    if (eventPlain.eventStatus !== "cancelled") {
+      return { deleted: false, error: "Only cancelled events can be removed." };
+    }
     const variantId = eventPlain.productVariantId;
 
     const deleteZoomMeetingIfPresent = async (opts) => {
@@ -375,14 +396,30 @@ module.exports = {
     };
 
     if (!variantId) {
-      await deleteZoomMeetingIfPresent(options);
-      await EventMeeting.destroy({ where: { eventId: id }, ...options });
-      await Registration.destroy({ where: { eventId: id }, ...options });
-      await eventRepo.delete(id, options);
-      return { deleted: true };
+      const orderLineCount = await orderLineRepo.countByEventId(id, options);
+      if (orderLineCount > 0) {
+        return { deleted: false, error: "Cannot delete event: it has been ordered. Remove or archive orders first." };
+      }
+      const t = options.transaction || (await sequelize.transaction());
+      const ownTransaction = !options.transaction;
+      const opts = { ...options, transaction: t };
+      try {
+        await deleteZoomMeetingIfPresent(opts);
+        await EventMeeting.destroy({ where: { eventId: id }, ...opts });
+        await Registration.destroy({ where: { eventId: id }, ...opts });
+        await eventRepo.delete(id, opts);
+        if (ownTransaction) await t.commit();
+        return { deleted: true };
+      } catch (e) {
+        if (ownTransaction) await t.rollback();
+        throw e;
+      }
     }
-    const orderLineCount = await orderLineRepo.countByProductVariantIds([variantId], options);
-    if (orderLineCount > 0) {
+    const [countByVariant, countByEvent] = await Promise.all([
+      orderLineRepo.countByProductVariantIds([variantId], options),
+      orderLineRepo.countByEventId(id, options),
+    ]);
+    if (countByVariant > 0 || countByEvent > 0) {
       return { deleted: false, error: "Cannot delete event: it has been ordered. Remove or archive orders first." };
     }
     const t = options.transaction || (await sequelize.transaction());
@@ -393,8 +430,8 @@ module.exports = {
       await EventMeeting.destroy({ where: { eventId: id }, ...opts });
       await Registration.destroy({ where: { eventId: id }, ...opts });
       await ProductPrice.destroy({ where: { productVariantId: variantId }, ...opts });
-      await ProductVariant.destroy({ where: { id: variantId }, ...opts });
       await eventRepo.delete(id, opts);
+      await ProductVariant.destroy({ where: { id: variantId }, ...opts });
       if (ownTransaction) await t.commit();
       return { deleted: true };
     } catch (e) {

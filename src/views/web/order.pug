@@ -26,10 +26,14 @@ block content
       p(style="margin-top:0.5rem") Register or log in with #{order.email} to access your order history.
       p(style="margin-top:0.5rem")
         a(href="/auth/register") Register
-        |  · 
+        |  ·
         a(href="/auth/login") Log in
     else
       p(style="margin-top:0.5rem") Thank you for your order.
+    if invoice
+      p(style="margin-top:0.75rem")
+        a(href='/orders/' + order.id + '/receipt' style="display:inline-block;padding:0.5rem 1rem;background:#f5f5f5;border:1px solid #ddd;border-radius:4px;text-decoration:none;color:#333;font-size:0.9rem")
+          | ⬇ Download #{order.personType === 'legal' ? 'R1 Receipt' : 'Receipt'} (PDF)
   else if order.paymentStatus === "failed"
     p(style="color:#dc3545") Payment failed. Please try again.
     form(action="/checkout/pay/" + order.id method="post" style="display:inline")
@@ -39,7 +43,7 @@ block content
 
   if order.paymentStatus === "paid"
     if hasApprovedRefundRequest
-      p(style="color:#666") This order has already received a refund (full or partial).
+      p(style="color:#666") This order has already been refunded.
     else if hasPendingRefundRequest
       p(style="color:#f0ad4e;font-weight:600") Refund requested — pending review.
     else if order.fulfillmentStatus === "delivered"
@@ -59,12 +63,7 @@ block content
           if r.reason
             |  — #{r.reason}
           if r.status === 'approved'
-            - const refundType = r.refundAmount != null ? 'Partial' : 'Full'
-            |  — #{refundType}
-            if r.refundAmount != null
-              |  — #{Number(r.refundAmount).toFixed(2)} #{order.currency || 'USD'} refunded
-            else
-              |  — Full amount refunded
+            |  — Full amount refunded
 
   p(style="margin-top:1.5rem")
     a(href="/orders") Back to orders

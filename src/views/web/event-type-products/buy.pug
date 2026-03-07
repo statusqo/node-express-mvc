@@ -12,9 +12,6 @@ block content
     if priceAmount != null
       p(style="font-size:1.125rem") #{Number(priceAmount).toFixed(2)} #{currency} per session
 
-    if flash && flash.message
-      p(style="color:#c00; margin:0.5rem 0")= flash.message
-
     form(method="post" action="/" + sectionPath + "/" + product.slug + "/buy")
       h2(style="font-size:1.1rem; margin-top:1rem") Choose a session
       ul(style="list-style:none; padding:0; margin:0")

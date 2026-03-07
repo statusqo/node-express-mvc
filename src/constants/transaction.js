@@ -7,7 +7,6 @@ const TRANSACTION_STATUS = {
   SUCCESS: "success",
   FAILED: "failed",
   REFUNDED: "refunded",
-  PARTIALLY_REFUNDED: "partially_refunded",
 };
 
 module.exports = {

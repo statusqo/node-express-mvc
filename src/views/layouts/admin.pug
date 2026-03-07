@@ -12,16 +12,14 @@ html
       link(rel="stylesheet" href="/public/css/admin-dark.css")
       link(rel="stylesheet" href="/public/css/admin-navbar.css")
       link(rel="stylesheet" href="/public/css/footer.css")
-      
-    block scripts
-      script(src="/public/js/admin-media-picker.js")
-      script(src="/public/js/admin-meta-object-picker.js")
 
   body
+    include ../fragments/flash
+    include ../fragments/confirm-modal
     div(class="admin-layout")
       aside(class="admin-sidebar")
         include ../fragments/admin/dash-nav
-      
+
       main(class="admin-content")
         header.admin-header
             div(class="admin-header-breadcrumbs")
@@ -44,3 +42,8 @@ html
                 span.admin-header-username= user.username
         div(class="content-wrapper")
             block content
+    block scripts
+      script(src="/public/js/admin-media-picker.js")
+      script(src="/public/js/admin-meta-object-picker.js")
+      script(src="/public/js/flash.js")
+      script(src="/public/js/confirm-modal.js")

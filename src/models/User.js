@@ -59,6 +59,19 @@ const User = sequelize.define("User", {
     allowNull: true,
     unique: true,
   },
+  personType: {
+    type: DataTypes.ENUM('private', 'legal'),
+    allowNull: false,
+    defaultValue: 'private',
+  },
+  companyName: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  companyOib: {
+    type: DataTypes.STRING(11),
+    allowNull: true,
+  },
 }, {
   timestamps: true,
   tableName: 'users',

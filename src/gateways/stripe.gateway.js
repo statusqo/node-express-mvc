@@ -133,12 +133,16 @@ async function getOrCreateStripeCustomer(userId, email) {
     }
   }
 
-  const customer = await withTimeout(
-    stripe.customers.create({
-      email: preferredEmail,
-      metadata: { userId: String(userId) },
-    })
-  );
+  const customerCreateParams = {
+    email: preferredEmail,
+    metadata: { userId: String(userId) },
+  };
+  if (user.personType === 'legal' && user.companyName) {
+    customerCreateParams.name = user.companyName;
+    customerCreateParams.metadata.personType = 'legal';
+    if (user.companyOib) customerCreateParams.metadata.companyOib = user.companyOib;
+  }
+  const customer = await withTimeout(stripe.customers.create(customerCreateParams));
 
   await userGatewayProfileRepo.upsert({
     userId,
@@ -788,6 +792,30 @@ async function handleWebhook(event) {
     return;
   }
 
+  // Atomic idempotency claim: insert the event record first.
+  // If the insert succeeds, this instance owns the event and may process it.
+  // If it fails with a unique constraint, the event was already handled — skip it.
+  // If processing later fails, the claim is deleted so Stripe can retry correctly.
+  const { ProcessedStripeEvent } = require("../models");
+  try {
+    await ProcessedStripeEvent.create({ eventId: event.id, createdAt: new Date() });
+    logger.info("Stripe webhook: event claimed for processing", { eventId: event.id, eventType: event.type });
+  } catch (claimErr) {
+    if (claimErr.name === "SequelizeUniqueConstraintError") {
+      logger.info("Stripe webhook: event already processed, skipping", {
+        eventId: event.id,
+        eventType: event.type,
+      });
+      return;
+    }
+    logger.error("Stripe webhook: failed to claim event record", {
+      eventId: event.id,
+      eventType: event.type,
+      error: claimErr.message,
+    });
+    throw claimErr;
+  }
+
   try {
     switch (event.type) {
       case "checkout.session.completed": {
@@ -907,15 +935,8 @@ async function handleWebhook(event) {
               (t) => t.gatewayReference === paymentIntentId && t.status === "success"
             );
             if (transaction) {
-              const refundAmount = charge.amount_refunded; // Stripe: cents
-              const originalAmountCents = Math.round(Number(transaction.amount) * 100); // our DB: major units
-              const isPartialRefund = refundAmount < originalAmountCents;
-              await transactionRepo.update(transaction.id, {
-                status: isPartialRefund ? "partially_refunded" : "refunded",
-              });
-              if (!isPartialRefund) {
-                await orderService.restoreVariantQuantitiesForOrder(order.id);
-              }
+              await transactionRepo.update(transaction.id, { status: "refunded" });
+              await orderService.restoreVariantQuantitiesForOrder(order.id);
             }
           }
         }
@@ -925,23 +946,32 @@ async function handleWebhook(event) {
       default:
         logger.info("Unhandled Stripe webhook event", { eventType: event.type });
     }
+
+    logger.info("Stripe webhook: event processed successfully", { eventId: event.id, eventType: event.type });
   } catch (err) {
-    logger.error("Error handling Stripe webhook", { error: err.message, eventType: event.type });
+    // Processing failed: delete the claim so Stripe retries this event correctly.
+    logger.error("Stripe webhook: processing failed, releasing claim for retry", {
+      eventId: event.id,
+      eventType: event.type,
+      error: err.message,
+    });
+    await ProcessedStripeEvent.destroy({ where: { eventId: event.id } }).catch((destroyErr) => {
+      logger.error("Stripe webhook: could not release event claim — event may not retry correctly", {
+        eventId: event.id,
+        error: destroyErr.message,
+      });
+    });
     throw err;
   }
 }
 
-async function createRefund(paymentIntentId, amount = null) {
+async function createRefund(paymentIntentId) {
   if (!stripe) {
     const err = toError(normalizeError(new Error("Stripe is not configured."), GATEWAY_NAME));
     err.status = 500;
     throw err;
   }
-  const refundParams = { payment_intent: paymentIntentId };
-  if (amount) {
-    refundParams.amount = Math.round(amount * 100);
-  }
-  return await withTimeout(stripe.refunds.create(refundParams));
+  return await withTimeout(stripe.refunds.create({ payment_intent: paymentIntentId }));
 }
 
 module.exports = {

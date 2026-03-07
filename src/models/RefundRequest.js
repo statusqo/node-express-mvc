@@ -37,11 +37,6 @@ const RefundRequest = sequelize.define("RefundRequest", {
     type: DataTypes.UUID,
     allowNull: true,
   },
-  refundAmount: {
-    type: DataTypes.DECIMAL(10, 2),
-    allowNull: true,
-    comment: "Partial refund amount in order currency; null = full refund",
-  },
   stripeRefundId: {
     type: DataTypes.STRING,
     allowNull: true,

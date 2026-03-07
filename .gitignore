@@ -107,6 +107,9 @@ dist
 # Uploaded media (admin uploads)
 uploads/
 
+# Generated invoice PDFs
+storage/invoices/*.pdf
+
 # Docusaurus cache and generated files
 .docusaurus
 

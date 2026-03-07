@@ -90,9 +90,18 @@ module.exports = {
         };
       })
     );
-    const zoomConnected = req.user && req.user.id
-      ? !!(await AdminZoomAccount.findOne({ where: { userId: req.user.id } }))
-      : false;
+    // Mirror the token-validity logic from admin.service.js: presence alone is not
+    // enough — an expired token with no refresh token cannot be used.
+    const zoomConnected = await (async () => {
+      if (!req.user || !req.user.id) return false;
+      if (!config.zoom || !config.zoom.clientId || !config.zoom.clientSecret) return false;
+      const account = await AdminZoomAccount.findOne({ where: { userId: req.user.id } });
+      if (!account) return false;
+      const expiresAt = account.tokenExpiresAt ? new Date(account.tokenExpiresAt).getTime() : null;
+      const tokenExpired = expiresAt !== null && expiresAt <= Date.now();
+      if (tokenExpired && !account.refreshToken) return false;
+      return true;
+    })();
     const defaultVariant = plain.ProductVariants && plain.ProductVariants[0];
     const priceRow = defaultVariant?.ProductPrices?.[0];
     res.render("admin/event-type-products/events", {
@@ -177,13 +186,81 @@ module.exports = {
       });
     }
     try {
-      await eventService.create(product.id, result.data);
+      const newEvent = await eventService.create(product.id, result.data);
+      if (newEvent && newEvent.isOnline && newEvent.eventStatus === "active") {
+        const meetingResult = await eventService.ensureMeetingForOnlineEvent(newEvent.id, req.user.id);
+        if (meetingResult.error && config.zoom && config.zoom.clientId) {
+          res.setFlash("success", `Event created. Zoom: ${meetingResult.error}`);
+          return res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events");
+        }
+      }
       res.setFlash("success", "Event created.");
     } catch (e) {
       res.setFlash("error", e.message || "Failed to create event.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events/new");
     }
     res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events");
+  },
+
+  /**
+   * GET .../events/:eventId/edit — Edit Event form.
+   */
+  async editEventForm(req, res) {
+    const { productSlug, eventId } = req.params;
+    const sectionPath = req.sectionPath;
+    const typeSlug = req.eventTypeSlug;
+    if (!typeSlug || !sectionPath) {
+      res.setFlash("error", "Invalid section.");
+      return res.redirect((req.adminPrefix || "") + "/");
+    }
+    const product = await productService.findBySlugWithTypeAndDefaultVariant(productSlug);
+    if (!product) {
+      res.setFlash("error", "Product not found.");
+      return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
+    }
+    const plain = toPlain(product);
+    if (plain.ProductType && plain.ProductType.slug !== typeSlug) {
+      res.setFlash("error", "Product does not belong to this section.");
+      return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
+    }
+    const eventRaw = await eventService.findById(eventId, {
+      include: [
+        ProductVariant,
+        { model: EventMeeting, as: "EventMeeting", required: false },
+        { model: Registration, as: "Registrations", required: false, attributes: ["id"] },
+      ],
+    });
+    if (!eventRaw || String(eventRaw.productId) !== String(plain.id)) {
+      res.setFlash("error", "Event not found.");
+      return res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events");
+    }
+    const ev = toPlain(eventRaw);
+    const priceRow = ev.productVariantId
+      ? await ProductPrice.findOne({ where: { productVariantId: ev.productVariantId, isDefault: true } })
+      : null;
+    const hasMeeting = ev.isOnline && ev.EventMeeting && ev.EventMeeting.providerMeetingId;
+    const meetingLinkStatus = !ev.isOnline ? null : ev.eventStatus === "active" && hasMeeting ? "synced" : "not_synced";
+    const registrationCount = ev.Registrations ? ev.Registrations.length : 0;
+    const defaultVariant = plain.ProductVariants && plain.ProductVariants[0];
+    const productPriceRow = defaultVariant?.ProductPrices?.[0];
+    res.render("admin/event-type-products/event-form", {
+      title: "Edit Event – " + plain.title,
+      product: {
+        ...plain,
+        priceAmount: productPriceRow ? Number(productPriceRow.amount) : null,
+        currency: productPriceRow?.currency || "USD",
+      },
+      event: {
+        ...ev,
+        priceAmount: priceRow ? Number(priceRow.amount) : null,
+        currency: priceRow?.currency || "USD",
+        meetingLinkStatus,
+        registrationCount,
+      },
+      sectionPath,
+      typeLabel: getTypeLabel(sectionPath),
+      isEdit: true,
+    });
   },
 
   /**
@@ -205,6 +282,10 @@ module.exports = {
     const targetEvent = await eventService.findById(eventId);
     if (!targetEvent || String(targetEvent.productId) !== String(toPlain(product).id)) {
       res.setFlash("error", "Event not found or does not belong to this product.");
+      return res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events");
+    }
+    if (targetEvent.eventStatus !== "cancelled") {
+      res.setFlash("error", "Only cancelled events can be removed.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events");
     }
     const { deleted, error } = await eventService.delete(eventId);
@@ -266,20 +347,23 @@ module.exports = {
     try {
       await eventService.saveEventsForProduct(product.id, { events, deletedIds });
       const allEvents = await eventService.findByProductId(product.id);
-      let zoomError = null;
+      const zoomErrors = [];
       for (const ev of allEvents || []) {
         if (ev.isOnline && ev.eventStatus === "active") {
           const result = await eventService.ensureMeetingForOnlineEvent(ev.id, req.user.id);
           if (result.error) {
-            zoomError = result.error;
-            break;
+            zoomErrors.push(result.error);
           }
         }
       }
       // Only surface Zoom errors when Zoom is actually configured — if it isn't, the
       // not_synced badge is sufficient feedback and no error message is needed.
-      if (zoomError && config.zoom && config.zoom.clientId) {
-        res.setFlash("error", `Events saved. Zoom: ${zoomError}`);
+      if (zoomErrors.length && config.zoom && config.zoom.clientId) {
+        const uniqueErrors = [...new Set(zoomErrors)];
+        const detail = uniqueErrors.length > 1
+          ? `${uniqueErrors[0]} (and ${uniqueErrors.length - 1} more)`
+          : uniqueErrors[0];
+        res.setFlash("error", `Events saved. Zoom: ${detail}`);
       } else {
         res.setFlash("success", "Events saved.");
       }
@@ -315,14 +399,18 @@ module.exports = {
     try {
       const result = await eventService.cancelEventAndCleanup(eventId);
       if (result.cancelled) {
-        res.setFlash("success", "Event cancelled. Registrations removed, orders refunded, and attendees notified.");
+        if (result.refundErrors && result.refundErrors.length) {
+          res.setFlash("success", `Event cancelled. Warning: ${result.refundErrors.length} refund(s) failed – process manually in your payment gateway. ${result.refundErrors[0]}`);
+        } else {
+          res.setFlash("success", "Event cancelled. Registrations removed, orders refunded, and attendees notified.");
+        }
       } else {
         res.setFlash("error", result.error || "Cancel failed.");
       }
     } catch (e) {
       res.setFlash("error", e.message || "Cancel failed.");
     }
-    res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events");
+    res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events/" + eventId + "/edit");
   },
 
   /**
@@ -357,6 +445,6 @@ module.exports = {
     } catch (e) {
       res.setFlash("error", e.message || "Re-sync failed.");
     }
-    res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events");
+    res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events/" + eventId + "/edit");
   },
 };

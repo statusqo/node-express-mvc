@@ -196,7 +196,7 @@ body:has(.admin-layout) .admin-header-username {
 /* ── Page header ──────────────────────────────────────────────────── */
 .da-page-header {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 1rem;
     margin-bottom: 2rem;
@@ -699,6 +699,13 @@ tr.da-row--entering {
     letter-spacing: -0.01em;
 }
 
+.da-card-desc {
+    font-size: 13px;
+    color: var(--ds-text-3);
+    line-height: 1.5;
+    margin: 0 0 1.25rem;
+}
+
 .da-card-body {
     padding: 1.5rem;
 }
@@ -797,6 +804,14 @@ tr.da-row--entering {
 }
 
 .da-page .da-form-input::placeholder { color: var(--ds-text-3); }
+
+.da-page .da-form-input:disabled {
+    background: var(--ds-surface);
+    border-color: var(--ds-border);
+    color: var(--ds-text-2);
+    cursor: not-allowed;
+    opacity: 1;
+}
 
 .da-page .da-form-hint {
     font-size: 12px;
@@ -1997,7 +2012,7 @@ tr.da-row--entering {
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--ds-border);
-    margin-bottom: 1.25rem;
+    padding-bottom: 1.25rem;
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -2136,31 +2151,99 @@ tr.da-row--entering {
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   MEDIA PAGE — upload zone & preview (dark overrides)
+   MEDIA PAGE — upload zone & preview (fully self-contained dark styles)
+   admin.css is not loaded in the admin layout, so all base styles
+   for upload zone components are defined here.
    ══════════════════════════════════════════════════════════════════ */
 
+/* Drop zone — clickable label wrapping the hidden file input */
 .da-page .admin-upload-zone {
-    border-color: var(--ds-border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed var(--ds-border);
+    border-radius: 12px;
+    padding: 3rem 2rem;
+    text-align: center;
+    cursor: pointer;
     background: var(--ds-surface-2);
+    transition: border-color 0.18s var(--ds-ease), background 0.18s var(--ds-ease);
+    margin-bottom: 1.25rem;
+    user-select: none;
 }
+
 .da-page .admin-upload-zone:hover {
-    border-color: var(--ds-border-accent);
+    border-color: var(--ds-accent);
     background: var(--ds-accent-dim);
 }
+
+/* Icon wrapper — accent-tinted circle */
+.da-page .admin-upload-zone-icon-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--ds-accent) 12%, transparent);
+    margin-bottom: 1.125rem;
+    flex-shrink: 0;
+    transition: background 0.18s var(--ds-ease);
+}
+
+.da-page .admin-upload-zone:hover .admin-upload-zone-icon-wrap {
+    background: color-mix(in srgb, var(--ds-accent) 20%, transparent);
+}
+
+/* Upload icon */
 .da-page .admin-upload-zone-icon {
-    color: var(--ds-text-3);
-}
-.da-page .admin-upload-zone:hover .admin-upload-zone-icon {
+    width: 36px;
+    height: 36px;
     color: var(--ds-accent);
+    flex-shrink: 0;
 }
+
+/* Text inside drop zone */
 .da-page .admin-upload-zone-label {
+    font-size: 1rem;
+    font-weight: 600;
     color: var(--ds-text-1);
+    margin: 0 0 0.4rem 0;
 }
+
 .da-page .admin-upload-zone-hint {
+    font-size: 0.8rem;
     color: var(--ds-text-3);
+    margin: 0 0 0.2rem 0;
 }
+
+.da-page .admin-upload-zone-size {
+    font-size: 0.78rem;
+    color: var(--ds-text-3);
+    margin: 0 0 0.625rem 0;
+}
+
 .da-page .admin-upload-zone-selected {
+    font-size: 0.82rem;
+    font-weight: 500;
     color: var(--ds-accent);
+    margin: 0;
+    max-width: 30ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Visually hidden file input — still submits with the form */
+.da-page .admin-upload-file-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    pointer-events: none;
 }
 .da-page .admin-media-preview {
     border-color: var(--ds-border);
@@ -2341,4 +2424,163 @@ tr.da-row--entering {
     outline: none;
     border-color: #fff;
     box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15);
+}
+
+/* ── Confirm modal ──────────────────────────────────────────────────────── */
+@keyframes da-modal-backdrop-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+@keyframes da-modal-box-in {
+    from { opacity: 0; transform: translateY(16px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+@keyframes da-modal-backdrop-out {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+}
+@keyframes da-modal-box-out {
+    from { opacity: 1; transform: translateY(0)   scale(1); }
+    to   { opacity: 0; transform: translateY(8px) scale(0.97); }
+}
+
+#da-confirm-modal {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    z-index: 9000;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+#da-confirm-modal.da-confirm-modal--open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+#da-confirm-modal.da-confirm-modal--open .da-confirm-modal__backdrop {
+    animation: da-modal-backdrop-in 220ms ease-out forwards;
+}
+#da-confirm-modal.da-confirm-modal--open .da-confirm-modal__box {
+    animation: da-modal-box-in 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+#da-confirm-modal.da-confirm-modal--closing .da-confirm-modal__backdrop {
+    animation: da-modal-backdrop-out 180ms ease-in forwards;
+}
+#da-confirm-modal.da-confirm-modal--closing .da-confirm-modal__box {
+    animation: da-modal-box-out 180ms ease-in forwards;
+}
+.da-confirm-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+    backdrop-filter: blur(2px);
+}
+.da-confirm-modal__box {
+    position: relative;
+    background: var(--ds-surface);
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius-lg);
+    width: 100%;
+    max-width: 460px;
+    margin: 1rem;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--ds-border);
+    overflow: hidden;
+}
+.da-confirm-modal__header {
+    display: flex;
+    align-items: center;
+    padding: 1.125rem 1.5rem;
+    border-bottom: 1px solid var(--ds-border);
+}
+.da-confirm-modal__title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ds-text-1);
+    margin: 0;
+    letter-spacing: -0.01em;
+}
+.da-confirm-modal__body {
+    padding: 1.25rem 1.5rem;
+}
+.da-confirm-modal__msg {
+    font-size: 13px;
+    color: var(--ds-text-2);
+    margin: 0 0 0.75rem;
+    line-height: 1.6;
+}
+.da-confirm-modal__msg:last-child {
+    margin-bottom: 0;
+}
+.da-confirm-modal__bullets {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+.da-confirm-modal__bullets li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    font-size: 13px;
+    color: var(--ds-text-2);
+    line-height: 1.5;
+}
+.da-confirm-modal__bullets li::before {
+    content: '';
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--ds-danger);
+    margin-top: 0.45em;
+    flex-shrink: 0;
+}
+.da-confirm-modal__footer {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--ds-border);
+    background: var(--ds-surface-2);
+    justify-content: flex-end;
+}
+/* Button styles scoped to the modal (mirrors .da-page .da-btn) */
+#da-confirm-modal .da-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1.125rem;
+    border-radius: var(--ds-radius-sm);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    white-space: nowrap;
+    transition: background 180ms var(--ds-ease), box-shadow 180ms var(--ds-ease), color 180ms var(--ds-ease), border-color 180ms var(--ds-ease);
+    font-family: inherit;
+}
+#da-confirm-modal .da-btn--danger {
+    background: var(--ds-danger-dim);
+    color: var(--ds-danger);
+    border-color: rgba(239, 68, 68, 0.2);
+}
+#da-confirm-modal .da-btn--danger:hover {
+    background: var(--ds-danger);
+    color: #fff;
+    border-color: var(--ds-danger);
+}
+#da-confirm-modal .da-btn--secondary {
+    background: var(--ds-surface-3);
+    color: var(--ds-text-2);
+    border-color: var(--ds-border);
+}
+#da-confirm-modal .da-btn--secondary:hover {
+    background: var(--ds-surface-3);
+    color: var(--ds-text-1);
+    border-color: var(--ds-border-accent);
 }

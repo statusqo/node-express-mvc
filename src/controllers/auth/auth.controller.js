@@ -63,15 +63,15 @@ module.exports = {
   },
 
   async register(req, res, next) {
-    const { email, username, password } = req.body;
+    const { email, username, password, personType, companyName, companyOib } = req.body;
 
-    const errMsg = validateRegister({ email, username, password });
+    const errMsg = validateRegister({ email, username, password, personType, companyName, companyOib });
     if (errMsg) {
       return res.status(400).render("web/register", { title: "Register", error: errMsg });
     }
 
     try {
-      const user = await accountService.register({ email, username, password });
+      const user = await accountService.register({ email, username, password, personType, companyName, companyOib });
       req.session.regenerate((regErr) => {
         if (regErr) {
           logger.error("Session regenerate on register error", { error: regErr.message });

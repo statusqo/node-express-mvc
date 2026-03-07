@@ -4,13 +4,94 @@ block append links
     link(rel='preconnect' href='https://fonts.googleapis.com')
     link(rel='preconnect' href='https://fonts.gstatic.com' crossorigin)
 
+mixin fieldRows(disabled)
+    .da-form-section
+        h2.da-form-section-label Date & time
+        .da-form-group
+            label.da-form-label(for='startDate')
+                | Start date
+                if !disabled
+                    span.req *
+            input#startDate.da-form-input(
+                type='date'
+                name='startDate'
+                required=!disabled
+                disabled=disabled
+                value=event ? event.startDate : ''
+                autofocus=!disabled
+            )
+        .da-form-group
+            label.da-form-label(for='startTime') Start time
+            input#startTime.da-form-input(
+                type='time'
+                name='startTime'
+                disabled=disabled
+                value=event && event.startTime ? String(event.startTime).substring(0, 5) : ''
+            )
+        .da-form-group
+            label.da-form-label(for='durationMinutes') Duration (minutes)
+            input#durationMinutes.da-form-input(
+                type='number'
+                name='durationMinutes'
+                min='1'
+                placeholder='e.g. 60'
+                disabled=disabled
+                value=event && event.durationMinutes != null ? event.durationMinutes : ''
+            )
+        .da-form-group
+            label.da-form-label(for='timezone') Timezone
+            input#timezone.da-form-input(
+                type='text'
+                name='timezone'
+                placeholder='e.g. Europe/London'
+                maxlength='64'
+                readonly
+                disabled=disabled
+                value=event && event.timezone ? event.timezone : ''
+            )
+
+    .da-form-section
+        h2.da-form-section-label Location & capacity
+        .da-form-group
+            label.da-form-label(for='location') Location
+            input#location.da-form-input(
+                type='text'
+                name='location'
+                placeholder='e.g. Zoom or room name'
+                maxlength='255'
+                disabled=disabled
+                value=event ? event.location : ''
+            )
+        .da-form-group
+            label.da-form-label(for='capacity') Capacity
+            input#capacity.da-form-input(
+                type='number'
+                name='capacity'
+                min='0'
+                placeholder='0'
+                disabled=disabled
+                value=event && event.capacity != null ? event.capacity : ''
+            )
+            if !disabled
+                p.da-form-hint Maximum attendees. Leave 0 for unlimited.
+        .da-form-group
+            label.admin-checkbox
+                input(
+                    type='checkbox'
+                    name='isOnline'
+                    value='1'
+                    checked=(event ? event.isOnline : false)
+                    disabled=disabled
+                )
+                | Online event (Zoom meeting can be created when syncing)
+
 block content
     .da-page
 
         //- ── Page header ─────────────────────────────────────────────
         .da-page-header
             .da-page-header-left
-                h1.da-page-title New Event
+                h1.da-page-title= isEdit ? 'Event Details' : 'New Event'
                 p.da-page-subtitle= product ? product.title : ''
                     if product && (product.priceAmount != null || product.currency)
                         |  · Default: #{product.currency || 'USD'} #{product.priceAmount != null ? product.priceAmount : '—'}
@@ -20,88 +101,97 @@ block content
                         polyline(points='15 18 9 12 15 6')
                     | Back to Events
 
-        if flash && flash.message
-            p.admin-flash(class='admin-flash-' + (flash.type || 'info'))= flash.message
         if error
             p.admin-flash.admin-flash-error= error
 
-        //- ── Form ─────────────────────────────────────────────────────
-        .da-card(style='max-width: 640px;')
-            form(method='post' action=(adminPrefix || '') + '/' + sectionPath + '/' + product.slug + '/events/new')
+        //- ── Read-only event details (edit mode) ─────────────────────
+        if isEdit
+            .da-card(style='max-width: 640px;')
                 .da-card-body
-                    .da-form-section
-                        h2.da-form-section-label Date & time
-                        .da-form-group
-                            label.da-form-label(for='startDate')
-                                | Start date
-                                span.req *
-                            input#startDate.da-form-input(
-                                type='date'
-                                name='startDate'
-                                required
-                                value=event ? event.startDate : ''
-                                autofocus
-                            )
-                        .da-form-group
-                            label.da-form-label(for='startTime') Start time
-                            input#startTime.da-form-input(
-                                type='time'
-                                name='startTime'
-                                value=event && event.startTime ? String(event.startTime).substring(0, 5) : ''
-                            )
-                        .da-form-group
-                            label.da-form-label(for='durationMinutes') Duration (minutes)
-                            input#durationMinutes.da-form-input(
-                                type='number'
-                                name='durationMinutes'
-                                min='1'
-                                placeholder='e.g. 60'
-                                value=event && event.durationMinutes != null ? event.durationMinutes : ''
-                            )
-                            p.da-form-hint Optional. Used for display and calendar exports.
-                        .da-form-group
-                            label.da-form-label(for='timezone') Timezone
-                            input#timezone.da-form-input(type='text' name='timezone' placeholder='e.g. Europe/London' maxlength='64' readonly)
-                            p.da-form-hint Set automatically from your browser. Used for start time and Zoom.
+                    +fieldRows(true)
 
-                    .da-form-section
-                        h2.da-form-section-label Location & capacity
-                        .da-form-group
-                            label.da-form-label(for='location') Location
-                            input#location.da-form-input(
-                                type='text'
-                                name='location'
-                                placeholder='e.g. Zoom or room name'
-                                maxlength='255'
-                                value=event ? event.location : ''
-                            )
-                        .da-form-group
-                            label.da-form-label(for='capacity') Capacity
-                            input#capacity.da-form-input(
-                                type='number'
-                                name='capacity'
-                                min='0'
-                                placeholder='0'
-                                value=event && event.capacity != null ? event.capacity : ''
-                            )
-                            p.da-form-hint Maximum attendees. Leave 0 for unlimited.
-                        .da-form-group
-                            label.admin-checkbox
-                                input(type='checkbox' name='isOnline' value='1' checked=(event ? event.isOnline : false))
-                                | Online event (Zoom meeting can be created when syncing)
+        //- ── Create form (new mode) ───────────────────────────────────
+        else
+            .da-card(style='max-width: 640px;')
+                form(
+                    method='post'
+                    action=(adminPrefix || '') + '/' + sectionPath + '/' + product.slug + '/events/new'
+                )
+                    .da-card-body
+                        +fieldRows(false)
+                    .da-card-footer
+                        button.da-btn.da-btn--primary(type='submit') Create Event
+                        a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/' + sectionPath + '/' + product.slug + '/events') Cancel
 
-                .da-card-footer
-                    button.da-btn.da-btn--primary(type='submit') Create Event
-                    a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/' + sectionPath + '/' + product.slug + '/events') Cancel
+        //- ── Zoom meeting status (edit only) ─────────────────────────
+        if isEdit
+            - var baseEventsUrl = (adminPrefix || '') + '/' + sectionPath + '/' + product.slug + '/events'
+            .da-card(style='max-width:640px; margin-top:1.5rem')
+                .da-card-body
+                    p.da-form-section-label(style='margin-bottom:0.5rem') Zoom Meeting
+                    if !event.isOnline
+                        p.da-aside-empty This is an in-person event — no Zoom meeting.
+                    else if event.meetingLinkStatus === 'synced'
+                        span.da-badge.da-badge--success ✓ Active Zoom meeting
+                    else
+                        .da-cell-actions(style='display:flex; justify-content: flex-start; align-items:center; gap:0.75rem; flex-wrap:wrap;')
+                            span.da-badge.da-badge--warning — No Zoom meeting
+                            if event.eventStatus === 'orphaned'
+                                form#resync-zoom-form(method='post' action=baseEventsUrl + '/resync-event')
+                                    input(type='hidden' name='eventId' value=event.id)
+                                    button.da-btn.da-btn--secondary(type='submit') Re-sync with Zoom
+
+        //- ── Actions (edit only) ─────────────────────────────────────
+        if isEdit
+            - var regCount = event.registrationCount || 0
+            - var cancelBullets = regCount > 0 ? (event.isOnline ? ['Zoom meeting will be cancelled', regCount + ' active registration(s) will be cleared', 'Associated orders will be refunded', 'Event will be marked as cancelled', 'Attendees will be notified via email'] : [regCount + ' active registration(s) will be cleared', 'Associated orders will be refunded', 'Event will be marked as cancelled', 'Attendees will be notified via email']) : (event.isOnline ? ['Zoom meeting will be cancelled', 'Event will be marked as cancelled'] : ['Event will be marked as cancelled'])
+            - var orphanBullets = regCount > 0 ? [regCount + ' active registration(s) will be cleared', 'Associated orders will be refunded', 'Event will be marked as cancelled', 'Attendees will be notified via email'] : ['Event will be marked as cancelled']
+            - var cancelIntro = regCount > 0 ? 'This event has ' + regCount + ' active registration(s). The following will happen immediately:' : 'The following will happen immediately:'
+
+            if event.eventStatus === 'active'
+                form#cancel-event-form(method='post' action=baseEventsUrl + '/cancel-event' style='margin-top:1.5rem;')
+                    input(type='hidden' name='eventId' value=event.id)
+                    input(type='hidden' name='confirm' value='1')
+                    button.da-btn.da-btn--danger(
+                        type='button'
+                        data-confirm-modal
+                        data-confirm-title='Cancel Event'
+                        data-confirm-msg=cancelIntro
+                        data-confirm-bullets=JSON.stringify(cancelBullets)
+                        data-form-id='cancel-event-form'
+                    ) Cancel Event
+
+            else if event.eventStatus === 'orphaned'
+                form#orphan-cancel-form(method='post' action=baseEventsUrl + '/cancel-event' style='margin-top:1.5rem;')
+                    input(type='hidden' name='eventId' value=event.id)
+                    input(type='hidden' name='confirm' value='1')
+                    button.da-btn.da-btn--danger(
+                        type='button'
+                        data-confirm-modal
+                        data-confirm-title='Cancel Event'
+                        data-confirm-msg=cancelIntro
+                        data-confirm-bullets=JSON.stringify(orphanBullets)
+                        data-form-id='orphan-cancel-form'
+                    ) Cancel Event
+
+            else if event.eventStatus === 'cancelled'
+                form#remove-event-form(method='post' action=baseEventsUrl + '/remove-event' style='margin-top:1.5rem')
+                    input(type='hidden' name='eventId' value=event.id)
+                    button.da-btn.da-btn--danger(
+                        type='button'
+                        data-confirm-modal
+                        data-confirm-title='Remove Event'
+                        data-confirm-msg='Remove this event permanently? This cannot be undone.'
+                        data-form-id='remove-event-form'
+                    ) Remove Event
 
 block append scripts
     script.
         (function () {
             var tzInput = document.getElementById('timezone');
-            if (tzInput) {
+            if (tzInput && !tzInput.value && !tzInput.disabled) {
                 try {
-                    var tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-                    tzInput.value = tz;
+                    tzInput.value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
                 } catch (e) {
                     tzInput.value = 'UTC';
                 }

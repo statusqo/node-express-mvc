@@ -79,6 +79,19 @@ const Order = sequelize.define("Order", {
     type: DataTypes.STRING,
     allowNull: true,
   },
+  personType: {
+    type: DataTypes.ENUM('private', 'legal'),
+    allowNull: false,
+    defaultValue: 'private',
+  },
+  companyName: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  companyOib: {
+    type: DataTypes.STRING(11),
+    allowNull: true,
+  },
   // Deprecated: use paymentStatus + fulfillmentStatus. Kept for migration compatibility.
   status: {
     type: DataTypes.STRING,

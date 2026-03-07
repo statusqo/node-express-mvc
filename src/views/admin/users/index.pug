@@ -7,9 +7,6 @@ block append links
 block content
     .da-page
 
-        if flash && flash.message
-            p.admin-flash(class='admin-flash-' + (flash.type || 'info'))= flash.message
-
         //- ── Page header ─────────────────────────────────────────────
         .da-page-header
             .da-page-header-left
@@ -52,26 +49,6 @@ block content
                                         td
                                             .da-cell-actions
                                                 a.da-row-btn.da-row-btn--edit(href=(adminPrefix || '') + '/users/' + u.id + '/edit' aria-label='Edit ' + u.email) Edit
-                                                .da-delete-wrap(aria-label='Delete user actions')
-                                                    button.da-row-btn.da-row-btn--delete.da-delete-trigger(
-                                                        type='button'
-                                                        aria-label='Delete ' + u.email
-                                                        aria-expanded='false'
-                                                    ) Delete
-                                                    .da-confirm-group(role='group' aria-label='Confirm deletion')
-                                                        button.da-row-btn.da-row-btn--cancel.da-delete-cancel(
-                                                            type='button'
-                                                            aria-label='Cancel deletion'
-                                                        ) No
-                                                        span.da-confirm-sep(aria-hidden='true')
-                                                        form.da-form-inline.da-delete-form(
-                                                            method='post'
-                                                            action=(adminPrefix || '') + '/users/' + u.id + '/delete'
-                                                        )
-                                                            button.da-row-btn.da-row-btn--confirm(
-                                                                type='submit'
-                                                                aria-label='Confirm delete ' + u.email
-                                                            ) Yes, delete
                             else
                                 tr
                                     td(colspan='4')
@@ -105,96 +82,8 @@ block content
                                         td
                                             .da-cell-actions
                                                 a.da-row-btn.da-row-btn--edit(href=(adminPrefix || '') + '/users/' + u.id + '/edit' aria-label='Edit ' + u.email) Edit
-                                                .da-delete-wrap(aria-label='Delete user actions')
-                                                    button.da-row-btn.da-row-btn--delete.da-delete-trigger(
-                                                        type='button'
-                                                        aria-label='Delete ' + u.email
-                                                        aria-expanded='false'
-                                                    ) Delete
-                                                    .da-confirm-group(role='group' aria-label='Confirm deletion')
-                                                        button.da-row-btn.da-row-btn--cancel.da-delete-cancel(
-                                                            type='button'
-                                                            aria-label='Cancel deletion'
-                                                        ) No
-                                                        span.da-confirm-sep(aria-hidden='true')
-                                                        form.da-form-inline.da-delete-form(
-                                                            method='post'
-                                                            action=(adminPrefix || '') + '/users/' + u.id + '/delete'
-                                                        )
-                                                            button.da-row-btn.da-row-btn--confirm(
-                                                                type='submit'
-                                                                aria-label='Confirm delete ' + u.email
-                                                            ) Yes, delete
                             else
                                 tr
                                     td(colspan='4')
                                         .da-table-empty No users yet.
 
-block append scripts
-    script.
-        (function () {
-            'use strict';
-
-            /* ── Delete confirmation flow ─────────────────────────── */
-
-            function initDeleteFlow() {
-                document.querySelectorAll('.da-delete-trigger').forEach(function (trigger) {
-                    trigger.addEventListener('click', function () {
-                        var row = trigger.closest('tr.da-row');
-                        if (!row) return;
-                        row.classList.add('da-row--confirming');
-                        trigger.setAttribute('aria-expanded', 'true');
-                        // Focus the "No" button for accessibility
-                        var cancel = row.querySelector('.da-delete-cancel');
-                        if (cancel) setTimeout(function () { cancel.focus(); }, 200);
-                    });
-                });
-
-                document.querySelectorAll('.da-delete-cancel').forEach(function (cancel) {
-                    cancel.addEventListener('click', function () {
-                        var row = cancel.closest('tr.da-row');
-                        if (!row) return;
-                        row.classList.remove('da-row--confirming');
-                        var trigger = row.querySelector('.da-delete-trigger');
-                        if (trigger) {
-                            trigger.setAttribute('aria-expanded', 'false');
-                            setTimeout(function () { trigger.focus(); }, 200);
-                        }
-                    });
-                });
-
-                /* Animate row exit before form submission */
-                document.querySelectorAll('.da-delete-form').forEach(function (form) {
-                    form.addEventListener('submit', function (e) {
-                        e.preventDefault();
-                        var row = form.closest('tr');
-                        if (!row) { form.submit(); return; }
-
-                        row.classList.add('da-row--removing');
-
-                        // Wait for exit animation (350ms) then submit
-                        setTimeout(function () {
-                            form.submit();
-                        }, 340);
-                    });
-                });
-            }
-
-            /* ── Keyboard: Escape cancels confirming state ────────── */
-
-            document.addEventListener('keydown', function (e) {
-                if (e.key !== 'Escape') return;
-                document.querySelectorAll('tr.da-row--confirming').forEach(function (row) {
-                    row.classList.remove('da-row--confirming');
-                    var trigger = row.querySelector('.da-delete-trigger');
-                    if (trigger) trigger.setAttribute('aria-expanded', 'false');
-                });
-            });
-
-            /* ── Init ─────────────────────────────────────────────── */
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', initDeleteFlow);
-            } else {
-                initDeleteFlow();
-            }
-        })();

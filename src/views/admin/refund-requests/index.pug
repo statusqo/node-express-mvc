@@ -11,9 +11,6 @@ block content
 
     .da-page
 
-        if flash && flash.message
-            p.admin-flash(class='admin-flash-' + (flash.type || 'info'))= flash.message
-
         //- ── Page header ─────────────────────────────────────────────
         .da-page-header
             .da-page-header-left
@@ -52,7 +49,6 @@ block content
                         tr
                             th(scope='col') Status
                             th(scope='col') Order
-                            th.da-col-type(scope='col') Type
                             th.da-col-type(scope='col') Amount
                             th.da-col-reason(scope='col') Reason
                             th.da-col-created(scope='col') Requested
@@ -62,8 +58,7 @@ block content
                         if refundRequests && refundRequests.length
                             each r in refundRequests
                                 - var statusClass = ({pending:'warning', approved:'success', rejected:'danger'})[r.status] || 'neutral'
-                                - var refundType  = r.status === 'approved' ? (r.refundAmount != null ? 'Partial' : 'Full') : null
-                                - var refundAmt   = r.status === 'approved' ? (r.refundAmount != null ? Number(r.refundAmount).toFixed(2) + ' ' + (r.Order && r.Order.currency ? r.Order.currency : 'USD') : (r.Order && r.Order.total != null ? Number(r.Order.total).toFixed(2) + ' ' + (r.Order.currency || 'USD') : 'Full')) : null
+                                - var refundAmt   = r.status === 'approved' ? (r.Order && r.Order.total != null ? Number(r.Order.total).toFixed(2) + ' ' + (r.Order.currency || 'USD') : '—') : null
                                 tr(class=r.status === 'pending' ? 'da-row--pending' : '')
                                     //- Status
                                     td
@@ -83,13 +78,6 @@ block content
                                                     span.da-cell-mono= r.Order.id ? r.Order.id.slice(0, 8) + '…' : '—'
                                                 if r.Order.email
                                                     span.da-order-email= r.Order.email
-                                        else
-                                            span.da-cell-muted —
-
-                                    //- Refund type
-                                    td.da-col-type
-                                        if refundType
-                                            span.da-cell-secondary= refundType
                                         else
                                             span.da-cell-muted —
 

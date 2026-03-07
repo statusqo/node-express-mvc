@@ -2,12 +2,12 @@
  * Public controller for event-type product sections (Webinars, Seminars, Classrooms).
  * Expects req.typeSlug and req.sectionPath set by route middleware (e.g. typeSlug: 'webinar', sectionPath: 'webinars').
  */
-const { ProductVariant } = require("../../models");
+const { ProductVariant, ProductPrice } = require("../../models");
 const productService = require("../../services/product.service");
 const eventService = require("../../services/event.service");
 const orderService = require("../../services/order.service");
 const paymentMethodService = require("../../services/paymentMethod.service");
-const { validateWebinarBuy } = require("../../validators/webinarBuy.schema");
+const { validateEventRegister } = require("../../validators/eventRegister.schema");
 const { getDefaultGateway } = require("../../gateways");
 const config = require("../../config");
 
@@ -113,10 +113,13 @@ module.exports = {
       res.setFlash("error", "This session is sold out.");
       return res.redirect("/" + sectionPath + "/" + plain.slug);
     }
-    const variant = plain.ProductVariants && plain.ProductVariants[0];
-    const priceRow = variant && variant.ProductPrices && variant.ProductPrices[0];
-    const priceAmount = priceRow ? Number(priceRow.amount) : null;
-    const currency = priceRow ? priceRow.currency : "USD";
+    // Use the event's own variant price — this is what will actually be charged and is the
+    // authoritative value for determining whether the session is free (priceAmount === 0).
+    const eventPriceRow = await ProductPrice.findOne({
+      where: { productVariantId: eventPlain.productVariantId, isDefault: true },
+    });
+    const priceAmount = eventPriceRow ? Number(eventPriceRow.amount) : null;
+    const currency = eventPriceRow ? eventPriceRow.currency : "USD";
     let paymentMethods = [];
     if (req.user && req.user.id) {
       try {
@@ -155,12 +158,12 @@ module.exports = {
     if (plain.ProductType && plain.ProductType.slug !== req.typeSlug) {
       return res.status(404).json({ error: "Product not found." });
     }
-    const validation = validateWebinarBuy(req.body || {});
+    const validation = validateEventRegister(req.body || {});
     if (!validation.ok) {
       const msg = (validation.errors && validation.errors[0] && validation.errors[0].message) || "Invalid input.";
       return res.status(400).json({ error: msg });
     }
-    const { eventId, email, forename, surname } = validation.data;
+    const { eventId, email, forename, surname, billingLine1, billingLine2, billingCity, billingState, billingPostcode, billingCountry } = validation.data;
     const event = await eventService.findById(eventId);
     if (!event || String(event.productId) !== String(product.id)) {
       return res.status(400).json({ error: "Invalid session." });
@@ -180,12 +183,35 @@ module.exports = {
     if (!userId && !email) {
       return res.status(400).json({ error: "Email is required for guest checkout." });
     }
+    // Require billing address for paid sessions (check variant price).
+    const { ProductPrice } = require("../../models");
+    const eventPriceRow = await ProductPrice.findOne({ where: { productVariantId: event.productVariantId, isDefault: true } });
+    const isPaid = eventPriceRow && Number(eventPriceRow.amount) > 0;
+    if (isPaid && (!billingLine1 || !billingCity || !billingPostcode || !billingCountry)) {
+      return res.status(400).json({ error: "Billing address is required." });
+    }
     let order;
     try {
-      order = await orderService.createOrderFromEvent(eventId, userId, sessionId, { email, forename, surname });
+      order = await orderService.createOrderFromEvent(eventId, userId, sessionId, {
+        email, forename, surname, billingLine1, billingLine2, billingCity, billingState, billingPostcode, billingCountry,
+        personType: req.user?.personType || 'private',
+        companyName: req.user?.companyName || null,
+        companyOib: req.user?.companyOib || null,
+      });
     } catch (e) {
       return res.status(400).json({ error: e.message || "Could not create order." });
     }
+
+    // Free session — fulfill immediately without going through the payment gateway.
+    if (Number(order.total) === 0) {
+      try {
+        await orderService.fulfillFreeOrder(order.id);
+        return res.json({ free: true, orderId: order.id });
+      } catch (e) {
+        return res.status(500).json({ error: e.message || "Could not complete free registration." });
+      }
+    }
+
     const gateway = getDefaultGateway();
     if (!gateway) {
       return res.status(503).json({ error: "Payment system is not configured." });

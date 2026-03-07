@@ -29,9 +29,20 @@ block content
     form#checkoutForm(action="/checkout" method="post" data-stripe-key=(stripePublishableKey || '') data-user-logged-in=(user ? '1' : '') data-requires-address=(requiresAddress ? '1' : '0'))
       if user
         p(style="margin-bottom:1rem; padding:0.75rem; background:#e8f4fd; border-radius:6px; font-size:0.95rem")
-          | You can 
+          | You can
           a(href="/account") save your address in your account
           |  to speed up future checkouts.
+
+      if user && user.personType === 'legal'
+        section(style="margin-bottom:1.25rem; padding:0.75rem; border:1px solid #d0d0d0; border-radius:6px; background:#f5f8ff")
+          h3(style="margin:0 0 0.5rem 0; font-size:1rem") Company / legal person
+          p(style="margin:0.25rem 0; font-size:0.95rem")
+            strong Company name:
+            |  #{user.companyName || '—'}
+          p(style="margin:0.25rem 0; font-size:0.95rem")
+            strong OIB:
+            |  #{user.companyOib || '—'}
+          p(style="margin:0.5rem 0 0; font-size:0.85rem; color:#555") Your R1 receipt will be issued to the above company. To change company details, update your account profile.
 
       h3(style="margin-top:1rem") Contact &amp; delivery details
       div(style="margin-bottom:0.75rem")

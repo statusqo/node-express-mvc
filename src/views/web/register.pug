@@ -11,10 +11,26 @@ block content
 
     label(for="email") Email
     input#email(type="email" name="email" required)
-    
+
     label(for="password") Password
     input#password(type="password" name="password" required)
-    
+
+    fieldset
+      legend Account type
+      label
+        input#personTypePrivate(type="radio" name="personType" value="private" checked)
+        |  Private person
+      label
+        input#personTypeLegal(type="radio" name="personType" value="legal")
+        |  Legal person (company)
+
+    #companyFields(style="display:none")
+      label(for="companyName") Company name
+      input#companyName(type="text" name="companyName" maxlength="255")
+
+      label(for="companyOib") OIB (tax ID)
+      input#companyOib(type="text" name="companyOib" maxlength="11" pattern="\\d{11}" title="OIB must be exactly 11 digits")
+
     button(type="submit") Register
 
   if googleAuthEnabled
@@ -22,5 +38,21 @@ block content
     p
       a(href="/auth/google") Sign up with Google
 
-  p Already have an account? 
+  p Already have an account?
     a(href="/auth/login") Sign in
+
+  script.
+    (function () {
+      var radios = document.querySelectorAll('input[name="personType"]');
+      var companyFields = document.getElementById('companyFields');
+      var companyNameInput = document.getElementById('companyName');
+      var companyOibInput = document.getElementById('companyOib');
+      function toggle() {
+        var isLegal = document.getElementById('personTypeLegal').checked;
+        companyFields.style.display = isLegal ? '' : 'none';
+        companyNameInput.required = isLegal;
+        companyOibInput.required = isLegal;
+      }
+      radios.forEach(function (r) { r.addEventListener('change', toggle); });
+      toggle();
+    })();

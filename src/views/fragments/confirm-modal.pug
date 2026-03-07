@@ -1,0 +1,18 @@
+//- Reusable confirmation modal.
+//- Trigger by adding these attributes to any button (type="button"):
+//-   data-confirm-modal
+//-   data-confirm-title="Your title"
+//-   data-confirm-msg="Intro sentence shown above the bullet list"
+//-   data-confirm-bullets='["Action one","Action two"]'   (optional JSON array)
+//-   data-form-id="id-of-form-to-submit"
+#da-confirm-modal(role='dialog' aria-modal='true' aria-labelledby='da-confirm-modal-title')
+    .da-confirm-modal__backdrop
+    .da-confirm-modal__box
+        .da-confirm-modal__header
+            h2#da-confirm-modal-title.da-confirm-modal__title Confirm
+        .da-confirm-modal__body
+            p#da-confirm-modal-msg.da-confirm-modal__msg
+            ul#da-confirm-modal-bullets.da-confirm-modal__bullets
+        .da-confirm-modal__footer
+            button#da-confirm-modal-cancel.da-btn.da-btn--secondary(type='button') Cancel
+            button#da-confirm-modal-ok.da-btn.da-btn--danger(type='button') Confirm

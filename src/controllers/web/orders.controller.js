@@ -1,5 +1,7 @@
+const fs = require("fs");
 const orderService = require("../../services/order.service");
 const refundRequestService = require("../../services/refundRequest.service");
+const invoiceService = require("../../services/invoice.service");
 const { getDefaultGateway } = require("../../gateways");
 const logger = require("../../config/logger");
 
@@ -58,6 +60,8 @@ module.exports = {
     const hasPendingRefundRequest = refundRequests.some((r) => r.status === "pending");
     const hasApprovedRefundRequest = refundRequests.some((r) => r.status === "approved");
 
+    const invoice = await invoiceService.getInvoiceForOrder(order.id);
+
     res.render("web/order", {
       title: "Order",
       order,
@@ -65,8 +69,49 @@ module.exports = {
       refundRequests,
       hasPendingRefundRequest,
       hasApprovedRefundRequest,
+      invoice,
       stripePublishableKey: require("../../config").stripe?.publishableKey || "",
     });
+  },
+
+  async downloadReceipt(req, res, next) {
+    const userId = req.user && req.user.id;
+    const sessionId = req.session && req.sessionID ? req.sessionID : null;
+    if (!userId) return res.redirect("/auth/login");
+
+    const orderId = req.params.id;
+    let order;
+    try {
+      ({ order } = await orderService.getOrderWithLines(orderId, userId, sessionId));
+    } catch (err) {
+      return next(err);
+    }
+
+    if (!order || order.paymentStatus !== "paid") {
+      return res.status(404).send("Receipt not available.");
+    }
+
+    const invoice = await invoiceService.getInvoiceForOrder(orderId);
+    if (!invoice || !invoice.pdfPath) {
+      return res.status(404).send("Receipt not found.");
+    }
+
+    // invoice.pdfPath is stored as a relative path (e.g. "invoices/INV-2026-000001.pdf").
+    // Resolve it to an absolute path before any filesystem operations.
+    const absolutePath = invoiceService.resolvePdfPath(invoice.pdfPath);
+
+    if (!fs.existsSync(absolutePath)) {
+      logger.error("Invoice PDF missing from disk", {
+        invoiceNumber: invoice.invoiceNumber,
+        pdfPath: invoice.pdfPath,
+        absolutePath,
+      });
+      return res.status(404).send("Receipt file not found.");
+    }
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${invoice.invoiceNumber}.pdf"`);
+    fs.createReadStream(absolutePath).pipe(res);
   },
 
   async refundRequest(req, res) {

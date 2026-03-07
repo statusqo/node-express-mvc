@@ -7,9 +7,6 @@ block append links
 block content
     .da-page
 
-        if flash && flash.message
-            p.admin-flash(class='admin-flash-' + (flash.type || 'info'))= flash.message
-
         //- ── Page header ─────────────────────────────────────────────
         .da-page-header
             .da-page-header-left
@@ -20,26 +17,30 @@ block content
         .da-section
             .da-section-header
                 h2.da-section-title Upload
-            .da-card
+            .da-card(style='max-width: 640px;')
                 .da-card-header
                     h2.da-card-title Upload a file
-                    p(style='margin:0; font-size: 13px; color: var(--ds-text-3);') Add images, PDFs and other media for products and collections.
-                .da-card-body
-                    form(method='post' action=(adminPrefix || '') + '/media/upload' enctype='multipart/form-data')
+                form(method='post' action=(adminPrefix || '') + '/media/upload' enctype='multipart/form-data')
+                    .da-card-body
+                        p.da-card-desc Add images, PDFs and other media for products and collections.
                         label.admin-upload-zone(for='media-file')
-                            svg.admin-upload-zone-icon(viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5' aria-hidden='true')
-                                path(stroke-linecap='round' stroke-linejoin='round' d='M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5')
-                            p.admin-upload-zone-label Click to select a file
+                            .admin-upload-zone-icon-wrap(aria-hidden='true')
+                                svg.admin-upload-zone-icon(viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5' aria-hidden='true')
+                                    path(stroke-linecap='round' stroke-linejoin='round' d='M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z')
+                            p.admin-upload-zone-label Upload your files
                             p.admin-upload-zone-hint JPG, PNG, GIF, WebP, SVG · PDF
+                            p.admin-upload-zone-size Max 20 MB
                             p#upload-selected.admin-upload-zone-selected
                         input#media-file.admin-upload-file-input(
                             type='file'
                             name='file'
                             accept='.jpg,.jpeg,.png,.gif,.webp,.svg,.pdf,image/*,application/pdf'
                         )
-                        .da-form-group(style='margin-top: 1rem;')
+                        .da-form-group
                             label.da-form-label(for='alt') Alt text (optional)
                             input#alt.da-form-input(type='text' name='alt' placeholder='Describe the image for screen readers')
+                            p.da-form-hint Helps screen readers identify the file and improves accessibility.
+                    .da-card-footer
                         button.da-btn.da-btn--primary(type='submit') Upload file
 
         //- ── Media table ─────────────────────────────────────────────

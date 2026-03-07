@@ -124,8 +124,12 @@ async function webhook(req, res) {
     try {
       const row = await EventMeeting.findOne({ where: { providerMeetingId: meetingId } });
       if (row) {
-        await Event.update({ eventStatus: "orphaned" }, { where: { id: row.eventId } });
-        logger.info({ eventId: row.eventId, meetingId }, "Event marked orphaned (Zoom meeting deleted)");
+        const eventId = row.eventId;
+        await Event.update({ eventStatus: "orphaned" }, { where: { id: eventId } });
+        // Remove the stale meeting record so the dead join URL is no longer served.
+        // resyncOrphanedEvent will create a fresh EventMeeting when the admin re-syncs.
+        await row.destroy();
+        logger.info({ eventId, meetingId }, "Event marked orphaned and stale meeting record removed (Zoom meeting deleted)");
       } else {
         logger.info(
           { meetingId },

@@ -19,15 +19,15 @@ html
       script(src="/public/js/main.js")
       script(src="/public/js/footer.js")
       script(src="/public/js/add-to-cart.js")
+      script(src="/public/js/flash.js")
 
   body
+    include ../fragments/flash
     div(class="page")
       div(class="page-body")
         header(class="nav-header")
           include ../fragments/web/nav
         main(class="main-content")
-          if flash && flash.message
-            div(class="flash flash-" + flash.type role="alert" aria-live="polite")= flash.message
           block content
         footer(class="footer")
           include ../fragments/web/footer

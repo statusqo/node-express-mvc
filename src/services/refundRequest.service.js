@@ -116,12 +116,10 @@ async function getRefundRequestStatusByOrderIds(orderIds) {
 
 /**
  * Approve a refund request: call Stripe createRefund, update RefundRequest, transaction, and order.
- * Variant quantity restore is done by charge.refunded webhook.
  * @param {string} requestId
  * @param {string} processedByUserId
- * @param {{ full?: boolean, amount?: number }} opts - full: true for full refund; amount: number for partial (order currency units)
  */
-async function approveRefundRequest(requestId, processedByUserId, opts = {}) {
+async function approveRefundRequest(requestId, processedByUserId) {
   const request = await refundRequestRepo.findById(requestId);
   if (!request) {
     const err = new Error("Refund request not found.");
@@ -153,26 +151,13 @@ async function approveRefundRequest(requestId, processedByUserId, opts = {}) {
     throw err;
   }
 
-  const isFull = opts.full === true || (opts.amount == null || opts.amount === "");
-  const amount = isFull ? null : (opts.amount != null ? Number(opts.amount) : null);
-  if (!isFull && (amount == null || amount <= 0 || amount > Number(order.total))) {
-    const err = new Error("Invalid partial refund amount.");
-    err.status = 400;
-    throw err;
-  }
-
-  const refund = await stripeGateway.createRefund(paymentIntentId, amount);
+  const refund = await stripeGateway.createRefund(paymentIntentId);
   const now = new Date();
-  const orderTotal = Number(order.total) || 0;
-  const isPartialRefundOfTotal = !isFull && amount != null && amount >= orderTotal;
-  const treatAsFull = isFull || isPartialRefundOfTotal;
-  const refundAmountDb = isFull ? null : amount;
 
   await refundRequestRepo.update(requestId, {
     status: APPROVED,
     processedAt: now,
     processedByUserId,
-    refundAmount: refundAmountDb,
     stripeRefundId: refund.id,
   });
 
@@ -181,17 +166,11 @@ async function approveRefundRequest(requestId, processedByUserId, opts = {}) {
     (t) => t.gatewayReference === paymentIntentId && t.status === TRANSACTION_STATUS.SUCCESS
   );
   if (successTransaction) {
-    await transactionRepo.update(successTransaction.id, {
-      status: treatAsFull ? TRANSACTION_STATUS.REFUNDED : TRANSACTION_STATUS.PARTIALLY_REFUNDED,
-    });
+    await transactionRepo.update(successTransaction.id, { status: TRANSACTION_STATUS.REFUNDED });
   }
 
-  if (treatAsFull) {
-    await orderRepo.update(order.id, { paymentStatus: "refunded", fulfillmentStatus: "refunded" });
-    await orderService.restoreVariantQuantitiesForOrder(order.id);
-  } else {
-    await orderRepo.update(order.id, { fulfillmentStatus: "partially_refunded" });
-  }
+  await orderRepo.update(order.id, { paymentStatus: "refunded", fulfillmentStatus: "refunded" });
+  await orderService.restoreVariantQuantitiesForOrder(order.id);
 
   return await refundRequestRepo.findById(requestId);
 }

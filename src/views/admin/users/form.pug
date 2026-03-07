@@ -77,6 +77,35 @@ block content
                                         )
 
                             .da-form-section
+                                span.da-form-section-label Person Type
+
+                                .da-form-group
+                                    label.da-form-label Person Type
+                                    select#personType.da-form-select(name='personType')
+                                        option(value='private' selected=(!user || user.personType !== 'legal')) Private person
+                                        option(value='legal' selected=(user && user.personType === 'legal')) Legal person (company)
+
+                                .da-form-group
+                                    label.da-form-label(for='companyName') Company Name
+                                    input#companyName.da-form-input(
+                                        type='text'
+                                        name='companyName'
+                                        value=user ? (user.companyName || '') : ''
+                                        placeholder='Required for legal persons'
+                                    )
+
+                                .da-form-group
+                                    label.da-form-label(for='companyOib') OIB (Tax ID)
+                                    input#companyOib.da-form-input(
+                                        type='text'
+                                        name='companyOib'
+                                        value=user ? (user.companyOib || '') : ''
+                                        maxlength='11'
+                                        pattern='\\d{11}'
+                                        placeholder='11-digit Croatian tax ID'
+                                    )
+
+                            .da-form-section
                                 span.da-form-section-label Permissions
 
                                 .da-form-group
@@ -166,6 +195,11 @@ block content
                                                 p.da-detail-line Expires #{pm.expiryMonth}/#{pm.expiryYear}
                             else
                                 p.da-aside-empty No saved payment methods.
+
+        //- ── Danger zone (edit only) ─────────────────────────────────
+        if isEdit
+            form(method='post' action=(adminPrefix || '') + '/users/' + user.id + '/delete' onsubmit='return confirm("Are you sure you want to delete this user? This cannot be undone.")' style='margin-top:1.5rem')
+                button.da-btn.da-btn--danger(type='submit') Delete User
 
         //- ── Orders table (edit only) ────────────────────────────────
         if isEdit

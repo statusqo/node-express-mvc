@@ -6,7 +6,6 @@ block append links
 
 block content
     .da-page
-
         //- ── Sticky page header ───────────────────────────────────────
         .da-page-header.da-page-header--sticky
             .da-page-header-left
@@ -21,8 +20,6 @@ block content
                         polyline(points='15 18 9 12 15 6')
                     | Back to #{typeLabel}s
 
-        if flash && flash.message
-            p.admin-flash(class='admin-flash-' + (flash.type || 'info'))= flash.message
         if error
             p.admin-flash.admin-flash-error= error
 
@@ -78,20 +75,17 @@ block content
                                 th(scope='col') Location
                                 th(scope='col') Cap.
                                 th(scope='col') Seats
-                                th(scope='col') Online
+                                th(scope='col') Format
                                 th(scope='col' title='Zoom meeting status') Mtg
                                 th(scope='col') Status
                                 th(scope='col') TZ
                                 th(scope='col') Price
-                                th(scope='col') Curr.
                                 th(scope='col' style='text-align:right') Actions
 
                         tbody#events-tbody
                             - function formatDDMMYY(s) { if (!s) return '—'; var d = new Date(s); if (isNaN(d.getTime())) return String(s); var day = ('0' + d.getDate()).slice(-2); var month = ('0' + (d.getMonth() + 1)).slice(-2); var year = String(d.getFullYear()).slice(-2); return day + '-' + month + '-' + year; }
                             each ev in events
                                 - var evStatusClass = ({active:'da-badge--success', cancelled:'da-badge--danger', orphaned:'da-badge--warning'})[ev.eventStatus] || 'da-badge--neutral'
-                                - var cancelMsg = ev.registrationCount > 0 ? 'Cancel this event? ' + ev.registrationCount + ' registrant(s) will be removed from Zoom, orders refunded, and attendees notified. Event will be marked cancelled.' : 'Cancel this event? It will be marked cancelled.'
-                                - var orphanCancelMsg = ev.registrationCount > 0 ? 'Cancel this orphaned event? ' + ev.registrationCount + ' registration(s) will be removed, orders refunded, and attendees notified.' : 'Cancel this orphaned event? It will be marked cancelled.'
                                 tr.event-row.da-row(data-event-id=ev.id data-event-status=ev.eventStatus || 'active')
                                     td
                                         span.da-cell-muted= formatDDMMYY(ev.startDate)
@@ -125,148 +119,6 @@ block content
                                     td
                                         span.da-cell-secondary= ev.priceAmount != null ? ev.priceAmount : '—'
                                     td
-                                        span.da-cell-muted= ev.currency || 'USD'
-                                    td
                                         .da-cell-actions
-                                            if ev.eventStatus === 'orphaned'
-                                                button.da-row-btn.da-row-btn--resync.event-action-resync(
-                                                    type='button'
-                                                    data-event-id=ev.id
-                                                ) Re-sync
-                                                button.da-row-btn.da-row-btn--delete.event-action-cancel(
-                                                    type='button'
-                                                    data-event-id=ev.id
-                                                    data-confirm-msg=orphanCancelMsg
-                                                ) Cancel
-                                            else if ev.eventStatus === 'active'
-                                                button.da-row-btn.da-row-btn--delete.event-action-cancel(
-                                                    type='button'
-                                                    data-event-id=ev.id
-                                                    data-confirm-msg=cancelMsg
-                                                ) Cancel
-                                            else if ev.eventStatus === 'cancelled'
-                                                .da-delete-wrap(aria-label='Remove event actions')
-                                                    button.da-row-btn.da-row-btn--delete.da-delete-trigger(
-                                                        type='button'
-                                                        aria-label='Remove cancelled event'
-                                                        aria-expanded='false'
-                                                    ) Remove
-                                                    .da-confirm-group(role='group' aria-label='Confirm removal')
-                                                        button.da-row-btn.da-row-btn--cancel.da-delete-cancel(
-                                                            type='button'
-                                                            aria-label='Cancel removal'
-                                                        ) No
-                                                        span.da-confirm-sep(aria-hidden='true')
-                                                        form.da-form-inline.da-delete-form(
-                                                            method='post'
-                                                            action=(adminPrefix || '') + '/' + sectionPath + '/' + product.slug + '/events/remove-event'
-                                                        )
-                                                            input(type='hidden' name='eventId' value=ev.id)
-                                                            button.da-row-btn.da-row-btn--confirm(
-                                                                type='submit'
-                                                                aria-label='Confirm remove event'
-                                                            ) Yes, remove
+                                            a.da-row-btn.da-row-btn--edit(href=(adminPrefix || '') + '/' + sectionPath + '/' + product.slug + '/events/' + ev.id + '/edit') Edit
 
-        span#events-action-urls(
-            data-base-url=(adminPrefix || '') + '/' + sectionPath + '/' + product.slug + '/events'
-            style='display:none'
-        )
-
-block append scripts
-    script.
-        (function () {
-            'use strict';
-
-            /* ── Delete confirmation flow (same as Users / Collections) ───────── */
-            function initDeleteFlow() {
-                document.querySelectorAll('.da-delete-trigger').forEach(function (trigger) {
-                    trigger.addEventListener('click', function () {
-                        var row = trigger.closest('tr.da-row');
-                        if (!row) return;
-                        row.classList.add('da-row--confirming');
-                        trigger.setAttribute('aria-expanded', 'true');
-                        var cancel = row.querySelector('.da-delete-cancel');
-                        if (cancel) setTimeout(function () { cancel.focus(); }, 200);
-                    });
-                });
-
-                document.querySelectorAll('.da-delete-cancel').forEach(function (cancel) {
-                    cancel.addEventListener('click', function () {
-                        var row = cancel.closest('tr.da-row');
-                        if (!row) return;
-                        row.classList.remove('da-row--confirming');
-                        var trigger = row.querySelector('.da-delete-trigger');
-                        if (trigger) {
-                            trigger.setAttribute('aria-expanded', 'false');
-                            setTimeout(function () { trigger.focus(); }, 200);
-                        }
-                    });
-                });
-
-                document.querySelectorAll('.da-delete-form').forEach(function (form) {
-                    form.addEventListener('submit', function (e) {
-                        e.preventDefault();
-                        var row = form.closest('tr');
-                        if (!row) { form.submit(); return; }
-                        row.classList.add('da-row--removing');
-                        setTimeout(function () { form.submit(); }, 340);
-                    });
-                });
-            }
-
-            document.addEventListener('keydown', function (e) {
-                if (e.key !== 'Escape') return;
-                document.querySelectorAll('tr.da-row.da-row--confirming').forEach(function (row) {
-                    row.classList.remove('da-row--confirming');
-                    var trigger = row.querySelector('.da-delete-trigger');
-                    if (trigger) trigger.setAttribute('aria-expanded', 'false');
-                });
-            });
-
-            /* ── Cancel / Re-sync via POST ───────────────────────────── */
-            var actionUrls = document.getElementById('events-action-urls');
-            var baseUrl = actionUrls ? actionUrls.getAttribute('data-base-url') || '' : '';
-
-            function postEventAction(actionPath, eventId, extraFields) {
-                if (!baseUrl || !eventId) return;
-                var f = document.createElement('form');
-                f.method = 'post';
-                f.action = baseUrl + actionPath;
-                var inp = document.createElement('input');
-                inp.type = 'hidden';
-                inp.name = 'eventId';
-                inp.value = eventId;
-                f.appendChild(inp);
-                if (extraFields) {
-                    for (var k in extraFields) {
-                        var i = document.createElement('input');
-                        i.type = 'hidden';
-                        i.name = k;
-                        i.value = extraFields[k];
-                        f.appendChild(i);
-                    }
-                }
-                document.body.appendChild(f);
-                f.submit();
-            }
-
-            document.addEventListener('click', function (e) {
-                var btn = e.target;
-                if (btn.classList.contains('event-action-resync')) {
-                    e.preventDefault();
-                    var eventId = btn.getAttribute('data-event-id');
-                    if (eventId) postEventAction('/resync-event', eventId);
-                } else if (btn.classList.contains('event-action-cancel')) {
-                    e.preventDefault();
-                    var eventId = btn.getAttribute('data-event-id');
-                    var msg = btn.getAttribute('data-confirm-msg') || 'Cancel this event?';
-                    if (eventId && confirm(msg)) postEventAction('/cancel-event', eventId, { confirm: '1' });
-                }
-            });
-
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', initDeleteFlow);
-            } else {
-                initDeleteFlow();
-            }
-        })();

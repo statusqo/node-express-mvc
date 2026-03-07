@@ -31,6 +31,8 @@ const RefundRequest = require("./RefundRequest");
 const Registration = require("./Registration");
 const AdminZoomAccount = require("./AdminZoomAccount");
 const EventMeeting = require("./EventMeeting");
+const Invoice = require("./Invoice");
+const ProcessedStripeEvent = require("./ProcessedStripeEvent");
 
 // --- Menu <-> MenuItem ---
 Menu.hasMany(MenuItem, { foreignKey: "menuId" });
@@ -132,6 +134,10 @@ Registration.belongsTo(User, { foreignKey: "userId" });
 Order.hasMany(Transaction, { foreignKey: "orderId" });
 Transaction.belongsTo(Order, { foreignKey: "orderId" });
 
+// --- Invoice ---
+Order.hasOne(Invoice, { foreignKey: "orderId", as: "Invoice" });
+Invoice.belongsTo(Order, { foreignKey: "orderId" });
+
 // --- RefundRequest ---
 Order.hasMany(RefundRequest, { foreignKey: "orderId" });
 RefundRequest.belongsTo(Order, { foreignKey: "orderId" });
@@ -193,4 +199,6 @@ module.exports = {
   Registration,
   AdminZoomAccount,
   EventMeeting,
+  Invoice,
+  ProcessedStripeEvent,
 };

@@ -18,8 +18,6 @@ block content
                         polyline(points='15 18 9 12 15 6')
                     | Back to Orders
 
-        if flash && flash.message
-            p.admin-flash(class='admin-flash-' + (flash.type || 'info'))= flash.message
         if error
             p.admin-flash.admin-flash-error= error
 
@@ -50,6 +48,24 @@ block content
                                 .da-readonly-group
                                     span.da-readonly-label Customer
                                     .da-readonly-value= order.email || (order.forename || order.surname ? (order.forename || '') + ' ' + (order.surname || '') : order.userId ? 'User #' + order.userId : 'Guest') || '—'
+
+                                //- Person type
+                                .da-readonly-group
+                                    span.da-readonly-label Person Type
+                                    .da-readonly-value
+                                        if order.personType === 'legal'
+                                            span.da-badge.da-badge--info Legal person
+                                        else
+                                            span Private person
+
+                                //- Company info (legal persons only)
+                                if order.personType === 'legal'
+                                    .da-readonly-group
+                                        span.da-readonly-label Company Name
+                                        .da-readonly-value= order.companyName || '—'
+                                    .da-readonly-group
+                                        span.da-readonly-label OIB
+                                        .da-readonly-value= order.companyOib || '—'
 
                                 //- Payment status (read-only with badge)
                                 .da-readonly-group
@@ -132,35 +148,16 @@ block content
                                             strong Processed:&nbsp;
                                             | #{new Date(r.processedAt).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})}
                                     if r.status === 'approved'
-                                        - var refundType = r.refundAmount != null ? 'Partial' : 'Full'
-                                        - var refundAmt = r.refundAmount != null ? Number(r.refundAmount).toFixed(2) + ' ' + (order.currency || 'USD') : 'Full (' + (order.total != null ? Number(order.total).toFixed(2) : '—') + ' ' + (order.currency || 'USD') + ')'
-                                        p.da-refund-meta
-                                            strong Type:&nbsp;
-                                            | #{refundType}
                                         p.da-refund-meta
                                             strong Amount:&nbsp;
-                                            | #{refundAmt}
+                                            | #{order.total != null ? Number(order.total).toFixed(2) : '—'} #{order.currency || 'USD'} (full refund)
 
                                     if r.status === 'pending'
                                         .da-refund-actions
 
-                                            //- Approve full
+                                            //- Approve
                                             form(method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/refund-request/' + r.id + '/approve')
-                                                input(type='hidden' name='full' value='1')
-                                                button.da-btn.da-btn--primary(type='submit') Approve full
-
-                                            //- Approve partial
-                                            form.da-partial-form(method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/refund-request/' + r.id + '/approve')
-                                                input.da-partial-input(
-                                                    type='number'
-                                                    name='amount'
-                                                    step='0.01'
-                                                    min='0.01'
-                                                    max=(order.total != null ? order.total : 999)
-                                                    placeholder='Partial'
-                                                    aria-label='Partial refund amount'
-                                                )
-                                                button.da-btn.da-btn--secondary(type='submit') Partial
+                                                button.da-btn.da-btn--primary(type='submit') Approve
 
                                             //- Reject
                                             form(method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/refund-request/' + r.id + '/reject')

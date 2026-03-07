@@ -25,7 +25,7 @@ const Transaction = sequelize.define("Transaction", {
     allowNull: false,
     defaultValue: "pending",
     validate: {
-      isIn: [["pending", "success", "failed", "refunded", "partially_refunded"]],
+      isIn: [["pending", "success", "failed", "refunded"]],
     },
   },
   // e.g. "stripe"

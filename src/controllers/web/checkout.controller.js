@@ -91,6 +91,9 @@ module.exports = {
       billingState: parsed.data.billingState || null,
       billingPostcode: parsed.data.billingPostcode || null,
       billingCountry: parsed.data.billingCountry || null,
+      personType: req.user?.personType || 'private',
+      companyName: req.user?.companyName || null,
+      companyOib: req.user?.companyOib || null,
     };
     try {
       const order = await orderService.createOrderFromCart(userId, sessionId, {
@@ -145,6 +148,9 @@ module.exports = {
       billingState: parsed.data.billingState || null,
       billingPostcode: parsed.data.billingPostcode || null,
       billingCountry: parsed.data.billingCountry || null,
+      personType: req.user?.personType || 'private',
+      companyName: req.user?.companyName || null,
+      companyOib: req.user?.companyOib || null,
       clearCart: false,
     };
 
@@ -364,6 +370,9 @@ module.exports = {
       billingState: parsed.data.billingState || null,
       billingPostcode: parsed.data.billingPostcode || null,
       billingCountry: parsed.data.billingCountry || null,
+      personType: req.user?.personType || 'private',
+      companyName: req.user?.companyName || null,
+      companyOib: req.user?.companyOib || null,
     };
 
     try {

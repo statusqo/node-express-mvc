@@ -1,0 +1,5 @@
+if flash && flash.message
+  div(class="flash flash-" + flash.type role="alert" aria-live="polite" aria-atomic="true")
+    span.flash-message= flash.message
+    button.flash-close(type="button" aria-label="Dismiss notification" title="Dismiss")
+      span(aria-hidden="true") ×

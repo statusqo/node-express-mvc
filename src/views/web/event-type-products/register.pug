@@ -8,9 +8,7 @@ block content
     if priceAmount != null
       p(style="font-size:1.125rem; margin-bottom:1rem") #{Number(priceAmount).toFixed(2)} #{currency} per session
 
-    if flash && flash.message
-      p(style="color:#c00; margin:0.5rem 0")= flash.message
-
+    - var isFree = priceAmount != null && Number(priceAmount) === 0
     form#eventRegisterForm(
       method="post"
       action="#"
@@ -19,6 +17,7 @@ block content
       data-product-slug=product.slug
       data-place-order-url=("/" + sectionPath + "/" + product.slug + "/place-order")
       data-user-logged-in=(user ? '1' : '')
+      data-is-free=(isFree ? '1' : '')
     )
       input(type="hidden" name="eventId" value=event.id)
       section(style="margin-bottom:1rem; padding:0.75rem; border:1px solid #e0e0e0; border-radius:6px; background:#fafafa")
@@ -42,37 +41,70 @@ block content
         label(for="surname") Last name
         input#surname(type="text" name="surname" value=(user && user.surname ? user.surname : "") style="display:block; width:100%; max-width:20rem; margin-top:0.25rem; padding:0.35rem")
 
-      if stripePublishableKey
-        h2(style="font-size:1.1rem; margin-top:1.25rem") Payment
-        p(style="margin-bottom:0.75rem; font-size:0.95rem") Payment is processed securely by Stripe. Your card details never touch our servers.
-        if paymentMethods && paymentMethods.length > 0
-          div(style="margin-bottom:0.75rem")
-            label(style="display:block; font-size:0.9rem; margin-bottom:0.35rem") Pay with
-            div(style="display:flex; flex-direction:column; gap:0.35rem")
-              label(style="display:flex; align-items:center; gap:0.5rem; cursor:pointer")
-                input#paySavedCard(type="radio" name="payWith" value="saved" checked=(paymentMethods.length > 0))
-                | Use a saved card
-              label(style="display:flex; align-items:center; gap:0.5rem; cursor:pointer")
-                input#payNewCard(type="radio" name="payWith" value="new")
-                | Use a new card
-            div#savedCardSelect(style="margin-top:0.5rem; margin-left:1.5rem")
-              select#savedPaymentMethod(name="savedPaymentMethod" style="min-width:12rem; padding:0.35rem")
-                each pm in paymentMethods
-                  option(value=pm.gatewayToken)= (pm.brand || 'Card') + ' ****' + (pm.last4 || '????') + (pm.isDefault ? ' (Default)' : '')
-        div#cardElementWrap(style="margin-top:0.75rem; padding:0.75rem; border:1px solid #ccc; border-radius:6px; margin-bottom:0.5rem; background:#fff")
-          div#card-element
-        input#saveCardHidden(type="hidden" name="saveCard" value="0")
-        if user
-          div.saveCardRow(style="margin-top:0.5rem; margin-bottom:0.5rem")
-            label(style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.95rem")
-              input#saveCardCheckbox(name="saveCardCheckbox" type="checkbox" value="1")
-              | Save this card for later
-        div#cardErrors(style="color:#c00; font-size:0.9rem; margin-bottom:1rem" role="alert")
-      else
-        p(style="margin-bottom:1rem; padding:0.75rem; background:#f0f7ff; border-radius:6px; font-size:0.9rem; color:#333")
-          | Payment gateway is not configured. Please try again later.
+      if user && user.personType === 'legal'
+        section(style="margin-top:1.25rem; padding:0.75rem; border:1px solid #d0d0d0; border-radius:6px; background:#f5f8ff")
+          h2(style="font-size:1.1rem; margin:0 0 0.5rem 0") Company / legal person
+          p(style="margin:0.25rem 0; font-size:0.95rem")
+            strong Company name:
+            |  #{user.companyName || '—'}
+          p(style="margin:0.25rem 0; font-size:0.95rem")
+            strong OIB:
+            |  #{user.companyOib || '—'}
+          p(style="margin:0.5rem 0 0; font-size:0.85rem; color:#555") Your R1 receipt will be issued to the above company. To change company details, update your account profile.
 
-      button#payBtn(type="submit" class="button" style="margin-top:1rem; padding:0.75rem 1.5rem") Pay and register
+      if !isFree
+        h2(style="font-size:1.1rem; margin-top:1.25rem") Billing address
+        div(style="margin-bottom:0.75rem")
+          label(for="billingLine1") Address line 1 *
+          input#billingLine1(type="text" name="billingLine1" required style="display:block; width:100%; max-width:24rem; margin-top:0.25rem; padding:0.35rem")
+        div(style="margin-bottom:0.75rem")
+          label(for="billingLine2") Address line 2
+          input#billingLine2(type="text" name="billingLine2" style="display:block; width:100%; max-width:24rem; margin-top:0.25rem; padding:0.35rem")
+        div(style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem; margin-bottom:0.75rem; max-width:24rem")
+          div
+            label(for="billingCity") City *
+            input#billingCity(type="text" name="billingCity" required style="display:block; width:100%; margin-top:0.25rem; padding:0.35rem")
+          div
+            label(for="billingPostcode") Postcode *
+            input#billingPostcode(type="text" name="billingPostcode" required style="display:block; width:100%; margin-top:0.25rem; padding:0.35rem")
+        div(style="margin-bottom:0.75rem")
+          label(for="billingState") State / Region
+          input#billingState(type="text" name="billingState" style="display:block; width:100%; max-width:24rem; margin-top:0.25rem; padding:0.35rem")
+        div(style="margin-bottom:0.75rem")
+          label(for="billingCountry") Country *
+          input#billingCountry(type="text" name="billingCountry" required style="display:block; width:100%; max-width:24rem; margin-top:0.25rem; padding:0.35rem")
+
+        if stripePublishableKey
+          h2(style="font-size:1.1rem; margin-top:1.25rem") Payment
+          p(style="margin-bottom:0.75rem; font-size:0.95rem") Payment is processed securely by Stripe. Your card details never touch our servers.
+          if paymentMethods && paymentMethods.length > 0
+            div(style="margin-bottom:0.75rem")
+              label(style="display:block; font-size:0.9rem; margin-bottom:0.35rem") Pay with
+              div(style="display:flex; flex-direction:column; gap:0.35rem")
+                label(style="display:flex; align-items:center; gap:0.5rem; cursor:pointer")
+                  input#paySavedCard(type="radio" name="payWith" value="saved" checked=(paymentMethods.length > 0))
+                  | Use a saved card
+                label(style="display:flex; align-items:center; gap:0.5rem; cursor:pointer")
+                  input#payNewCard(type="radio" name="payWith" value="new")
+                  | Use a new card
+              div#savedCardSelect(style="margin-top:0.5rem; margin-left:1.5rem")
+                select#savedPaymentMethod(name="savedPaymentMethod" style="min-width:12rem; padding:0.35rem")
+                  each pm in paymentMethods
+                    option(value=pm.gatewayToken)= (pm.brand || 'Card') + ' ****' + (pm.last4 || '????') + (pm.isDefault ? ' (Default)' : '')
+          div#cardElementWrap(style="margin-top:0.75rem; padding:0.75rem; border:1px solid #ccc; border-radius:6px; margin-bottom:0.5rem; background:#fff")
+            div#card-element
+          input#saveCardHidden(type="hidden" name="saveCard" value="0")
+          if user
+            div.saveCardRow(style="margin-top:0.5rem; margin-bottom:0.5rem")
+              label(style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.95rem")
+                input#saveCardCheckbox(name="saveCardCheckbox" type="checkbox" value="1")
+                | Save this card for later
+        else
+          p(style="margin-bottom:1rem; padding:0.75rem; background:#f0f7ff; border-radius:6px; font-size:0.9rem; color:#333")
+            | Payment gateway is not configured. Please try again later.
+
+      div#cardErrors(style="color:#c00; font-size:0.9rem; margin-bottom:1rem" role="alert")
+      button#payBtn(type="submit" class="button" style="margin-top:1rem; padding:0.75rem 1.5rem")= isFree ? 'Register for free' : 'Pay and register'
 
   a(href="/" + sectionPath + "/" + product.slug style="display:inline-block; margin-top:1rem") Back to #{product.title}
 

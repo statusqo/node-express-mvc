@@ -7,9 +7,6 @@ block append links
 block content
     .da-page
 
-        if flash && flash.message
-            p.admin-flash(class='admin-flash-' + (flash.type || 'info'))= flash.message
-
         //- ── Page header ─────────────────────────────────────────────
         .da-page-header
             .da-page-header-left

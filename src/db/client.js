@@ -30,7 +30,18 @@ module.exports = {
     try {
       await sequelize.authenticate();
       logger.info(`Database connected (${config.db.dialect})`);
-      
+
+      if (config.db.dialect === "sqlite") {
+        // WAL mode allows concurrent readers during writes, eliminating SQLITE_BUSY
+        // errors under moderate concurrency. busy_timeout makes SQLite wait up to
+        // 5 s instead of throwing immediately when a lock is contested.
+        // synchronous=NORMAL is safe with WAL and gives a modest write performance boost.
+        await sequelize.query("PRAGMA journal_mode=WAL;");
+        await sequelize.query("PRAGMA busy_timeout=5000;");
+        await sequelize.query("PRAGMA synchronous=NORMAL;");
+        logger.info("SQLite WAL mode enabled (busy_timeout=5000, synchronous=NORMAL)");
+      }
+
       // Sync models if needed (be careful in production)
       // In production, use migrations instead of sync({ alter: true })
       if (config.env !== 'production') {

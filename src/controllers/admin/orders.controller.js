@@ -133,11 +133,9 @@ module.exports = {
       res.setFlash("error", "Not authenticated.");
       return res.redirect((req.adminPrefix || "") + "/orders");
     }
-    const full = req.body && (req.body.full === "1" || req.body.full === "true");
-    const amount = req.body && req.body.amount != null && req.body.amount !== "" ? Number(req.body.amount) : null;
     try {
-      await refundRequestService.approveRefundRequest(requestId, adminUserId, { full, amount });
-      res.setFlash("success", full ? "Refund approved (full)." : "Refund approved (partial).");
+      await refundRequestService.approveRefundRequest(requestId, adminUserId);
+      res.setFlash("success", "Refund approved.");
     } catch (err) {
       const msg = err.status === 404 ? "Refund request not found." : err.message || "Could not approve refund.";
       res.setFlash("error", msg);

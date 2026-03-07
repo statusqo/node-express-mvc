@@ -7,13 +7,14 @@ module.exports = {
   },
 
   async findByProductId(productId, options = {}) {
+    const { where: extraWhere, ...rest } = options;
     return await Event.findAll({
-      where: { productId },
+      where: { productId, ...extraWhere },
       order: [
         ["startDate", "ASC"],
         ["startTime", "ASC"],
       ],
-      ...options,
+      ...rest,
     });
   },
 
@@ -21,13 +22,14 @@ module.exports = {
    * Events with eventStatus = active only (for storefront).
    */
   async findActiveByProductId(productId, options = {}) {
+    const { where: extraWhere, ...rest } = options;
     return await Event.findAll({
-      where: { productId, eventStatus: EVENT_STATUS.ACTIVE },
+      where: { productId, eventStatus: EVENT_STATUS.ACTIVE, ...extraWhere },
       order: [
         ["startDate", "ASC"],
         ["startTime", "ASC"],
       ],
-      ...options,
+      ...rest,
     });
   },
 

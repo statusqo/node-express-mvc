@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"c:/dev/projects/node-express-mvc\" rm -f src/validators/webinarBuy.schema.js)",
+      "Bash(npx sequelize-cli db:migrate:status)",
+      "Bash(npm install pdfkit)",
+      "Bash(node -e \"require\\(''./src/models/index''\\); require\\(''./src/services/invoice.service''\\); console.log\\(''OK''\\)\")"
+    ]
+  }
+}

@@ -1,11 +1,5 @@
 "use strict";
 
-/**
- * Single migration that creates the full current schema.
- * Use on a fresh database only (e.g. after dropping all tables or new environment).
- * Replaces all previous incremental migrations.
- */
-
 module.exports = {
   async up(queryInterface, Sequelize) {
     const ts = {
@@ -25,9 +19,14 @@ module.exports = {
       forename: { type: Sequelize.STRING, allowNull: true },
       surname: { type: Sequelize.STRING, allowNull: true },
       mobile: { type: Sequelize.STRING, allowNull: true },
+      googleId: { type: Sequelize.STRING, allowNull: true },
+      personType: { type: Sequelize.ENUM('private', 'legal'), allowNull: false, defaultValue: 'private' },
+      companyName: { type: Sequelize.STRING, allowNull: true },
+      companyOib: { type: Sequelize.STRING(11), allowNull: true },
       ...ts,
     });
     await queryInterface.addIndex("users", ["stripeCustomerId"], { unique: true });
+    await queryInterface.addIndex("users", ["googleId"], { unique: true, name: "users_google_id_unique" });
 
     await queryInterface.createTable("sessions", {
       sid: { type: Sequelize.STRING, primaryKey: true },
@@ -87,6 +86,9 @@ module.exports = {
       billingState: { type: Sequelize.STRING, allowNull: true },
       billingPostcode: { type: Sequelize.STRING, allowNull: true },
       billingCountry: { type: Sequelize.STRING, allowNull: true },
+      personType: { type: Sequelize.ENUM('private', 'legal'), allowNull: false, defaultValue: 'private' },
+      companyName: { type: Sequelize.STRING, allowNull: true },
+      companyOib: { type: Sequelize.STRING(11), allowNull: true },
       ...ts,
     });
     await queryInterface.addIndex("orders", ["userId"]);
@@ -184,7 +186,7 @@ module.exports = {
     await queryInterface.addIndex("product_collections", ["productId", "collectionId"], { unique: true });
     await queryInterface.addIndex("product_collections", ["collectionId"]);
 
-    // --- Cart & order lines ---
+    // --- Cart lines ---
     await queryInterface.createTable("cart_lines", {
       id: uuid,
       cartId: { type: Sequelize.UUID, allowNull: false, references: { model: "carts", key: "id" }, onUpdate: "CASCADE", onDelete: "CASCADE" },
@@ -193,17 +195,6 @@ module.exports = {
       ...ts,
     });
     await queryInterface.addIndex("cart_lines", ["cartId", "productVariantId"], { unique: true });
-
-    await queryInterface.createTable("order_lines", {
-      id: uuid,
-      orderId: { type: Sequelize.UUID, allowNull: false, references: { model: "orders", key: "id" }, onUpdate: "CASCADE", onDelete: "CASCADE" },
-      productVariantId: { type: Sequelize.UUID, allowNull: true, references: { model: "product_variants", key: "id" }, onUpdate: "CASCADE", onDelete: "RESTRICT" },
-      price: { type: Sequelize.DECIMAL(10, 2), allowNull: false },
-      quantity: { type: Sequelize.INTEGER, defaultValue: 1 },
-      title: { type: Sequelize.STRING(255), allowNull: true },
-      ...ts,
-    });
-    await queryInterface.addIndex("order_lines", ["orderId"]);
 
     await queryInterface.createTable("transactions", {
       id: uuid,
@@ -282,7 +273,7 @@ module.exports = {
     await queryInterface.addIndex("product_meta_objects", ["productId", "metaObjectId"], { unique: true });
     await queryInterface.addIndex("product_meta_objects", ["metaObjectId"]);
 
-    // --- Media (uploaded files; linkable to Products and Collections) ---
+    // --- Media ---
     await queryInterface.createTable("media", {
       id: uuid,
       path: { type: Sequelize.STRING, allowNull: false },
@@ -349,12 +340,13 @@ module.exports = {
       slug: { type: Sequelize.STRING, allowNull: false, unique: true },
       excerpt: { type: Sequelize.TEXT, allowNull: true },
       body: { type: Sequelize.TEXT, allowNull: true },
+      bodyIsHtml: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: false },
       published: { type: Sequelize.BOOLEAN, defaultValue: false },
       publishedAt: { type: Sequelize.DATE, allowNull: true },
       ...ts,
     });
 
-    // --- Events (seminars/webinars/classrooms; each event = one ProductVariant + ProductPrice) ---
+    // --- Events ---
     await queryInterface.createTable("events", {
       id: uuid,
       productId: { type: Sequelize.UUID, allowNull: false, references: { model: "products", key: "id" }, onUpdate: "CASCADE", onDelete: "CASCADE" },
@@ -364,29 +356,125 @@ module.exports = {
       durationMinutes: { type: Sequelize.INTEGER, allowNull: true },
       location: { type: Sequelize.STRING, allowNull: true },
       capacity: { type: Sequelize.INTEGER, allowNull: true },
-      joiningLink: { type: Sequelize.STRING, allowNull: true },
+      isOnline: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: false },
+      timezone: { type: Sequelize.STRING, allowNull: true },
+      eventStatus: { type: Sequelize.STRING, allowNull: false, defaultValue: "active" },
       ...ts,
     });
     await queryInterface.addIndex("events", ["productId"]);
     await queryInterface.addIndex("events", ["productVariantId"], { unique: true });
+
+    // --- Order lines (after events due to eventId FK) ---
+    await queryInterface.createTable("order_lines", {
+      id: uuid,
+      orderId: { type: Sequelize.UUID, allowNull: false, references: { model: "orders", key: "id" }, onUpdate: "CASCADE", onDelete: "CASCADE" },
+      productVariantId: { type: Sequelize.UUID, allowNull: true, references: { model: "product_variants", key: "id" }, onUpdate: "CASCADE", onDelete: "RESTRICT" },
+      eventId: { type: Sequelize.UUID, allowNull: true, references: { model: "events", key: "id" }, onUpdate: "CASCADE", onDelete: "SET NULL" },
+      price: { type: Sequelize.DECIMAL(10, 2), allowNull: false },
+      quantity: { type: Sequelize.INTEGER, defaultValue: 1 },
+      title: { type: Sequelize.STRING(255), allowNull: true },
+      ...ts,
+    });
+    await queryInterface.addIndex("order_lines", ["orderId"]);
+    await queryInterface.addIndex("order_lines", ["eventId"]);
+
+    // --- Refund requests ---
+    await queryInterface.createTable("refund_requests", {
+      id: uuid,
+      orderId: { type: Sequelize.UUID, allowNull: false, references: { model: "orders", key: "id" }, onUpdate: "CASCADE", onDelete: "CASCADE" },
+      status: { type: Sequelize.STRING, allowNull: false, defaultValue: "pending" },
+      reason: { type: Sequelize.TEXT, allowNull: true },
+      requestedByUserId: { type: Sequelize.UUID, allowNull: true, references: { model: "users", key: "id" }, onUpdate: "CASCADE", onDelete: "SET NULL" },
+      processedAt: { type: Sequelize.DATE, allowNull: true },
+      processedByUserId: { type: Sequelize.UUID, allowNull: true, references: { model: "users", key: "id" }, onUpdate: "CASCADE", onDelete: "SET NULL" },
+      stripeRefundId: { type: Sequelize.STRING, allowNull: true },
+      ...ts,
+    });
+    await queryInterface.addIndex("refund_requests", ["orderId"]);
+    await queryInterface.addIndex("refund_requests", ["status"]);
+    await queryInterface.addIndex("refund_requests", ["requestedByUserId"]);
+
+    // --- Registrations & meeting providers ---
+    await queryInterface.createTable("admin_zoom_accounts", {
+      id: uuid,
+      userId: { type: Sequelize.UUID, allowNull: false, references: { model: "users", key: "id" }, onUpdate: "CASCADE", onDelete: "CASCADE" },
+      zoomUserId: { type: Sequelize.STRING, allowNull: false },
+      accessToken: { type: Sequelize.TEXT, allowNull: false },
+      refreshToken: { type: Sequelize.TEXT, allowNull: true },
+      tokenExpiresAt: { type: Sequelize.DATE, allowNull: true },
+      ...ts,
+    });
+    await queryInterface.addIndex("admin_zoom_accounts", ["userId"], { unique: true });
+    await queryInterface.addIndex("admin_zoom_accounts", ["zoomUserId"]);
+
+    await queryInterface.createTable("registrations", {
+      id: uuid,
+      eventId: { type: Sequelize.UUID, allowNull: false, references: { model: "events", key: "id" }, onUpdate: "CASCADE", onDelete: "CASCADE" },
+      orderId: { type: Sequelize.UUID, allowNull: false, references: { model: "orders", key: "id" }, onUpdate: "CASCADE", onDelete: "CASCADE" },
+      orderLineId: { type: Sequelize.UUID, allowNull: false, references: { model: "order_lines", key: "id" }, onUpdate: "CASCADE", onDelete: "CASCADE" },
+      userId: { type: Sequelize.UUID, allowNull: true, references: { model: "users", key: "id" }, onUpdate: "CASCADE", onDelete: "SET NULL" },
+      email: { type: Sequelize.STRING, allowNull: false },
+      forename: { type: Sequelize.STRING, allowNull: true },
+      surname: { type: Sequelize.STRING, allowNull: true },
+      status: { type: Sequelize.STRING, allowNull: false, defaultValue: "registered" },
+      providerRegistrantId: { type: Sequelize.STRING, allowNull: true },
+      ...ts,
+    });
+    await queryInterface.addIndex("registrations", ["eventId"]);
+    await queryInterface.addIndex("registrations", ["orderId"]);
+    await queryInterface.addIndex("registrations", ["orderLineId"]);
+    await queryInterface.addIndex("registrations", ["eventId", "orderLineId"], { unique: true });
+
+    await queryInterface.createTable("event_meetings", {
+      id: uuid,
+      eventId: { type: Sequelize.UUID, allowNull: false, references: { model: "events", key: "id" }, onUpdate: "CASCADE", onDelete: "CASCADE" },
+      provider: { type: Sequelize.STRING, allowNull: false, defaultValue: "zoom" },
+      providerMeetingId: { type: Sequelize.STRING, allowNull: false },
+      joinUrl: { type: Sequelize.TEXT, allowNull: false },
+      startUrl: { type: Sequelize.TEXT, allowNull: true },
+      hostAccountId: { type: Sequelize.UUID, allowNull: true, references: { model: "admin_zoom_accounts", key: "id" }, onUpdate: "CASCADE", onDelete: "SET NULL" },
+      ...ts,
+    });
+    await queryInterface.addIndex("event_meetings", ["eventId"], { unique: true });
+    await queryInterface.addIndex("event_meetings", ["providerMeetingId"]);
+
+    // --- Invoices (receipts + R1 receipts) ---
+    await queryInterface.createTable("invoices", {
+      id: { type: Sequelize.UUID, defaultValue: Sequelize.UUIDV4, primaryKey: true },
+      orderId: { type: Sequelize.UUID, allowNull: false, unique: true, references: { model: "orders", key: "id" }, onUpdate: "CASCADE", onDelete: "CASCADE" },
+      invoiceNumber: { type: Sequelize.STRING, allowNull: false, unique: true },
+      type: { type: Sequelize.ENUM("receipt", "r1"), allowNull: false },
+      sequenceNumber: { type: Sequelize.INTEGER, allowNull: false },
+      year: { type: Sequelize.INTEGER, allowNull: false },
+      pdfPath: { type: Sequelize.STRING, allowNull: true },
+      generatedAt: { type: Sequelize.DATE, allowNull: false },
+      ...ts,
+    });
+    await queryInterface.addIndex("invoices", ["orderId"], { unique: true });
+    await queryInterface.addIndex("invoices", ["year", "type"]);
   },
 
   async down(queryInterface) {
-    const dropOrder = [
-      "menu_items",
-      "menus",
+    const tables = [
+      "invoices",
+      "event_meetings",
+      "registrations",
+      "admin_zoom_accounts",
+      "refund_requests",
+      "order_lines",
       "events",
       "posts",
-      "product_meta_objects",
+      "menu_items",
+      "menus",
       "collection_media",
       "product_media",
       "media",
+      "product_meta_objects",
       "meta_objects",
       "user_gateway_profiles",
       "payment_methods",
       "shippings",
       "transactions",
-      "order_lines",
       "cart_lines",
       "product_collections",
       "collections",
@@ -403,7 +491,7 @@ module.exports = {
       "sessions",
       "users",
     ];
-    for (const table of dropOrder) {
+    for (const table of tables) {
       await queryInterface.dropTable(table);
     }
   },

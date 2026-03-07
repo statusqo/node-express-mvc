@@ -5,6 +5,7 @@ const metaObjectRepo = require("../repos/metaObject.repo");
 const postRepo = require("../repos/post.repo");
 const orderRepo = require("../repos/order.repo");
 const { Product, ProductType, RefundRequest, AdminZoomAccount } = require("../models");
+const config = require("../config");
 
 module.exports = {
   async getDashboardStats(userId) {
@@ -24,9 +25,18 @@ module.exports = {
       RefundRequest.count({ where: { status: "pending" } }),
     ]);
 
-    const zoomConnected = userId
-      ? !!(await AdminZoomAccount.findOne({ where: { userId } }))
-      : false;
+    const zoomAccount = userId
+      ? await AdminZoomAccount.findOne({ where: { userId } })
+      : null;
+    const zoomConnected = (() => {
+      if (!zoomAccount) return false;
+      if (!config.zoom || !config.zoom.clientId || !config.zoom.clientSecret) return false;
+      // Token is usable if it hasn't expired, or a refresh token exists to renew it
+      const expiresAt = zoomAccount.tokenExpiresAt ? new Date(zoomAccount.tokenExpiresAt).getTime() : null;
+      const tokenExpired = expiresAt !== null && expiresAt <= Date.now();
+      if (tokenExpired && !zoomAccount.refreshToken) return false;
+      return true;
+    })();
 
     return {
       users: userCount,
