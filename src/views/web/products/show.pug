@@ -15,7 +15,7 @@ block content
     if product.description
       div(style="margin:1rem 0")= product.description
     if price != null
-      p(style="font-size:1.25rem") #{Number(price).toFixed(2)} #{currency}
+      p(style="font-size:1.25rem") #{Number(price).toFixed(2)} #{DEFAULT_CURRENCY}
     if product.metaObjects && product.metaObjects.length
       div(style="margin:1rem 0")
         h3(style="font-size:1rem; margin-bottom:0.5rem") Meta Objects

@@ -6,7 +6,15 @@ block content
     if product.description
       p(style="margin:0.5rem 0")= product.description
     if priceAmount != null
-      p(style="font-size:1.125rem; margin-bottom:1rem") #{Number(priceAmount).toFixed(2)} #{currency} per session
+      p(style="font-size:1.125rem; margin-bottom:0.25rem") #{Number(priceAmount).toFixed(2)} #{currency} per session
+      if Number(priceAmount) > 0
+        - const _rate = (product.vatRate != null) ? Number(product.vatRate) : 25
+        - const _net = Number(priceAmount) / (1 + _rate / 100)
+        - const _vatAmt = Number(priceAmount) - _net
+        div(style="font-size:0.82rem; color:#666; margin-bottom:1rem")
+          div(style="display:flex; gap:1.5rem")
+            span Net (excl. PDV #{_rate}%): #{_net.toFixed(2)} #{currency}
+            span PDV #{_rate}%: #{_vatAmt.toFixed(2)} #{currency}
 
     - var isFree = priceAmount != null && Number(priceAmount) === 0
     form#eventRegisterForm(

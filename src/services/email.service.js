@@ -1,5 +1,6 @@
 const nodemailer = require("nodemailer");
 const config = require("../config");
+const { DEFAULT_CURRENCY } = require("../config/constants");
 
 let cachedTransporter;
 
@@ -77,8 +78,8 @@ async function sendOrderConfirmationEmail(order, lines = [], pdfBuffer = null, i
 
   const transporter = getTransporter();
   const subject = "Order confirmation";
-  const lineList = (lines || []).map((l) => `  - ${l.title || "Item"} x ${l.quantity || 1} @ ${l.price || 0} ${order.currency || "USD"}`).join("\n");
-  const text = `Thank you for your order.\n\nOrder ID: ${order.id}\nTotal: ${order.total} ${order.currency || "USD"}\n\n${lineList ? "Items:\n" + lineList : ""}\n`;
+  const lineList = (lines || []).map((l) => `  - ${l.title || "Item"} x ${l.quantity || 1} @ ${l.price || 0} ${order.currency || DEFAULT_CURRENCY}`).join("\n");
+  const text = `Thank you for your order.\n\nOrder ID: ${order.id}\nTotal: ${order.total} ${order.currency || DEFAULT_CURRENCY}\n\n${lineList ? "Items:\n" + lineList : ""}\n`;
 
   const mailOptions = {
     from: config.mail.from,
@@ -126,4 +127,24 @@ async function sendEventCancellationEmail(opts = {}) {
   });
 }
 
-module.exports = { sendContactEmail, sendOrderConfirmationEmail, sendEventCancellationEmail, isMailConfigured };
+/**
+ * Send welcome email to a newly registered user. No-op if mail is not configured.
+ * @param {Object} user - { email, username?, forename? }
+ */
+async function sendWelcomeEmail(user) {
+  if (!isMailConfigured()) return;
+  const to = sanitizeHeaderValue(user.email);
+  if (!to) return;
+
+  const name = sanitizeHeaderValue(user.forename || user.username || user.email);
+  const transporter = getTransporter();
+
+  await transporter.sendMail({
+    from: config.mail.from,
+    to,
+    subject: "Welcome!",
+    text: `Hi ${name},\n\nThank you for creating an account. We're glad to have you on board.\n\nIf you have any questions, feel free to reach out.\n`,
+  });
+}
+
+module.exports = { sendContactEmail, sendOrderConfirmationEmail, sendEventCancellationEmail, sendWelcomeEmail, isMailConfigured };

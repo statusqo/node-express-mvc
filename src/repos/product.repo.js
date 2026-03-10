@@ -1,4 +1,5 @@
 const { Product, ProductVariant, ProductPrice, ProductType, ProductCategory, MetaObject, ProductMetaObject, Media, ProductMedia, OrderLine } = require("../models");
+const { DEFAULT_CURRENCY } = require("../config/constants");
 const productTypeRepo = require("./productType.repo");
 const { sequelize } = require("../db");
 
@@ -270,7 +271,7 @@ module.exports = {
   /**
    * Create a single variant with one default price for a product (e.g. for event-based offerings).
    */
-  async createVariantWithDefaultPrice(productId, { title = "Default", amount = 0, currency = "USD", quantity = 0 }, options = {}) {
+  async createVariantWithDefaultPrice(productId, { title = "Default", amount = 0, currency = DEFAULT_CURRENCY, quantity = 0 }, options = {}) {
     const variant = await ProductVariant.create(
       {
         productId,
@@ -285,7 +286,7 @@ module.exports = {
       {
         productVariantId: variant.id,
         amount: Number(amount) || 0,
-        currency: (currency || "USD").substring(0, 3),
+        currency: DEFAULT_CURRENCY.substring(0, 3),
         isDefault: true,
       },
       options
@@ -298,13 +299,14 @@ module.exports = {
    * Accepts metaObjectIds and metaObjectValues for per-product meta object instance values.
    */
   async create(data, options = {}) {
-    const { title, slug, description, productTypeId, productCategoryId, active = true, priceAmount, currency = "USD", quantity, metaObjectIds, metaObjectValues, mediaIds, isPhysical, weight, weightUnit } = data;
+    const { title, slug, description, productTypeId, productCategoryId, active = true, priceAmount, /* currency is ignored */ quantity, metaObjectIds, metaObjectValues, mediaIds, isPhysical, weight, weightUnit, vatRate } = data;
     const t = options.transaction || (await sequelize.transaction());
     const ownTransaction = !options.transaction;
     try {
       const physical = isPhysical === "on" || isPhysical === true;
       const weightVal = physical && weight !== "" && weight != null && !isNaN(Number(weight)) ? Number(weight) : null;
       const unitVal = weightVal != null && (weightUnit === "g" || weightUnit === "kg") ? weightUnit : (weightVal != null ? "kg" : null);
+      const vatRateVal = [0, 5, 13, 25].includes(Number(vatRate)) ? Number(vatRate) : 25;
       const product = await Product.create(
         {
           title: String(title).trim(),
@@ -316,6 +318,7 @@ module.exports = {
           isPhysical: physical,
           weight: weightVal,
           weightUnit: unitVal,
+          vatRate: vatRateVal,
         },
         { transaction: t }
       );
@@ -335,7 +338,7 @@ module.exports = {
         {
           productVariantId: variant.id,
           amount,
-          currency: (currency || "USD").substring(0, 3),
+          currency: DEFAULT_CURRENCY.substring(0, 3),
           isDefault: true,
         },
         { transaction: t }
@@ -359,7 +362,7 @@ module.exports = {
   async update(id, data, options = {}) {
     const product = await Product.findByPk(id, options);
     if (!product) return null;
-    const { title, slug, description, productTypeId, productCategoryId, active, priceAmount, currency, quantity, metaObjectIds, metaObjectValues, mediaIds, isPhysical, weight, weightUnit } = data;
+    const { title, slug, description, productTypeId, productCategoryId, active, priceAmount, currency, quantity, metaObjectIds, metaObjectValues, mediaIds, isPhysical, weight, weightUnit, vatRate } = data;
     const payload = {};
     if (title !== undefined) payload.title = String(title).trim();
     if (slug !== undefined) payload.slug = String(slug).trim();
@@ -383,6 +386,9 @@ module.exports = {
       payload.weight = weightVal;
       payload.weightUnit = weightVal != null && (weightUnit === "g" || weightUnit === "kg") ? weightUnit : (weightVal != null ? "kg" : null);
     }
+    if (vatRate !== undefined) {
+      payload.vatRate = [0, 5, 13, 25].includes(Number(vatRate)) ? Number(vatRate) : 25;
+    }
     await product.update(payload, options);
     if (priceAmount !== undefined || currency !== undefined) {
       const variant = await ProductVariant.findOne({ where: { productId: id, isDefault: true }, ...options });
@@ -391,7 +397,8 @@ module.exports = {
         if (price) {
           const updatePrice = {};
           if (priceAmount !== undefined && priceAmount !== "") updatePrice.amount = Number(priceAmount);
-          if (currency !== undefined) updatePrice.currency = String(currency).substring(0, 3);
+          // currency is not user-editable; always keep default value
+          updatePrice.currency = DEFAULT_CURRENCY.substring(0, 3);
           if (Object.keys(updatePrice).length) await price.update(updatePrice, options);
         }
       }

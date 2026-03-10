@@ -1,9 +1,16 @@
 const { z } = require("zod");
+const { isValidOib } = require("../utils/oib");
 
 const companyFields = {
   personType: z.enum(['private', 'legal']).optional().default('private'),
   companyName: z.string().max(255).optional().nullable(),
-  companyOib: z.string().regex(/^\d{11}$/, "OIB must be exactly 11 digits").optional().nullable().or(z.literal('')),
+  companyOib: z
+    .string()
+    .regex(/^\d{11}$/, "OIB must be exactly 11 digits")
+    .refine((v) => isValidOib(v), "OIB checksum is invalid")
+    .optional()
+    .nullable()
+    .or(z.literal('')),
 };
 
 /** Admin create/update user. Password required on create, optional on update. */

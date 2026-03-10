@@ -17,6 +17,40 @@ const Invoice = sequelize.define("Invoice", {
     allowNull: false,
     unique: true,
   },
+  // Croatian fiscal format: "SEQ/PREMISES/DEVICE" (e.g. "42/INTERNET1/1")
+  fiscalInvoiceNumber: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  // Zaštitni kod izdavatelja — 32-char hex, computed before FINA submission
+  zkiCode: {
+    type: DataTypes.STRING(32),
+    allowNull: true,
+  },
+  // Fiscalisation lifecycle: pending → fiscalized | failed | not_required
+  fiscalizationStatus: {
+    type: DataTypes.ENUM("pending", "fiscalized", "failed", "not_required"),
+    allowNull: false,
+    defaultValue: "pending",
+  },
+  // Jedinstveni identifikator računa — UUID returned by Tax Administration
+  fiscalizationJir: {
+    type: DataTypes.STRING(36),
+    allowNull: true,
+  },
+  fiscalizedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  // Full SOAP XML sent and received — stored for legal audit trail
+  fiscalizationRequest: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  fiscalizationResponse: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
   type: {
     type: DataTypes.ENUM("receipt", "r1"),
     allowNull: false,

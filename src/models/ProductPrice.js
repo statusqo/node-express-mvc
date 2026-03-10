@@ -1,5 +1,6 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../db/client");
+const { DEFAULT_CURRENCY } = require("../config/constants");
 
 const ProductPrice = sequelize.define("ProductPrice", {
   id: {
@@ -18,7 +19,8 @@ const ProductPrice = sequelize.define("ProductPrice", {
   currency: {
     type: DataTypes.STRING(3),
     allowNull: false,
-    defaultValue: "USD",
+    // must always match DEFAULT_CURRENCY constant; admin UI doesn't allow changing it
+    defaultValue: DEFAULT_CURRENCY,
   },
   isDefault: {
     type: DataTypes.BOOLEAN,

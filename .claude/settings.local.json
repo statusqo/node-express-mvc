@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install xmlbuilder2 xml-crypto node-forge axios fast-xml-parser)",
+      "Bash(npx sequelize-cli db:migrate)"
+    ]
+  }
+}

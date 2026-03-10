@@ -8,6 +8,7 @@ const eventService = require("../../services/event.service");
 const { validateEventForm } = require("../../validators/event.schema");
 const { ProductPrice, ProductVariant, EventMeeting, AdminZoomAccount, Registration } = require("../../models");
 const config = require("../../config");
+const { DEFAULT_CURRENCY } = require("../../config/constants");
 
 function toPlain(obj) {
   return obj && typeof obj.get === "function" ? obj.get({ plain: true }) : obj;
@@ -34,7 +35,7 @@ module.exports = {
       return {
         ...plain,
         priceAmount: priceRow ? Number(priceRow.amount) : null,
-        currency: priceRow?.currency || "USD",
+        currency: DEFAULT_CURRENCY,
         quantity: variant && variant.quantity != null ? variant.quantity : 0,
       };
     });
@@ -83,7 +84,7 @@ module.exports = {
         return {
           ...ev,
           priceAmount: priceRow ? Number(priceRow.amount) : null,
-          currency: priceRow?.currency || "USD",
+          currency: DEFAULT_CURRENCY,
           seatsRemaining,
           meetingLinkStatus,
           registrationCount,
@@ -109,7 +110,7 @@ module.exports = {
       product: {
         ...plain,
         priceAmount: priceRow ? Number(priceRow.amount) : null,
-        currency: priceRow?.currency || "USD",
+        currency: DEFAULT_CURRENCY,
       },
       events: eventsWithPrice,
       sectionPath,
@@ -146,7 +147,7 @@ module.exports = {
       product: {
         ...plain,
         priceAmount: priceRow ? Number(priceRow.amount) : null,
-        currency: priceRow?.currency || "USD",
+        currency: DEFAULT_CURRENCY,
       },
       sectionPath,
       typeLabel: getTypeLabel(sectionPath),
@@ -177,7 +178,7 @@ module.exports = {
       const priceRow = defaultVariant?.ProductPrices?.[0];
       return res.status(400).render("admin/event-type-products/event-form", {
         title: "New Event – " + plain.title,
-        product: { ...plain, priceAmount: priceRow ? Number(priceRow.amount) : null, currency: priceRow?.currency || "USD" },
+        product: { ...plain, priceAmount: priceRow ? Number(priceRow.amount) : null, currency: DEFAULT_CURRENCY },
         sectionPath,
         typeLabel: getTypeLabel(sectionPath),
         event: { ...req.body, isOnline: req.body.isOnline === "1" || req.body.isOnline === true },
@@ -248,12 +249,12 @@ module.exports = {
       product: {
         ...plain,
         priceAmount: productPriceRow ? Number(productPriceRow.amount) : null,
-        currency: productPriceRow?.currency || "USD",
+        currency: DEFAULT_CURRENCY,
       },
       event: {
         ...ev,
         priceAmount: priceRow ? Number(priceRow.amount) : null,
-        currency: priceRow?.currency || "USD",
+        currency: DEFAULT_CURRENCY,
         meetingLinkStatus,
         registrationCount,
       },

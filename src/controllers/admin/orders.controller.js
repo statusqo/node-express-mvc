@@ -1,6 +1,7 @@
 // src/controllers/admin/orders.controller.js
 const orderService = require("../../services/order.service");
 const refundRequestService = require("../../services/refundRequest.service");
+const invoiceService = require("../../services/invoice.service");
 const { validateOrderUpdate } = require("../../validators/order.schema");
 const { PAYMENT_STATUSES, FULFILLMENT_STATUSES } = require("../../constants/order");
 
@@ -71,12 +72,16 @@ module.exports = {
       return res.redirect((req.adminPrefix || "") + "/orders");
     }
     const orderPlain = order.get ? order.get({ plain: true }) : order;
-    const refundRequests = await refundRequestService.findByOrder(order.id);
+    const [refundRequests, invoice] = await Promise.all([
+      refundRequestService.findByOrder(order.id),
+      invoiceService.getInvoiceForOrder(order.id),
+    ]);
     const refundRequestsPlain = (refundRequests || []).map((r) => (r.get ? r.get({ plain: true }) : r));
     res.render("admin/orders/edit", {
       title: "Edit Order",
       order: orderPlain,
       refundRequests: refundRequestsPlain,
+      invoice: invoice || null,
       validFulfillmentStatuses: FULFILLMENT_STATUSES,
     });
   },
@@ -93,12 +98,16 @@ module.exports = {
         return res.redirect(ordersPath);
       }
       const orderPlain = order.get ? order.get({ plain: true }) : order;
-      const refundRequests = await refundRequestService.findByOrder(order.id);
+      const [refundRequests, invoice] = await Promise.all([
+        refundRequestService.findByOrder(order.id),
+        invoiceService.getInvoiceForOrder(order.id),
+      ]);
       const refundRequestsPlain = (refundRequests || []).map((r) => (r.get ? r.get({ plain: true }) : r));
       return res.status(400).render("admin/orders/edit", {
         title: "Edit Order",
         order: orderPlain,
         refundRequests: refundRequestsPlain,
+        invoice: invoice || null,
         validFulfillmentStatuses: FULFILLMENT_STATUSES,
         error: result.errors[0].message,
       });
@@ -113,12 +122,18 @@ module.exports = {
       const message = status === 404 ? "Order not found." : err.message || "Could not update order.";
       const order = await orderService.getOrderByIdForAdmin(id);
       const orderPlain = order ? (order.get ? order.get({ plain: true }) : order) : { id };
-      const refundRequests = order ? await refundRequestService.findByOrder(order.id) : [];
+      const [refundRequests, invoice] = order
+        ? await Promise.all([
+            refundRequestService.findByOrder(order.id),
+            invoiceService.getInvoiceForOrder(order.id),
+          ])
+        : [[], null];
       const refundRequestsPlain = (refundRequests || []).map((r) => (r.get ? r.get({ plain: true }) : r));
       return res.status(status).render("admin/orders/edit", {
         title: "Edit Order",
         order: orderPlain,
         refundRequests: refundRequestsPlain,
+        invoice: invoice || null,
         validFulfillmentStatuses: FULFILLMENT_STATUSES,
         error: message,
       });

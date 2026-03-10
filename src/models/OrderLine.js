@@ -31,6 +31,12 @@ const OrderLine = sequelize.define("OrderLine", {
     type: DataTypes.UUID,
     allowNull: true,
   },
+  // Snapshotted VAT rate (%) from the product at order time. Null for pre-fiscalisation orders.
+  vatRate: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    defaultValue: null,
+  },
 }, {
   timestamps: true,
   tableName: "order_lines",

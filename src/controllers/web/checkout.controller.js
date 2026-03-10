@@ -51,6 +51,27 @@ module.exports = {
       }
     }
     const requiresAddress = cartRequiresAddress(lines);
+
+    // VAT breakdown for display: group gross totals by rate, derive net and VAT amounts
+    const vatMap = {};
+    for (const line of lines) {
+      const variant = line.ProductVariant || {};
+      const product = variant.Product || {};
+      const priceRow = variant.ProductPrices && variant.ProductPrices[0];
+      const price = line.price != null ? Number(line.price) : (priceRow ? Number(priceRow.amount) : 0);
+      const qty = line.quantity || 1;
+      const gross = price * qty;
+      const rate = product.vatRate != null ? Number(product.vatRate) : 25;
+      vatMap[rate] = (vatMap[rate] || 0) + gross;
+    }
+    const vatSummary = Object.entries(vatMap)
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .map(([rate, gross]) => {
+        const r = Number(rate);
+        const net = gross / (1 + r / 100);
+        return { rate: r, net: net, vatAmount: gross - net, gross };
+      });
+
     res.render("web/checkout", {
       title: "Checkout",
       cart,
@@ -64,6 +85,7 @@ module.exports = {
       user: userPlain,
       paymentMethods,
       stripePublishableKey: config.stripe?.publishableKey || "",
+      vatSummary,
     });
   },
 

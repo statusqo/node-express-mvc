@@ -1,5 +1,6 @@
 "use strict";
 const crypto = require("crypto");
+const { DEFAULT_CURRENCY } = require("../../config/constants");
 
 module.exports = {
   async up(queryInterface) {
@@ -41,7 +42,7 @@ module.exports = {
         { id: variantId, productId, title: "Default", isDefault: true, active: true, createdAt: now, updatedAt: now },
       ]);
       await queryInterface.bulkInsert("product_prices", [
-        { id: priceId, productVariantId: variantId, amount: p.price, currency: "USD", isDefault: true, createdAt: now, updatedAt: now },
+        { id: priceId, productVariantId: variantId, amount: p.price, currency: DEFAULT_CURRENCY, isDefault: true, createdAt: now, updatedAt: now },
       ]);
       await queryInterface.bulkInsert("product_collections", [
         { id: crypto.randomUUID(), productId, collectionId, sortOrder: i, createdAt: now, updatedAt: now },

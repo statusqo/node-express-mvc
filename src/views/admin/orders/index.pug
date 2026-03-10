@@ -95,7 +95,7 @@ block content
                                         else
                                             span.da-cell-muted —
                                     td.da-col-created
-                                        span.da-cell-secondary= order.total != null ? Number(order.total).toFixed(2) + ' ' + (order.currency || 'USD') : '—'
+                                        span.da-cell-secondary= order.total != null ? Number(order.total).toFixed(2) + ' ' + (order.currency || 'EUR') : '—'
                                     td.da-col-created
                                         span.da-cell-muted= order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '—'
                                     td

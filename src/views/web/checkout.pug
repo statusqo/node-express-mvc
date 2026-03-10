@@ -17,13 +17,22 @@ block content
           - const price = line.price != null ? Number(line.price) : (priceRow ? Number(priceRow.amount) : 0)
           - const qty = line.quantity || 1
           - const lineSubtotal = price * qty
-          - const currency = priceRow && priceRow.currency ? priceRow.currency : (checkoutCurrency || 'USD')
+          - const currency = priceRow && priceRow.currency ? priceRow.currency : (checkoutCurrency || DEFAULT_CURRENCY)
           li(style="padding:0.35rem 0; display:flex; justify-content:space-between")
             span= title + " × " + qty
             span= (lineSubtotal).toFixed(2) + " " + currency
       div(style="margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid #e0e0e0; display:flex; justify-content:space-between; font-weight:600")
         span Total to pay
-        span#checkoutTotalDisplay= (checkoutTotal != null ? Number(checkoutTotal).toFixed(2) : '0.00') + " " + (checkoutCurrency || 'USD')
+        span#checkoutTotalDisplay= (checkoutTotal != null ? Number(checkoutTotal).toFixed(2) : '0.00') + " " + (checkoutCurrency || DEFAULT_CURRENCY)
+      if vatSummary && vatSummary.length > 0
+        div(style="margin-top:0.5rem; padding-top:0.5rem; border-top:1px solid #e0e0e0; font-size:0.82rem; color:#666")
+          each vg in vatSummary
+            div(style="display:flex; justify-content:space-between; padding:0.1rem 0")
+              span Net (excl. PDV #{vg.rate}%)
+              span= vg.net.toFixed(2) + " " + (checkoutCurrency || DEFAULT_CURRENCY)
+            div(style="display:flex; justify-content:space-between; padding:0.1rem 0")
+              span PDV #{vg.rate}%
+              span= vg.vatAmount.toFixed(2) + " " + (checkoutCurrency || DEFAULT_CURRENCY)
       p(style="margin:0.5rem 0 0; font-size:0.9rem; color:#555") You will be charged exactly this amount when you click Place order.
 
     form#checkoutForm(action="/checkout" method="post" data-stripe-key=(stripePublishableKey || '') data-user-logged-in=(user ? '1' : '') data-requires-address=(requiresAddress ? '1' : '0'))

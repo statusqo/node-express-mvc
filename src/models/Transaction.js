@@ -1,5 +1,6 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../db/client");
+const { DEFAULT_CURRENCY } = require("../config/constants");
 
 const Transaction = sequelize.define("Transaction", {
   id: {
@@ -18,7 +19,8 @@ const Transaction = sequelize.define("Transaction", {
   currency: {
     type: DataTypes.STRING,
     allowNull: false,
-    defaultValue: "USD",
+    // should match DEFAULT_CURRENCY
+    defaultValue: DEFAULT_CURRENCY,
   },
   status: {
     type: DataTypes.STRING,

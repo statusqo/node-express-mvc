@@ -107,6 +107,11 @@ dist
 # Uploaded media (admin uploads)
 uploads/
 
+# SQLite database files
+database.sqlite
+database.sqlite-shm
+database.sqlite-wal
+
 # Generated invoice PDFs
 storage/invoices/*.pdf
 

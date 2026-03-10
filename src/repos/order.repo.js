@@ -174,6 +174,7 @@ module.exports = {
         title: snapshot.title,
         price: snapshot.price,
         quantity: quantity ?? 1,
+        vatRate: snapshot.vatRate != null ? snapshot.vatRate : null,
         ...(eventId != null && { eventId }),
       },
       createOptions

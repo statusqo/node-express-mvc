@@ -45,6 +45,13 @@ const Product = sequelize.define("Product", {
     type: DataTypes.ENUM("g", "kg"),
     allowNull: true,
   },
+  // Croatian PDV (VAT) rate as a percentage integer: 0, 5, 13, or 25.
+  // Prices are stored gross (VAT-inclusive). Net = gross / (1 + vatRate/100).
+  vatRate: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 25,
+  },
 }, {
   timestamps: true,
   tableName: "products",

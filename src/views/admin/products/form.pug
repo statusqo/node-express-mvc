@@ -81,14 +81,17 @@ block content
                                     placeholder='0.00'
                                 )
                             .da-form-group
-                                label.da-form-label(for='currency') Currency
-                                input#currency.da-form-input(
-                                    type='text'
-                                    name='currency'
-                                    maxlength='3'
-                                    value=product && product.currency ? product.currency : 'USD'
-                                    placeholder='USD'
-                                )
+                                label.da-form-label Currency
+                                //- currency is fixed to default site value; user cannot change it
+                                input.da-form-input(type='text' readonly value=(DEFAULT_CURRENCY || 'EUR'))
+                            .da-form-group
+                                label.da-form-label(for='vatRate') VAT Rate (PDV)
+                                select#vatRate.da-form-select(name='vatRate')
+                                    - var currentVat = product && product.vatRate != null ? Number(product.vatRate) : 25
+                                    option(value='0'  selected=(currentVat === 0))  0%
+                                    option(value='5'  selected=(currentVat === 5))  5%
+                                    option(value='13' selected=(currentVat === 13)) 13%
+                                    option(value='25' selected=(currentVat === 25)) 25%
                             .da-form-group
                                 label.da-form-label(for='quantity') Default quantity
                                 input#quantity.da-form-input(

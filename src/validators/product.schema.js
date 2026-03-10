@@ -17,7 +17,8 @@ const ProductSchema = z.object({
     .optional()
     .transform((v) => (v === "" || v === undefined || v === null ? undefined : Number(v)))
     .refine((n) => n === undefined || (!Number.isNaN(n) && n >= 0), "Price must be a number."),
-  currency: z.string().trim().max(3).optional().transform((v) => (v && v.trim() ? v.trim().substring(0, 3) : "USD")),
+  // currency cannot be changed; it always matches DEFAULT_CURRENCY
+  currency: z.string().optional().transform(() => undefined),
   quantity: z
     .union([z.string(), z.number()])
     .optional()
@@ -30,6 +31,11 @@ const ProductSchema = z.object({
     .nullable()
     .transform((v) => (v === "" || v === undefined || v === null ? null : Number(v))),
   weightUnit: z.string().trim().max(10).optional().nullable().transform((v) => (v && v.trim() ? v.trim() : null)),
+  vatRate: z
+    .union([z.string(), z.number()])
+    .optional()
+    .transform((v) => (v === "" || v === undefined || v === null ? 25 : parseInt(String(v), 10)))
+    .refine((n) => [0, 5, 13, 25].includes(n), "VAT rate must be 0, 5, 13, or 25."),
 });
 
 function validateProduct(body, slugValue) {
@@ -47,12 +53,13 @@ function validateProduct(body, slugValue) {
       productTypeId: parsed.data.productTypeId,
       productCategoryId: parsed.data.productCategoryId,
       priceAmount: parsed.data.priceAmount,
-      currency: parsed.data.currency,
+      currency: undefined, // will be set server‑side to DEFAULT_CURRENCY
       quantity: parsed.data.quantity ?? 0,
       active: parsed.data.active ?? false,
       isPhysical: parsed.data.isPhysical ?? false,
       weight: parsed.data.weight,
       weightUnit: parsed.data.weightUnit,
+      vatRate: parsed.data.vatRate ?? 25,
     },
   };
 }

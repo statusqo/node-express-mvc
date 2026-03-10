@@ -12,7 +12,7 @@ const emailService = require("./email.service");
 const invoiceService = require("./invoice.service");
 // stripeGateway is required lazily to avoid circular dependency with stripe.gateway
 
-const DEFAULT_CURRENCY = "USD";
+const { DEFAULT_CURRENCY } = require("../config/constants");
 
 /**
  * Get cart total for payment (same pricing as createOrderFromCart). Uses ProductPrice from variants.
@@ -269,7 +269,7 @@ async function recordPaymentSuccess(transactionId, userIdFromOrder = null) {
       const invoiceTx = await sequelize.transaction();
       try {
         const orderPlain = orderAfter.get ? orderAfter.get({ plain: true }) : orderAfter;
-        const linesPlain = (lines || []).map((l) => ({ title: l.title, quantity: l.quantity, price: l.price }));
+        const linesPlain = (lines || []).map((l) => ({ title: l.title, quantity: l.quantity, price: l.price, vatRate: l.vatRate != null ? Number(l.vatRate) : null }));
         const { invoice, pdfBuffer } = await invoiceService.createInvoiceForOrder(orderPlain, linesPlain, invoiceTx);
         await invoiceTx.commit();
         invoicePdfBuffer = pdfBuffer;
@@ -297,7 +297,7 @@ async function recordPaymentSuccess(transactionId, userIdFromOrder = null) {
     if (emailService.sendOrderConfirmationEmail && emailService.isMailConfigured && emailService.isMailConfigured()) {
       try {
         const orderPlain = orderAfter.get ? orderAfter.get({ plain: true }) : orderAfter;
-        const linesPlain = (lines || []).map((l) => ({ title: l.title, quantity: l.quantity, price: l.price }));
+        const linesPlain = (lines || []).map((l) => ({ title: l.title, quantity: l.quantity, price: l.price, vatRate: l.vatRate != null ? Number(l.vatRate) : null }));
         await emailService.sendOrderConfirmationEmail(orderPlain, linesPlain, invoicePdfBuffer, invoiceNumber);
       } catch (_) {
         // Do not fail order flow on email failure
@@ -406,7 +406,7 @@ async function fulfillFreeOrder(orderId) {
       const invoiceTx = await sequelize.transaction();
       try {
         const orderPlain = orderAfter.get ? orderAfter.get({ plain: true }) : orderAfter;
-        const linesPlain = (lines || []).map((l) => ({ title: l.title, quantity: l.quantity, price: l.price }));
+        const linesPlain = (lines || []).map((l) => ({ title: l.title, quantity: l.quantity, price: l.price, vatRate: l.vatRate != null ? Number(l.vatRate) : null }));
         const { invoice, pdfBuffer } = await invoiceService.createInvoiceForOrder(orderPlain, linesPlain, invoiceTx);
         await invoiceTx.commit();
         invoicePdfBuffer = pdfBuffer;
@@ -430,7 +430,7 @@ async function fulfillFreeOrder(orderId) {
     if (emailService.sendOrderConfirmationEmail && emailService.isMailConfigured && emailService.isMailConfigured()) {
       try {
         const orderPlain = orderAfter.get ? orderAfter.get({ plain: true }) : orderAfter;
-        const linesPlain = (lines || []).map((l) => ({ title: l.title, quantity: l.quantity, price: l.price }));
+        const linesPlain = (lines || []).map((l) => ({ title: l.title, quantity: l.quantity, price: l.price, vatRate: l.vatRate != null ? Number(l.vatRate) : null }));
         await emailService.sendOrderConfirmationEmail(orderPlain, linesPlain, invoicePdfBuffer, invoiceNumber);
       } catch (_) {}
     }

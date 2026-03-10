@@ -97,10 +97,12 @@ module.exports = {
     }
 
     // invoice.pdfPath is stored as a relative path (e.g. "invoices/INV-2026-000001.pdf").
-    // Resolve it to an absolute path before any filesystem operations.
+    // Resolve it to an absolute path before streaming.
     const absolutePath = invoiceService.resolvePdfPath(invoice.pdfPath);
 
-    if (!fs.existsSync(absolutePath)) {
+    try {
+      await fs.promises.access(absolutePath);
+    } catch {
       logger.error("Invoice PDF missing from disk", {
         invoiceNumber: invoice.invoiceNumber,
         pdfPath: invoice.pdfPath,

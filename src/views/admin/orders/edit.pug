@@ -80,7 +80,7 @@ block content
                                 //- Total (read-only)
                                 .da-readonly-group
                                     span.da-readonly-label Total
-                                    .da-readonly-value= order.total != null ? Number(order.total).toFixed(2) + ' ' + (order.currency || 'USD') : '—'
+                                    .da-readonly-value= order.total != null ? Number(order.total).toFixed(2) + ' ' + (order.currency || 'EUR') : '—'
 
                                 //- Date (read-only)
                                 .da-readonly-group
@@ -150,7 +150,7 @@ block content
                                     if r.status === 'approved'
                                         p.da-refund-meta
                                             strong Amount:&nbsp;
-                                            | #{order.total != null ? Number(order.total).toFixed(2) : '—'} #{order.currency || 'USD'} (full refund)
+                                            | #{order.total != null ? Number(order.total).toFixed(2) : '—'} #{order.currency || 'EUR'} (full refund)
 
                                     if r.status === 'pending'
                                         .da-refund-actions
@@ -164,3 +164,36 @@ block content
                                                 button.da-btn.da-btn--danger(type='submit') Reject
                         else
                             p.da-refund-empty No refund requests for this order.
+
+                //- ── Invoice ─────────────────────────────────────────
+                .da-card(style='margin-top:1rem')
+                    .da-card-header
+                        h2.da-card-title Invoice
+                    .da-card-body
+                        if invoice
+                            .da-detail-list
+                                .da-detail-item
+                                    span.da-detail-label Number
+                                    span.da-detail-line.da-cell-mono= invoice.invoiceNumber
+                                .da-detail-item
+                                    span.da-detail-label Type
+                                    span.da-detail-line
+                                        if invoice.type === 'r1'
+                                            span.da-badge.da-badge--info R1 Račun
+                                        else
+                                            span.da-badge.da-badge--neutral Receipt
+                                .da-detail-item
+                                    span.da-detail-label Status
+                                    span.da-detail-line
+                                        - var iClass = invoice.status === 'issued' ? 'success' : 'danger'
+                                        span.da-badge(class='da-badge--' + iClass)= invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)
+                                .da-detail-item
+                                    span.da-detail-label Issued
+                                    span.da-detail-line= invoice.generatedAt ? new Date(invoice.generatedAt).toLocaleDateString('hr-HR', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'
+                        else
+                            if order.paymentStatus === 'paid'
+                                p.da-refund-empty Invoice not generated.
+                                form(method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/regenerate-invoice' style='margin-top:0.75rem')
+                                    button.da-btn.da-btn--secondary(type='submit') Generate Invoice
+                            else
+                                p.da-refund-empty Invoice will be created when the order is paid.

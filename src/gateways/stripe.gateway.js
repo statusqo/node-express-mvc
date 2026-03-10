@@ -22,6 +22,7 @@ const userRepo = require("../repos/user.repo");
 const transactionRepo = require("../repos/transaction.repo");
 const userGatewayProfileRepo = require("../repos/userGatewayProfile.repo");
 const logger = require("../config/logger");
+const { DEFAULT_CURRENCY } = require("../config/constants");
 
 const { normalizeError, toError } = require("./errors");
 const { PAYMENT_STATUS } = require("../constants/order");
@@ -168,7 +169,7 @@ async function createPaymentIntentForCart(amount, currency, userId, sessionId, o
     throw err;
   }
 
-  const currencyNorm = (currency || "usd").toString().toLowerCase();
+  const currencyNorm = (currency || DEFAULT_CURRENCY).toString().toLowerCase();
   const email = options.email != null ? options.email : null;
   const paymentMethodId = options.paymentMethodId ? String(options.paymentMethodId).trim() : null;
   const idempotencyKey = options.idempotencyKey ? String(options.idempotencyKey).trim() : null;

@@ -1,6 +1,7 @@
 const productService = require("../../services/product.service");
 const { parseDefinitionPairs } = require("../../validators/metaObject.schema");
 const config = require("../../config");
+const { DEFAULT_CURRENCY } = require("../../config/constants");
 
 function toPlain(obj) {
   return obj && typeof obj.get === "function" ? obj.get({ plain: true }) : obj;
@@ -41,7 +42,7 @@ module.exports = {
         ...plain,
         defaultVariantId: variant?.id || null,
         price: priceRow ? Number(priceRow.amount) : null,
-        currency: priceRow?.currency || "USD",
+        currency: DEFAULT_CURRENCY,
         media,
       };
     });
@@ -61,7 +62,7 @@ module.exports = {
     const defaultVariant = product.ProductVariants && product.ProductVariants[0];
     const priceRow = defaultVariant?.ProductPrices?.[0];
     const price = priceRow ? Number(priceRow.amount) : null;
-    const currency = priceRow?.currency || "USD";
+    const currency = DEFAULT_CURRENCY;
     const plain = toPlain(product);
     const metaObjectsWithTypes = (plain.metaObjects || []).map((mo) => ({
       ...mo,

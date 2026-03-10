@@ -3,6 +3,7 @@ const accountService = require("../../services/account.service");
 const { validateLogin, validateRegister } = require("../../validators/auth.schema");
 const { postLoginSuccess } = require("../../utils/postLogin");
 const logger = require("../../config/logger");
+const { sendWelcomeEmail } = require("../../services/email.service");
 
 module.exports = {
   async showLogin(req, res) {
@@ -72,6 +73,7 @@ module.exports = {
 
     try {
       const user = await accountService.register({ email, username, password, personType, companyName, companyOib });
+      sendWelcomeEmail(user).catch((err) => logger.error("Welcome email failed", { error: err.message }));
       req.session.regenerate((regErr) => {
         if (regErr) {
           logger.error("Session regenerate on register error", { error: regErr.message });

@@ -1,4 +1,5 @@
 const { ProductVariant, Product, ProductPrice } = require("../models");
+const { DEFAULT_CURRENCY } = require("../config/constants");
 
 module.exports = {
   async findById(id, options = {}) {
@@ -32,7 +33,7 @@ module.exports = {
   async getOrderLineSnapshot(variantId, options = {}) {
     const variant = await ProductVariant.findByPk(variantId, {
       include: [
-        { model: Product, as: "Product", attributes: ["id", "title"] },
+        { model: Product, as: "Product", attributes: ["id", "title", "vatRate"] },
         { model: ProductPrice, as: "ProductPrices", where: { isDefault: true }, required: false, limit: 1 },
       ],
       ...options,
@@ -44,7 +45,8 @@ module.exports = {
       productVariantId: variant.id,
       title: product?.title || variant.title || "Product",
       price: priceRow ? Number(priceRow.amount) : 0,
-      currency: priceRow?.currency || "USD",
+      currency: DEFAULT_CURRENCY,
+      vatRate: product?.vatRate != null ? Number(product.vatRate) : 25,
     };
   },
 };

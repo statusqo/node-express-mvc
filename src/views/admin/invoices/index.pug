@@ -1,0 +1,130 @@
+extends ../../layouts/admin
+
+block append links
+    link(rel='preconnect' href='https://fonts.googleapis.com')
+    link(rel='preconnect' href='https://fonts.gstatic.com' crossorigin)
+
+block content
+    .da-page
+
+        //- ── Page header ─────────────────────────────────────────────
+        .da-page-header
+            .da-page-header-left
+                h1.da-page-title Invoices
+                p.da-page-subtitle= invoices ? invoices.length + ' result' + (invoices.length !== 1 ? 's' : '') : '0 results'
+
+        //- ── Filter bar ──────────────────────────────────────────────
+        form.da-filter-bar(method='get' action=(adminPrefix || '') + '/invoices')
+            .da-filter-head
+                span.da-filter-head-label Filters
+                a.da-filter-clear(href=(adminPrefix || '') + '/invoices') Clear all
+
+            .da-filter-group
+                label.da-filter-group-label(for='filter-type') Type
+                select#filter-type.da-form-select(name='type')
+                    option(value='' selected=(!filters.type)) All
+                    option(value='receipt' selected=(filters.type === 'receipt')) Receipt
+                    option(value='r1' selected=(filters.type === 'r1')) R1 Račun
+
+            .da-filter-group
+                label.da-filter-group-label(for='filter-status') Status
+                select#filter-status.da-form-select(name='status')
+                    option(value='' selected=(!filters.status)) All
+                    option(value='issued' selected=(filters.status === 'issued')) Issued
+                    option(value='voided' selected=(filters.status === 'voided')) Voided
+
+            .da-filter-group
+                label.da-filter-group-label(for='filter-fiscal') Fiscalisation
+                select#filter-fiscal.da-form-select(name='fiscalizationStatus')
+                    option(value='' selected=(!filters.fiscalizationStatus)) All
+                    option(value='fiscalized'   selected=(filters.fiscalizationStatus === 'fiscalized'))   Fiscalized
+                    option(value='pending'      selected=(filters.fiscalizationStatus === 'pending'))      Pending
+                    option(value='failed'       selected=(filters.fiscalizationStatus === 'failed'))       Failed
+                    option(value='not_required' selected=(filters.fiscalizationStatus === 'not_required')) Not Required
+
+            .da-filter-group
+                label.da-filter-group-label(for='filter-year') Year
+                input#filter-year.da-form-input(
+                    type='number'
+                    name='year'
+                    min='2024'
+                    max='2099'
+                    placeholder='e.g. 2026'
+                    value=filters.year || ''
+                    style='width:6.5rem'
+                )
+
+            .da-filter-actions
+                button.da-btn.da-btn--primary(type='submit')
+                    svg(xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                        polygon(points='22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3')
+                    | Apply
+
+        //- ── Invoices table ──────────────────────────────────────────
+        .da-panel
+            .da-table-scroll
+                table.da-table(role='table' aria-label='Invoices list')
+                    thead
+                        tr
+                            th(scope='col') Invoice Number
+                            th(scope='col') Type
+                            th(scope='col') Status
+                            th(scope='col') Fiscalisation
+                            th.da-col-created(scope='col') Year
+                            th.da-col-created(scope='col') Issued
+                            th(scope='col' style='text-align:right') Actions
+                    tbody
+                        if invoices && invoices.length
+                            each inv in invoices
+                                - var typeClass  = inv.type === 'r1' ? 'info' : 'neutral'
+                                - var statusClass = inv.status === 'issued' ? 'success' : 'danger'
+                                - var fiskalStatus = inv.fiscalizationStatus || 'pending'
+                                - var fiskalClass  = fiskalStatus === 'fiscalized' ? 'success' : fiskalStatus === 'failed' ? 'danger' : fiskalStatus === 'not_required' ? 'neutral' : 'warning'
+                                - var fiskalLabel  = fiskalStatus === 'fiscalized' ? 'Fiscalised' : fiskalStatus === 'failed' ? 'Failed' : fiskalStatus === 'not_required' ? 'N/A' : 'Pending'
+                                - var canRetry     = fiskalStatus === 'pending' || fiskalStatus === 'failed'
+                                tr
+                                    td
+                                        span.da-cell-mono= inv.invoiceNumber
+                                        if inv.fiscalInvoiceNumber
+                                            br
+                                            span.da-cell-muted(style='font-size:0.75rem')= inv.fiscalInvoiceNumber
+                                    td
+                                        span.da-badge(class='da-badge--' + typeClass)= inv.type === 'r1' ? 'R1 Račun' : 'Receipt'
+                                    td
+                                        span.da-badge(class='da-badge--' + statusClass)= inv.status.charAt(0).toUpperCase() + inv.status.slice(1)
+                                    td
+                                        span.da-badge(class='da-badge--' + fiskalClass)= fiskalLabel
+                                        if inv.fiscalizationJir
+                                            br
+                                            span.da-cell-muted(
+                                                title=inv.fiscalizationJir
+                                                style='font-size:0.7rem;font-family:monospace;cursor:default'
+                                            )= inv.fiscalizationJir.substring(0, 8) + '…'
+                                    td.da-col-created
+                                        span.da-cell-secondary= inv.year
+                                    td.da-col-created
+                                        span.da-cell-muted= inv.generatedAt ? new Date(inv.generatedAt).toLocaleDateString('hr-HR', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'
+                                    td
+                                        .da-cell-actions
+                                            a.da-row-btn.da-row-btn--edit(
+                                                href=(adminPrefix || '') + '/orders/' + inv.orderId + '/edit'
+                                                aria-label='View order for invoice ' + inv.invoiceNumber
+                                            ) View Order
+                                            if canRetry
+                                                form(
+                                                    method='post'
+                                                    action=(adminPrefix || '') + '/invoices/' + inv.id + '/fiscalize'
+                                                    style='display:inline'
+                                                )
+                                                    button.da-row-btn.da-row-btn--confirm(
+                                                        type='submit'
+                                                        aria-label='Retry fiscalisation for ' + inv.invoiceNumber
+                                                    ) Fiscalise
+                        else
+                            tr
+                                td(colspan='7')
+                                    .da-table-empty
+                                        svg(xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true' style='color:var(--ds-text-3);margin-bottom:0.25rem')
+                                            path(d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z')
+                                            polyline(points='14 2 14 8 20 8')
+                                        span No invoices found.

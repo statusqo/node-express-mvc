@@ -2,6 +2,7 @@ const productService = require("../../services/product.service");
 const { validateProduct } = require("../../validators/product.schema");
 const { parseDefinitionPairs, validateMetaObjectValues } = require("../../validators/metaObject.schema");
 const config = require("../../config");
+const { DEFAULT_CURRENCY } = require("../../config/constants");
 
 function slugify(s) {
   if (!s || typeof s !== "string") return "";
@@ -81,7 +82,7 @@ module.exports = {
       return {
         ...plain,
         price: priceRow ? Number(priceRow.amount) : null,
-        currency: priceRow?.currency || "USD",
+        currency: DEFAULT_CURRENCY,
       };
     });
     res.render("admin/products/index", { title: "Products", products: list });
@@ -98,6 +99,7 @@ module.exports = {
       attachedMetaObjects: [],
       attachedMedia: [],
       isEdit: false,
+      DEFAULT_CURRENCY,
     });
   },
 
@@ -110,7 +112,7 @@ module.exports = {
       const attachedMetaObjects = buildAttachedMetaObjects(normalizeMetaObjectIds(req.body.metaObjectIds), metaObjectsWithPairs, req.body.metaObjectValues || {});
       return res.status(400).render("admin/products/form", {
         title: "New Product",
-        product: { ...req.body, slug: slugVal, active: req.body.active === "on", isPhysical: req.body.isPhysical === "on", metaObjectValues: req.body.metaObjectValues || {}, mediaIds: normalizeMediaIds(req.body.mediaIds) },
+        product: { ...req.body, slug: slugVal, active: req.body.active === "on", isPhysical: req.body.isPhysical === "on", metaObjectValues: req.body.metaObjectValues || {}, mediaIds: normalizeMediaIds(req.body.mediaIds), currency: DEFAULT_CURRENCY },
         productTypes: (types || []).map(toPlain),
         productCategories: (categories || []).map(toPlain),
         attachedMetaObjects,
@@ -118,6 +120,7 @@ module.exports = {
         uploadsBaseUrl: getUploadsBaseUrl(),
         isEdit: false,
         error: result.errors[0].message,
+        DEFAULT_CURRENCY,
       });
     }
     const { types, categories, metaObjects } = await productService.getFormData();
@@ -147,7 +150,7 @@ module.exports = {
       const attachedMetaObjects = buildAttachedMetaObjects(ids, metaObjectsWithPairs, req.body.metaObjectValues || {});
       return res.status(400).render("admin/products/form", {
         title: "New Product",
-        product: { ...req.body, slug: slugVal, active: req.body.active === "on", metaObjectIds: ids, metaObjectValues: req.body.metaObjectValues || {}, mediaIds: normalizeMediaIds(req.body.mediaIds) },
+        product: { ...req.body, slug: slugVal, active: req.body.active === "on", metaObjectIds: ids, metaObjectValues: req.body.metaObjectValues || {}, mediaIds: normalizeMediaIds(req.body.mediaIds), currency: DEFAULT_CURRENCY },
         productTypes: (types || []).map(toPlain),
         productCategories: (categories || []).map(toPlain),
         attachedMetaObjects,
@@ -155,6 +158,7 @@ module.exports = {
         uploadsBaseUrl: getUploadsBaseUrl(),
         isEdit: false,
         error: metaValidation.errors?.join(" ") || "Invalid meta object values.",
+        DEFAULT_CURRENCY,
       });
     }
     const validMetaIds = new Set((metaObjects || []).map((m) => String(m.id)));
@@ -164,7 +168,7 @@ module.exports = {
       const attachedMetaObjects = buildAttachedMetaObjects(ids, metaObjectsWithPairs, req.body.metaObjectValues || {});
       return res.status(400).render("admin/products/form", {
         title: "New Product",
-        product: { ...req.body, slug: slugVal, active: req.body.active === "on", metaObjectIds: ids, metaObjectValues: req.body.metaObjectValues || {}, mediaIds: normalizeMediaIds(req.body.mediaIds) },
+        product: { ...req.body, slug: slugVal, active: req.body.active === "on", metaObjectIds: ids, metaObjectValues: req.body.metaObjectValues || {}, mediaIds: normalizeMediaIds(req.body.mediaIds), currency: DEFAULT_CURRENCY },
         productTypes: (types || []).map(toPlain),
         productCategories: (categories || []).map(toPlain),
         attachedMetaObjects,
@@ -172,6 +176,7 @@ module.exports = {
         uploadsBaseUrl: getUploadsBaseUrl(),
         isEdit: false,
         error: "One or more selected meta objects are invalid.",
+        DEFAULT_CURRENCY,
       });
     }
     await productService.create({
@@ -213,7 +218,7 @@ module.exports = {
       product: {
         ...plain,
         priceAmount: priceRow ? Number(priceRow.amount) : "",
-        currency: priceRow?.currency || "USD",
+        currency: DEFAULT_CURRENCY,
         quantity: variant && variant.quantity != null ? variant.quantity : 0,
         metaObjectIds,
         metaObjectValues,
@@ -224,6 +229,7 @@ module.exports = {
       attachedMetaObjects,
       attachedMedia,
       isEdit: true,
+      DEFAULT_CURRENCY,
     });
   },
 
@@ -252,7 +258,7 @@ module.exports = {
       const attachedMedia = mediaIdsOrder.map((id) => mediaById.get(String(id))).filter(Boolean).map(toAttachedMediaItem);
       return res.status(400).render("admin/products/form", {
         title: "Edit Product",
-        product: { id, ...req.body, slug: slugVal, active: req.body.active === "on", metaObjectIds: existingMetaObjectIds, metaObjectValues: req.body.metaObjectValues || existingMetaObjectValues, mediaIds: mediaIdsOrder },
+        product: { id, ...req.body, slug: slugVal, active: req.body.active === "on", metaObjectIds: existingMetaObjectIds, metaObjectValues: req.body.metaObjectValues || existingMetaObjectValues, mediaIds: mediaIdsOrder, currency: DEFAULT_CURRENCY },
         productTypes: (types || []).map(toPlain),
         productCategories: (categories || []).map(toPlain),
         attachedMetaObjects,
@@ -260,6 +266,7 @@ module.exports = {
         uploadsBaseUrl: getUploadsBaseUrl(),
         isEdit: true,
         error: result.errors[0].message,
+        DEFAULT_CURRENCY,
       });
     }
     const { types, categories, metaObjects, media } = await productService.getFormData();
@@ -294,7 +301,7 @@ module.exports = {
       const attachedMedia = mediaIdsOrder.map((mid) => mediaById.get(String(mid))).filter(Boolean).map(toAttachedMediaItem);
       return res.status(400).render("admin/products/form", {
         title: "Edit Product",
-        product: { id, ...req.body, slug: slugVal, active: req.body.active === "on", metaObjectIds: ids, metaObjectValues: req.body.metaObjectValues || filteredMetaObjectValues, mediaIds: mediaIdsOrder },
+        product: { id, ...req.body, slug: slugVal, active: req.body.active === "on", metaObjectIds: ids, metaObjectValues: req.body.metaObjectValues || filteredMetaObjectValues, mediaIds: mediaIdsOrder, currency: DEFAULT_CURRENCY },
         productTypes: (types || []).map(toPlain),
         productCategories: (categories || []).map(toPlain),
         attachedMetaObjects,
@@ -302,6 +309,7 @@ module.exports = {
         uploadsBaseUrl: getUploadsBaseUrl(),
         isEdit: true,
         error: metaValidation.errors?.join(" ") || "Invalid meta object values.",
+        DEFAULT_CURRENCY,
       });
     }
     await productService.update(id, {

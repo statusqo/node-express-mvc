@@ -22,7 +22,7 @@ block content
             if product.description
               p(style="margin:0.5rem 0")= product.description
             if price != null
-              span #{Number(price).toFixed(2)} #{priceRow && priceRow.currency ? priceRow.currency : 'USD'}
+              span #{Number(price).toFixed(2)} #{DEFAULT_CURRENCY}
             if product.defaultVariantId
               form.js-add-to-cart-form(action="/cart/add" method="post" style="display:inline; margin-left:0.5rem")
                 input(type="hidden" name="productVariantId" value=product.defaultVariantId)

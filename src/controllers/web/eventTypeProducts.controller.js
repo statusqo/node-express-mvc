@@ -10,6 +10,7 @@ const paymentMethodService = require("../../services/paymentMethod.service");
 const { validateEventRegister } = require("../../validators/eventRegister.schema");
 const { getDefaultGateway } = require("../../gateways");
 const config = require("../../config");
+const { DEFAULT_CURRENCY } = require("../../config/constants");
 
 function toPlain(obj) {
   return obj && typeof obj.get === "function" ? obj.get({ plain: true }) : obj;
@@ -33,7 +34,7 @@ module.exports = {
       return {
         ...plain,
         priceAmount: priceRow ? Number(priceRow.amount) : null,
-        currency: priceRow?.currency || "USD",
+        currency: DEFAULT_CURRENCY,
       };
     }).filter((p) => p.active);
     res.render("web/event-type-products/index", {
@@ -119,7 +120,7 @@ module.exports = {
       where: { productVariantId: eventPlain.productVariantId, isDefault: true },
     });
     const priceAmount = eventPriceRow ? Number(eventPriceRow.amount) : null;
-    const currency = eventPriceRow ? eventPriceRow.currency : "USD";
+    const currency = DEFAULT_CURRENCY;
     let paymentMethods = [];
     if (req.user && req.user.id) {
       try {

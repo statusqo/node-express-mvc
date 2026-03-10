@@ -1,0 +1,213 @@
+/**
+ * Fiscalisation service — orchestrates the Croatian fiscalisation process.
+ *
+ * Flow for each invoice:
+ *   1. Load FINA certificate (cached)
+ *   2. Build fiscal invoice number (SEQ/PREMISES/DEVICE)
+ *   3. Compute ZKI (Zaštitni kod izdavatelja)
+ *   4. Build SOAP XML (RacunZahtjev)
+ *   5. Sign XML with certificate
+ *   6. Send to Tax Administration, receive JIR
+ *   7. Update invoice record with result
+ *
+ * This service does NOT throw on FINA errors — it records the error on the
+ * invoice record and returns a result object so the caller can continue.
+ * The invoice PDF has already been written by the time this runs.
+ */
+const invoiceRepo = require("../repos/invoice.repo");
+const logger = require("../config/logger");
+const { getFiscalizationConfig } = require("../config/fiscalization");
+const { loadCertificate, computeZki, signXml } = require("../infrastructure/fiscalization/xmlSigner");
+const { buildRacunZahtjev, formatFiskalDate } = require("../infrastructure/fiscalization/xmlBuilder");
+const { sendToTaxAdmin } = require("../infrastructure/fiscalization/fiskalApi");
+
+function newUuid() {
+  return require("crypto").randomUUID();
+}
+
+/**
+ * Build the fiscal invoice number in Croatian format: "SEQ/PREMISES/DEVICE"
+ *
+ * @param {number} sequenceNumber
+ * @param {string} premisesId
+ * @param {string} deviceId
+ * @returns {string}
+ */
+function buildFiscalInvoiceNumber(sequenceNumber, premisesId, deviceId) {
+  return `${sequenceNumber}/${premisesId}/${deviceId}`;
+}
+
+/**
+ * Determine the FINA payment method code from the order data.
+ * Stripe payments are always card (K).
+ *
+ * @param {object} order
+ * @returns {"G"|"K"|"T"|"O"}
+ */
+function getPaymentMethodCode(order) {
+  // All Stripe payments are card
+  if (order.stripePaymentIntentId) return "K";
+  // Default to card for online orders
+  return "K";
+}
+
+/**
+ * Main fiscalisation entry point. Called after an invoice record is created.
+ *
+ * @param {object} invoice  - Plain invoice object (from DB)
+ * @param {object} order    - Plain order object
+ * @param {Array}  lines    - Order lines: [{ price, quantity, vatRate }]
+ * @returns {Promise<{ success: boolean, jir?: string, zkiCode?: string, error?: string }>}
+ */
+async function fiscalizeInvoice(invoice, order, lines) {
+  const config = getFiscalizationConfig();
+
+  // ── Guard: skip if not configured ───────────────────────────────────────
+  if (!config.certPath) {
+    logger.warn("Fiscalisation skipped — FINA_CERT_PATH not configured", { invoiceId: invoice.id });
+    await _updateInvoice(invoice.id, { fiscalizationStatus: "not_required" });
+    return { success: false, error: "FINA_CERT_PATH not configured" };
+  }
+
+  // ── Load certificate ─────────────────────────────────────────────────────
+  let cert;
+  try {
+    cert = loadCertificate();
+  } catch (certErr) {
+    logger.error("Fiscalisation: certificate load failed", { invoiceId: invoice.id, error: certErr.message });
+    await _updateInvoice(invoice.id, {
+      fiscalizationStatus: "failed",
+      fiscalizationRequest: null,
+      fiscalizationResponse: `Certificate error: ${certErr.message}`,
+    });
+    return { success: false, error: certErr.message };
+  }
+
+  // ── Build fiscal invoice number ──────────────────────────────────────────
+  const fiscalInvoiceNumber = buildFiscalInvoiceNumber(
+    invoice.sequenceNumber,
+    config.businessPremisesId,
+    config.deviceId
+  );
+
+  // ── Compute ZKI ──────────────────────────────────────────────────────────
+  const invoiceDate     = new Date(invoice.generatedAt || Date.now());
+  const fiscalDatetime  = formatFiskalDate(invoiceDate);
+  const [seqNum, premisesId, deviceId] = fiscalInvoiceNumber.split("/");
+  const grandTotal      = Number(order.total || 0).toFixed(2);
+  const paymentMethod   = getPaymentMethodCode(order);
+
+  let zkiCode;
+  try {
+    zkiCode = computeZki({
+      companyOib:    cert.companyOib,
+      fiscalDatetime,
+      sequenceNum:   seqNum,
+      premisesId,
+      deviceId,
+      grandTotal,
+      privateKeyPem: cert.privateKeyPem,
+    });
+  } catch (zkiErr) {
+    logger.error("Fiscalisation: ZKI computation failed", { invoiceId: invoice.id, error: zkiErr.message });
+    await _updateInvoice(invoice.id, {
+      fiscalizationStatus: "failed",
+      fiscalInvoiceNumber,
+      fiscalizationResponse: `ZKI error: ${zkiErr.message}`,
+    });
+    return { success: false, error: zkiErr.message };
+  }
+
+  // ── Build and sign SOAP XML ───────────────────────────────────────────────
+  const messageId = newUuid();
+  let signedXml;
+  try {
+    const unsignedXml = buildRacunZahtjev({
+      messageId,
+      sentAt:              new Date(),
+      companyOib:          cert.companyOib,
+      inVatSystem:         config.inVatSystem,
+      invoiceDate,
+      fiscalInvoiceNumber,
+      sequenceLabel:       "P",   // P = poslovni prostor (premises-based sequence)
+      paymentMethod,
+      operatorOib:         config.operatorOib,
+      zkiCode,
+      grandTotal:          Number(grandTotal),
+      lines,
+    });
+    signedXml = signXml(unsignedXml, cert.privateKeyPem, cert.certPem);
+  } catch (buildErr) {
+    logger.error("Fiscalisation: XML build/sign failed", { invoiceId: invoice.id, error: buildErr.message });
+    await _updateInvoice(invoice.id, {
+      fiscalizationStatus:  "failed",
+      fiscalInvoiceNumber,
+      zkiCode,
+      fiscalizationResponse: `XML error: ${buildErr.message}`,
+    });
+    return { success: false, zkiCode, error: buildErr.message };
+  }
+
+  // ── Send to Tax Administration ────────────────────────────────────────────
+  let jir;
+  let rawResponse;
+  try {
+    ({ jir, rawResponse } = await sendToTaxAdmin(signedXml));
+  } catch (apiErr) {
+    logger.error("Fiscalisation: FINA submission failed", {
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      error: apiErr.message,
+    });
+    await _updateInvoice(invoice.id, {
+      fiscalizationStatus:   "failed",
+      fiscalInvoiceNumber,
+      zkiCode,
+      fiscalizationRequest:  signedXml,
+      fiscalizationResponse: apiErr.message,
+    });
+    return { success: false, zkiCode, error: apiErr.message };
+  }
+
+  // ── Success ───────────────────────────────────────────────────────────────
+  logger.info("Fiscalisation: success", {
+    invoiceId:     invoice.id,
+    invoiceNumber: invoice.invoiceNumber,
+    jir,
+    fiscalInvoiceNumber,
+  });
+
+  await _updateInvoice(invoice.id, {
+    fiscalInvoiceNumber,
+    zkiCode,
+    fiscalizationStatus:   "fiscalized",
+    fiscalizationJir:      jir,
+    fiscalizedAt:          new Date(),
+    fiscalizationRequest:  signedXml,
+    fiscalizationResponse: rawResponse,
+  });
+
+  return { success: true, jir, zkiCode, fiscalInvoiceNumber };
+}
+
+/**
+ * Update mutable fiscalisation fields on an invoice record.
+ * Uses a direct DB update to bypass the immutability hook (which only guards
+ * the original accounting fields, not the fiscal ones).
+ *
+ * @param {string} invoiceId
+ * @param {object} fields
+ */
+async function _updateInvoice(invoiceId, fields) {
+  try {
+    await invoiceRepo.updateFiscalFields(invoiceId, fields);
+  } catch (updateErr) {
+    logger.error("Fiscalisation: failed to update invoice record", {
+      invoiceId,
+      fields: Object.keys(fields),
+      error: updateErr.message,
+    });
+  }
+}
+
+module.exports = { fiscalizeInvoice, buildFiscalInvoiceNumber };

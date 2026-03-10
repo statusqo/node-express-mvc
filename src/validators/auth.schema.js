@@ -13,7 +13,10 @@ const RegisterSchema = z.object({
   password: z.string().min(4, "Password must be at least 4 characters"),
   personType: z.enum(['private', 'legal']).default('private'),
   companyName: z.string().max(255).optional(),
-  companyOib: z.string().regex(/^\d{11}$/, "OIB must be exactly 11 digits").optional(),
+  companyOib: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : v),
+    z.string().regex(/^\d{11}$/, "OIB must be exactly 11 digits").optional()
+  ),
 }).superRefine((data, ctx) => {
   if (data.personType === 'legal') {
     if (!data.companyName || data.companyName.trim() === '') {

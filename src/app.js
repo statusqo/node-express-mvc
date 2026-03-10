@@ -18,6 +18,7 @@ const { flashMiddleware } = require("./middlewares/flash.middleware");
 const { allowHost } = require("./middlewares/allowHost.middleware");
 const { sequelize } = require("./db/client");
 const config = require("./config");
+const { DEFAULT_CURRENCY } = require("./config/constants");
 const logger = require("./config/logger");
 const passport = require("passport");
 
@@ -139,6 +140,9 @@ app.use((req, res, next) => {
 });
 
 app.use(flashMiddleware);
+
+// make default currency available in all views
+app.locals.DEFAULT_CURRENCY = DEFAULT_CURRENCY;
 
 // inject dynamic menus and cart drawer data (before rate limit so 429 page has full layout)
 app.use(injectMenus);

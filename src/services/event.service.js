@@ -4,6 +4,7 @@
  */
 const { sequelize } = require("../db");
 const { ProductPrice, ProductVariant, EventMeeting, Registration } = require("../models");
+const { DEFAULT_CURRENCY } = require("../config/constants");
 const productRepo = require("../repos/product.repo");
 const eventRepo = require("../repos/event.repo");
 const orderLineRepo = require("../repos/orderLine.repo");
@@ -41,7 +42,7 @@ module.exports = {
     if (!defaultVariant) throw new Error("Product has no default variant.");
     const priceRow = defaultVariant.ProductPrices && defaultVariant.ProductPrices[0];
     const amount = priceRow ? Number(priceRow.amount) || 0 : 0;
-    const currency = (priceRow && priceRow.currency) ? String(priceRow.currency).substring(0, 3) : "USD";
+    const currency = DEFAULT_CURRENCY;
 
     const { startDate, startTime, durationMinutes, location, capacity, isOnline, timezone } = data;
     if (!startDate || String(startDate).trim() === "") {
@@ -98,7 +99,8 @@ module.exports = {
       if (price) {
         const updatePrice = {};
         if (priceAmount !== undefined && priceAmount !== "") updatePrice.amount = Number(priceAmount);
-        if (currency !== undefined) updatePrice.currency = String(currency).substring(0, 3);
+        // ignore any incoming currency; price must always use DEFAULT_CURRENCY
+        updatePrice.currency = DEFAULT_CURRENCY.substring(0, 3);
         if (Object.keys(updatePrice).length) await price.update(updatePrice, options);
       }
     }

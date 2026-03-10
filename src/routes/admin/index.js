@@ -68,6 +68,10 @@ router.post("/orders/:id/refund-request/:requestId/approve", asyncHandler(orders
 router.post("/orders/:id/refund-request/:requestId/reject", asyncHandler(ordersController.rejectRefundRequest));
 router.post("/orders/:id/regenerate-invoice", asyncHandler(invoicesController.regenerateInvoice));
 
+// Invoices
+router.get("/invoices", asyncHandler(invoicesController.listInvoices));
+router.post("/invoices/:id/fiscalize", asyncHandler(invoicesController.retryFiscalization));
+
 // Users CRUD
 router.get("/users", asyncHandler(usersController.index));
 router.get("/users/new", asyncHandler(usersController.newForm));

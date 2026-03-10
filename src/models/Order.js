@@ -1,6 +1,7 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../db/client");
 const { PAYMENT_STATUSES, FULFILLMENT_STATUSES } = require("../constants/order");
+const { DEFAULT_CURRENCY } = require("../config/constants");
 const Order = sequelize.define("Order", {
   id: {
     type: DataTypes.UUID,
@@ -115,7 +116,8 @@ const Order = sequelize.define("Order", {
   currency: {
     type: DataTypes.STRING,
     allowNull: false,
-    defaultValue: "USD",
+    // must match DEFAULT_CURRENCY constant
+    defaultValue: DEFAULT_CURRENCY,
   },
   // Stripe PaymentIntent id — set when creating PaymentIntent (custom checkout) or from Checkout Session (redirect). Used by webhooks to find order.
   stripePaymentIntentId: {
