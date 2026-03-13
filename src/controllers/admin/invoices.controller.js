@@ -1,7 +1,6 @@
 const { sequelize } = require("../../db");
 const orderRepo = require("../../repos/order.repo");
 const invoiceService = require("../../services/invoice.service");
-const fiscalizationService = require("../../services/fiscalization.service");
 const emailService = require("../../services/email.service");
 const logger = require("../../config/logger");
 const { PAYMENT_STATUS } = require("../../constants/order");
@@ -56,11 +55,11 @@ async function regenerateInvoice(req, res) {
   const linesPlain = (lines || []).map((l) => ({ title: l.title, quantity: l.quantity, price: l.price, vatRate: l.vatRate != null ? Number(l.vatRate) : null }));
 
   let invoice;
-  let pdfBuffer;
+  let initialPdfBuffer;
 
   const t = await sequelize.transaction();
   try {
-    ({ invoice, pdfBuffer } = await invoiceService.createInvoiceForOrder(orderPlain, linesPlain, t));
+    ({ invoice, pdfBuffer: initialPdfBuffer } = await invoiceService.createInvoiceForOrder(orderPlain, linesPlain, t));
     await t.commit();
   } catch (err) {
     await t.rollback();
@@ -73,6 +72,10 @@ async function regenerateInvoice(req, res) {
   }
 
   logger.info("Admin: invoice regenerated", { orderId, invoiceNumber: invoice.invoiceNumber });
+
+  // Fiscalise after commit — tx is no longer open during the FINA network call
+  const { pdfBuffer: fiscalPdf } = await invoiceService.fiscalizeAndUpdatePdf(invoice, orderPlain, linesPlain);
+  const pdfBuffer = fiscalPdf || initialPdfBuffer;
 
   const shouldResend = req.body && (req.body.resend === true || req.body.resend === "true");
   if (shouldResend && emailService.isMailConfigured && emailService.isMailConfigured()) {
@@ -144,43 +147,22 @@ async function retryFiscalization(req, res) {
   const orderPlain = order.get ? order.get({ plain: true }) : order;
   const linesPlain = (lines || []).map((l) => ({ title: l.title, quantity: l.quantity, price: l.price, vatRate: l.vatRate != null ? Number(l.vatRate) : null }));
 
-  const result = await fiscalizationService.fiscalizeInvoice(plain, orderPlain, linesPlain);
+  const { fiskalResult } = await invoiceService.fiscalizeAndUpdatePdf(plain, orderPlain, linesPlain);
 
-  if (result.success) {
-    // Regenerate PDF with fiscal codes
-    try {
-      const { generatePdfBuffer, resolvePdfPath } = invoiceService;
-      const path = require("path");
-      const fs   = require("fs");
-      const updatedPdf = await generatePdfBuffer(orderPlain, linesPlain, plain.invoiceNumber, plain.type, {
-        zki:                result.zkiCode,
-        jir:                result.jir,
-        fiscalInvoiceNumber: result.fiscalInvoiceNumber,
-      });
-      const absPath = resolvePdfPath(plain.pdfPath);
-      const tmpPath = `${absPath}.tmp`;
-      await fs.promises.writeFile(tmpPath, updatedPdf);
-      await fs.promises.rename(tmpPath, absPath);
-      logger.info("Admin: invoice PDF regenerated after retry fiscalisation", { invoiceId, invoiceNumber: plain.invoiceNumber });
-    } catch (pdfErr) {
-      logger.warn("Admin: fiscalisation retry succeeded but PDF regeneration failed", {
-        invoiceId, error: pdfErr.message,
-      });
-    }
-
+  if (fiskalResult && fiskalResult.success) {
     if (req.accepts("html")) {
-      res.setFlash("success", `Invoice ${plain.invoiceNumber} fiscalised. JIR: ${result.jir}`);
+      res.setFlash("success", `Invoice ${plain.invoiceNumber} fiscalised. JIR: ${fiskalResult.jir}`);
       return res.redirect(invoicesUrl);
     }
-    return res.status(200).json({ jir: result.jir, zkiCode: result.zkiCode });
+    return res.status(200).json({ jir: fiskalResult.jir, zkiCode: fiskalResult.zkiCode });
   }
 
-  // Failed
+  const errMsg = (fiskalResult && fiskalResult.error) || "Fiscalisation failed.";
   if (req.accepts("html")) {
-    res.setFlash("error", `Fiscalisation failed: ${result.error}`);
+    res.setFlash("error", `Fiscalisation failed: ${errMsg}`);
     return res.redirect(invoicesUrl);
   }
-  return res.status(500).json({ error: result.error });
+  return res.status(500).json({ error: errMsg });
 }
 
 /**

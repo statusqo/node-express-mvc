@@ -148,3 +148,6 @@ storage/invoices/*.pdf
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Certs
+certs

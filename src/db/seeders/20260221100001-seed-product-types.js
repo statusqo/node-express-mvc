@@ -8,7 +8,7 @@ module.exports = {
     const now = new Date();
     const types = [
       { name: "Webinar", slug: "webinar" },
-      { name: "Service", slug: "service" },
+      { name: "Seminar", slug: "seminar" },
       { name: "Classroom", slug: "classroom" },
     ];
 
@@ -27,7 +27,7 @@ module.exports = {
 
   async down(queryInterface) {
     await queryInterface.bulkDelete("product_types", {
-      slug: ["webinar", "service", "classroom"],
+      slug: ["webinar", "seminar", "classroom"],
     });
   },
 };

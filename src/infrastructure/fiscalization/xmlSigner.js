@@ -45,31 +45,32 @@ function loadCertificate() {
   if (!keyBag) throw new Error("FINA certificate: private key bag not found in .p12 file.");
   const privateKeyPem = forge.pki.privateKeyToPem(keyBag.key);
 
-  // Extract certificate
+  // Extract all certificates from the .p12 (leaf + chain).
+  // The first certBag is the leaf (end-entity) certificate; the rest are intermediates/root.
   const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
-  const certBag  = certBags[forge.pki.oids.certBag]?.[0];
-  if (!certBag) throw new Error("FINA certificate: certificate bag not found in .p12 file.");
-  const certPem = forge.pki.certificateToPem(certBag.cert);
+  const allCertBags = certBags[forge.pki.oids.certBag] || [];
+  if (allCertBags.length === 0) throw new Error("FINA certificate: certificate bag not found in .p12 file.");
+  const certBag  = allCertBags[0];
+  const certPem  = forge.pki.certificateToPem(certBag.cert);
+  // Chain PEMs: any additional certs (intermediate CAs) bundled in the .p12
+  const chainPems = allCertBags.slice(1).map((b) => forge.pki.certificateToPem(b.cert));
 
-  // Extract company OIB from certificate Subject CN or serialNumber
-  const subject     = certBag.cert.subject;
-  const cnAttr      = subject.getField("CN");
-  const serialAttr  = subject.getField("serialNumber");
-  // FINA certificates typically embed the OIB in the serialNumber attribute as "OIB:<digits>"
+  // Extract company OIB (11 digits) from certificate subject.
+  // FINA demo certs embed it in organizationName (e.g. "ACME HR33307656573").
+  // Production certs may use serialNumber ("OIB:33307656573") or CN.
+  const subject = certBag.cert.subject;
   let companyOib = "";
-  if (serialAttr && serialAttr.value) {
-    const match = serialAttr.value.match(/(\d{11})/);
-    if (match) companyOib = match[1];
-  }
-  if (!companyOib && cnAttr && cnAttr.value) {
-    const match = cnAttr.value.match(/(\d{11})/);
-    if (match) companyOib = match[1];
+  for (const attr of subject.attributes) {
+    if (attr.value) {
+      const match = String(attr.value).match(/(\d{11})/);
+      if (match) { companyOib = match[1]; break; }
+    }
   }
   if (!companyOib) {
     throw new Error("Could not extract company OIB from FINA certificate. Check the certificate subject fields.");
   }
 
-  _certCache = { privateKeyPem, certPem, companyOib };
+  _certCache = { privateKeyPem, certPem, chainPems, companyOib };
   return _certCache;
 }
 
@@ -118,12 +119,39 @@ function computeZki({ companyOib, fiscalDatetime, sequenceNum, premisesId, devic
  * @param {string} certPem       - Certificate PEM (included in KeyInfo)
  * @returns {string} Signed SOAP XML
  */
-function signXml(xmlString, privateKeyPem, certPem) {
-  const sig = new SignedXml({ privateKey: privateKeyPem });
+/**
+ * Sign the SOAP XML using XMLDSig (xml-crypto).
+ * Pass the full certificate chain (leaf + intermediates) so FINA can validate
+ * without out-of-band CA lookups. The leaf cert must be first.
+ *
+ * @param {string} xmlString     - Unsigned SOAP XML
+ * @param {string} privateKeyPem - RSA private key PEM
+ * @param {string} certPem       - Leaf certificate PEM
+ * @param {string[]} [chainPems] - Intermediate/root CA PEMs (optional)
+ * @returns {string} Signed SOAP XML
+ */
+function signXml(xmlString, privateKeyPem, certPem, chainPems = []) {
+  // Pass the full certificate chain as a concatenated PEM string.
+  // xml-crypto v6 `getKeyInfoContent` extracts all PEM blocks from `publicCert`
+  // and emits one <X509Certificate> per cert inside a single <X509Data>.
+  // FINA validates the chain from what's embedded in the request — omitting the
+  // intermediate CA cert is the most common cause of the s002 rejection.
+  const allCertsPem = [certPem, ...chainPems].join("\n");
 
-  // Use enveloped signature transform — standard for FINA
+  const sig = new SignedXml({
+    privateKey:  privateKeyPem,
+    publicCert:  allCertsPem,
+    signatureAlgorithm:       "http://www.w3.org/2000/09/xmldsig#rsa-sha1",
+    canonicalizationAlgorithm: "http://www.w3.org/2001/10/xml-exc-c14n#",
+  });
+
+  // Use URI="" (sign the whole document) + enveloped-signature transform.
+  // This avoids adding an Id attribute to tns:Racun, which would be rejected
+  // by FINA's strict XSD schema validation (s001: undefined attribute Id).
   sig.addReference({
-    xpath: "//*[local-name(.)='Racun']",
+    xpath: "/*",       // select root element; combined with isEmptyUri avoids adding Id to tns:Racun
+    uri: "",
+    isEmptyUri: true,
     transforms: [
       "http://www.w3.org/2000/09/xmldsig#enveloped-signature",
       "http://www.w3.org/2001/10/xml-exc-c14n#",
@@ -131,21 +159,14 @@ function signXml(xmlString, privateKeyPem, certPem) {
     digestAlgorithm: "http://www.w3.org/2000/09/xmldsig#sha1",
   });
 
-  sig.signatureAlgorithm = "http://www.w3.org/2000/09/xmldsig#rsa-sha1";
-  sig.canonicalizationAlgorithm = "http://www.w3.org/2001/10/xml-exc-c14n#";
-
-  // Include certificate in KeyInfo so FINA can verify without out-of-band lookup
-  const certBody = certPem
-    .replace("-----BEGIN CERTIFICATE-----", "")
-    .replace("-----END CERTIFICATE-----", "")
-    .replace(/\s+/g, "");
-  sig.keyInfoProvider = {
-    getKeyInfo() {
-      return `<X509Data><X509Certificate>${certBody}</X509Certificate></X509Data>`;
+  // Place the Signature element inside tns:RacunZahtjev (after tns:Racun) — required by FINA spec.
+  // Without a location hint, xml-crypto appends it to the root element (outside soapenv:Body).
+  sig.computeSignature(xmlString, {
+    location: {
+      reference: "//*[local-name(.)='RacunZahtjev']",
+      action: "append",
     },
-  };
-
-  sig.computeSignature(xmlString);
+  });
   return sig.getSignedXml();
 }
 

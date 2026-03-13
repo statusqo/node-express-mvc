@@ -3,6 +3,7 @@ const app = require("./app");
 const config = require("./config");
 const logger = require("./config/logger");
 const db = require("./db");
+const jobs = require("./jobs");
 
 async function start() {
   await db.connect();
@@ -17,9 +18,12 @@ async function start() {
     });
   });
 
+  jobs.start();
+
   // Graceful shutdown
   const shutdown = () => {
     logger.warn("Server is shutting down...");
+    jobs.stop();
     server.close(async () => {
       await db.disconnect();
       logger.info("HTTP server closed.");

@@ -51,6 +51,25 @@ const Invoice = sequelize.define("Invoice", {
     type: DataTypes.TEXT,
     allowNull: true,
   },
+  // ── Fiscal parameters — who signed it and on which device ──────────────────
+  // Snapshotted from the FINA certificate / config at the moment of fiscalisation.
+  // Nullable until fiscalisation succeeds (or not_required).
+  companyOib: {
+    type: DataTypes.STRING(11),
+    allowNull: true,
+  },
+  premisesId: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+  },
+  deviceId: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+  },
+  operatorOib: {
+    type: DataTypes.STRING(11),
+    allowNull: true,
+  },
   type: {
     type: DataTypes.ENUM("receipt", "r1"),
     allowNull: false,
@@ -62,6 +81,22 @@ const Invoice = sequelize.define("Invoice", {
   year: {
     type: DataTypes.INTEGER,
     allowNull: false,
+  },
+  // ── Accounting snapshot — written at invoice creation, never mutated ────────
+  // Gross order total (VAT-inclusive), in EUR.
+  total: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true, // nullable for historical rows pre-dating this field
+  },
+  // Total VAT extracted from lines (gross − net across all VAT groups).
+  vatTotal: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true,
+  },
+  // FINA payment method code: K=card, G=cash, T=transfer, O=other.
+  paymentMethod: {
+    type: DataTypes.STRING(1),
+    allowNull: true,
   },
   status: {
     type: DataTypes.ENUM("issued", "voided"),
@@ -82,15 +117,20 @@ const Invoice = sequelize.define("Invoice", {
 });
 
 // Invoice records are legal accounting documents and must not be mutated after
-// creation. Only the status field (voiding) is permitted to change.
-// This hook is the application-layer enforcement; the DB unique constraints
-// on invoiceNumber and (sequenceNumber, year, type) provide the second layer.
+// creation. Only fiscalisation fields and status (voiding) may change.
+// This hook is the application-layer enforcement; the DB unique constraint on
+// invoiceNumber provides the second layer.
 const IMMUTABLE_INVOICE_FIELDS = [
   "orderId",
   "invoiceNumber",
   "type",
   "sequenceNumber",
   "year",
+  "premisesId",
+  "deviceId",
+  "total",
+  "vatTotal",
+  "paymentMethod",
   "pdfPath",
   "generatedAt",
 ];

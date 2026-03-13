@@ -263,17 +263,21 @@ async function recordPaymentSuccess(transactionId, userIdFromOrder = null) {
     // Generate invoice (receipt or R1) — failure must not abort the payment flow.
     // If invoice generation fails, the order remains PAID. Use the admin
     // /orders/:id/regenerate-invoice endpoint to recover missing invoices.
+    //
+    // Important: fiscalisation runs AFTER the invoice tx is committed so we never
+    // hold a DB transaction open during a FINA network call.
     let invoicePdfBuffer = null;
     let invoiceNumber = null;
     try {
+      const orderPlain = orderAfter.get ? orderAfter.get({ plain: true }) : orderAfter;
+      const linesPlain = (lines || []).map((l) => ({ title: l.title, quantity: l.quantity, price: l.price, vatRate: l.vatRate != null ? Number(l.vatRate) : null }));
+
+      let invoice;
+      let initialPdfBuffer;
       const invoiceTx = await sequelize.transaction();
       try {
-        const orderPlain = orderAfter.get ? orderAfter.get({ plain: true }) : orderAfter;
-        const linesPlain = (lines || []).map((l) => ({ title: l.title, quantity: l.quantity, price: l.price, vatRate: l.vatRate != null ? Number(l.vatRate) : null }));
-        const { invoice, pdfBuffer } = await invoiceService.createInvoiceForOrder(orderPlain, linesPlain, invoiceTx);
+        ({ invoice, pdfBuffer: initialPdfBuffer } = await invoiceService.createInvoiceForOrder(orderPlain, linesPlain, invoiceTx));
         await invoiceTx.commit();
-        invoicePdfBuffer = pdfBuffer;
-        invoiceNumber = invoice.invoiceNumber;
       } catch (invoiceErr) {
         await invoiceTx.rollback();
         if (invoiceErr.name === "SequelizeUniqueConstraintError") {
@@ -289,6 +293,14 @@ async function recordPaymentSuccess(transactionId, userIdFromOrder = null) {
             error: invoiceErr.message,
           });
         }
+        invoice = null;
+      }
+
+      if (invoice) {
+        invoiceNumber = invoice.invoiceNumber;
+        // Fiscalise after commit — tx is no longer open during the FINA network call
+        const { pdfBuffer: fiscalPdf } = await invoiceService.fiscalizeAndUpdatePdf(invoice, orderPlain, linesPlain);
+        invoicePdfBuffer = fiscalPdf || initialPdfBuffer;
       }
     } catch (_) {
       // sequelize.transaction() itself failed — ignore
@@ -400,17 +412,19 @@ async function fulfillFreeOrder(orderId) {
     }
 
     // Generate invoice for free order — same recovery path applies if this fails.
+    // Fiscalisation runs after the invoice tx is committed (no open tx during FINA call).
     let invoicePdfBuffer = null;
     let invoiceNumber = null;
     try {
+      const orderPlain = orderAfter.get ? orderAfter.get({ plain: true }) : orderAfter;
+      const linesPlain = (lines || []).map((l) => ({ title: l.title, quantity: l.quantity, price: l.price, vatRate: l.vatRate != null ? Number(l.vatRate) : null }));
+
+      let invoice;
+      let initialPdfBuffer;
       const invoiceTx = await sequelize.transaction();
       try {
-        const orderPlain = orderAfter.get ? orderAfter.get({ plain: true }) : orderAfter;
-        const linesPlain = (lines || []).map((l) => ({ title: l.title, quantity: l.quantity, price: l.price, vatRate: l.vatRate != null ? Number(l.vatRate) : null }));
-        const { invoice, pdfBuffer } = await invoiceService.createInvoiceForOrder(orderPlain, linesPlain, invoiceTx);
+        ({ invoice, pdfBuffer: initialPdfBuffer } = await invoiceService.createInvoiceForOrder(orderPlain, linesPlain, invoiceTx));
         await invoiceTx.commit();
-        invoicePdfBuffer = pdfBuffer;
-        invoiceNumber = invoice.invoiceNumber;
       } catch (invoiceErr) {
         await invoiceTx.rollback();
         if (invoiceErr.name === "SequelizeUniqueConstraintError") {
@@ -424,6 +438,13 @@ async function fulfillFreeOrder(orderId) {
             error: invoiceErr.message,
           });
         }
+        invoice = null;
+      }
+
+      if (invoice) {
+        invoiceNumber = invoice.invoiceNumber;
+        const { pdfBuffer: fiscalPdf } = await invoiceService.fiscalizeAndUpdatePdf(invoice, orderPlain, linesPlain);
+        invoicePdfBuffer = fiscalPdf || initialPdfBuffer;
       }
     } catch (_) {}
 

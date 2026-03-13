@@ -56,12 +56,16 @@ function buildPdvGroups(lines) {
 
   return Array.from(groups.entries()).map(([rate, { grossTotal }]) => {
     const divisor = 1 + rate / 100;
-    const osnovica = grossTotal / divisor;          // net base
-    const iznos    = grossTotal - osnovica;          // VAT amount
+    // Work in integer cents to avoid floating-point rounding drift.
+    // iznos is derived from rounded grossCents - rounded osnovicaCents so that
+    // osnovica + iznos always sums to exactly gross (required by FINA validation).
+    const grossCents    = Math.round(grossTotal * 100);
+    const osnovicaCents = Math.round(grossCents / divisor);
+    const iznosCents    = grossCents - osnovicaCents;
     return {
       stopaPdv: rate,
-      osnovica: toAmount(osnovica),
-      iznos:    toAmount(iznos),
+      osnovica: toAmount(osnovicaCents / 100),
+      iznos:    toAmount(iznosCents / 100),
       ukupno:   toAmount(grossTotal),
     };
   });
@@ -128,7 +132,7 @@ function buildRacunZahtjev(params) {
     .ele(TNS, "tns:OznSlijed").txt(sequenceLabel).up()
     .ele(TNS, "tns:BrRac")
       .ele(TNS, "tns:BrOznRac").txt(seqNum).up()
-      .ele(TNS, "tns:OznPoslPr").txt(premisesId).up()
+      .ele(TNS, "tns:OznPosPr").txt(premisesId).up()
       .ele(TNS, "tns:OznNapUr").txt(deviceId).up()
     .up();
 

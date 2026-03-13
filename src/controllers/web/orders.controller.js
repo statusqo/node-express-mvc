@@ -112,7 +112,7 @@ module.exports = {
     }
 
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${invoice.invoiceNumber}.pdf"`);
+    res.setHeader("Content-Disposition", `attachment; filename="${invoice.invoiceNumber.replace(/\//g, "-")}.pdf"`);
     fs.createReadStream(absolutePath).pipe(res);
   },
 

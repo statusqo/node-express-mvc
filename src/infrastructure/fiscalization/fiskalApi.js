@@ -7,8 +7,14 @@
  *   Production: https://cis.porezna-uprava.hr:8449/FiskalizacijaService
  */
 const axios = require("axios");
+const https  = require("https");
 const { XMLParser } = require("fast-xml-parser");
 const { getFiscalizationConfig } = require("../../config/fiscalization");
+
+// Demo endpoint uses a FINA/APIS-IT CA not included in Node's bundled CA store.
+// In demo mode we skip SSL verification (safe for a test-only endpoint).
+// Production always uses full verification.
+const _demoAgent = new https.Agent({ rejectUnauthorized: false });
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -37,6 +43,8 @@ async function sendToTaxAdmin(signedXml) {
       timeout: config.timeoutMs,
       // Return the raw string even on 4xx/5xx so we can log the fault
       validateStatus: () => true,
+      // Demo endpoint uses a CA not in Node's bundle — skip verification there only
+      ...(config.environment === "demo" && { httpsAgent: _demoAgent }),
     });
   } catch (networkErr) {
     throw new Error(`FINA network error: ${networkErr.message}`);
@@ -44,11 +52,7 @@ async function sendToTaxAdmin(signedXml) {
 
   const rawResponse = String(response.data || "");
 
-  if (response.status >= 500) {
-    throw new Error(`FINA server error (HTTP ${response.status}): ${rawResponse.substring(0, 500)}`);
-  }
-
-  // Parse response XML
+  // Parse response XML (attempt even on 5xx — FINA often returns Greske inside a 500)
   let parsed;
   try {
     parsed = parser.parse(rawResponse);
@@ -67,10 +71,10 @@ async function sendToTaxAdmin(signedXml) {
     throw new Error(`FINA SOAP fault: ${faultString}`);
   }
 
-  // Extract RacunOdgovor
-  const racunOdgovor = body?.RacunOdgovor;
+  // Extract RacunOdgovor (success) or Odgovor (error — FINA uses this on HTTP 500)
+  const racunOdgovor = body?.RacunOdgovor || body?.Odgovor;
   if (!racunOdgovor) {
-    throw new Error(`FINA response missing RacunOdgovor element. Body: ${rawResponse.substring(0, 500)}`);
+    throw new Error(`FINA response missing RacunOdgovor element. HTTP ${response.status}. Body: ${rawResponse.substring(0, 500)}`);
   }
 
   // Check for application-level errors (Greske element)

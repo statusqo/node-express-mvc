@@ -5,11 +5,13 @@ const path = require("path");
 
 let sequelize;
 
+// ":memory:" is a special SQLite keyword — must NOT go through path.resolve()
+const isInMemory = config.db.dialect === "sqlite" && config.db.storage === ":memory:";
+
 if (config.db.dialect === "sqlite") {
   sequelize = new Sequelize({
     dialect: "sqlite",
-    storage: path.resolve(process.cwd(), config.db.storage),
-    // logging: (msg) => logger.info(msg),
+    storage: isInMemory ? ":memory:" : path.resolve(process.cwd(), config.db.storage),
     logging: false,
   });
 } else if (config.db.url) {
@@ -32,24 +34,21 @@ module.exports = {
       logger.info(`Database connected (${config.db.dialect})`);
 
       if (config.db.dialect === "sqlite") {
-        // WAL mode allows concurrent readers during writes, eliminating SQLITE_BUSY
-        // errors under moderate concurrency. busy_timeout makes SQLite wait up to
-        // 5 s instead of throwing immediately when a lock is contested.
-        // synchronous=NORMAL is safe with WAL and gives a modest write performance boost.
-        await sequelize.query("PRAGMA journal_mode=WAL;");
-        await sequelize.query("PRAGMA busy_timeout=5000;");
-        await sequelize.query("PRAGMA synchronous=NORMAL;");
-        logger.info("SQLite WAL mode enabled (busy_timeout=5000, synchronous=NORMAL)");
-      }
-
-      // Sync models if needed (be careful in production)
-      // In production, use migrations instead of sync({ alter: true })
-      if (config.env !== 'production') {
-        // await sequelize.sync({ alter: true });
-        logger.info("Skipping auto-sync to avoid SQLite backup table constraints. Use migrations.");
-
-        // The old seed() function is deprecated in favor of Sequelize Seeders.
-        // Run: npx sequelize-cli db:seed:all
+        if (isInMemory) {
+          // WAL mode is file-based and does not apply to in-memory databases.
+          // Run all migrations and seeders so the blank DB is fully ready.
+          const { setupInMemoryDb } = require("../scripts/setupInMemoryDb");
+          await setupInMemoryDb(sequelize);
+        } else {
+          // WAL mode allows concurrent readers during writes, eliminating SQLITE_BUSY
+          // errors under moderate concurrency. busy_timeout makes SQLite wait up to
+          // 5 s instead of throwing immediately when a lock is contested.
+          // synchronous=NORMAL is safe with WAL and gives a modest write performance boost.
+          await sequelize.query("PRAGMA journal_mode=WAL;");
+          await sequelize.query("PRAGMA busy_timeout=5000;");
+          await sequelize.query("PRAGMA synchronous=NORMAL;");
+          logger.info("SQLite WAL mode enabled (busy_timeout=5000, synchronous=NORMAL)");
+        }
       }
     } catch (err) {
       logger.error("Unable to connect to the database:", err);

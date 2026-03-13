@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(npm install xmlbuilder2 xml-crypto node-forge axios fast-xml-parser)",
-      "Bash(npx sequelize-cli db:migrate)"
+      "Bash(npx sequelize-cli db:migrate)",
+      "Bash(node -e \":*)",
+      "Bash(npm install:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(node src/scripts/test-fiscalization.js)"
     ]
   }
 }

@@ -119,6 +119,21 @@ async function fiscalizeInvoice(invoice, order, lines) {
   }
 
   // ── Build and sign SOAP XML ───────────────────────────────────────────────
+  // NakDost (naknadna dostava) must be true when an invoice is submitted after
+  // its issue date due to CIS unavailability. Threshold: 5 minutes — covers
+  // normal network retries without flagging live first-attempt submissions.
+  const NAKNADNA_THRESHOLD_MS = 5 * 60 * 1_000;
+  const naknada = (Date.now() - invoiceDate.getTime()) > NAKNADNA_THRESHOLD_MS;
+
+  if (naknada) {
+    logger.info("Fiscalisation: NakDost=true (late submission)", {
+      invoiceId:     invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      invoiceDate:   invoiceDate.toISOString(),
+      delayMs:       Date.now() - invoiceDate.getTime(),
+    });
+  }
+
   const messageId = newUuid();
   let signedXml;
   try {
@@ -129,14 +144,15 @@ async function fiscalizeInvoice(invoice, order, lines) {
       inVatSystem:         config.inVatSystem,
       invoiceDate,
       fiscalInvoiceNumber,
-      sequenceLabel:       "P",   // P = poslovni prostor (premises-based sequence)
+      sequenceLabel:       config.sequenceLabel,
       paymentMethod,
       operatorOib:         config.operatorOib,
       zkiCode,
       grandTotal:          Number(grandTotal),
       lines,
+      naknada,
     });
-    signedXml = signXml(unsignedXml, cert.privateKeyPem, cert.certPem);
+    signedXml = signXml(unsignedXml, cert.privateKeyPem, cert.certPem, cert.chainPems || []);
   } catch (buildErr) {
     logger.error("Fiscalisation: XML build/sign failed", { invoiceId: invoice.id, error: buildErr.message });
     await _updateInvoice(invoice.id, {
@@ -185,9 +201,14 @@ async function fiscalizeInvoice(invoice, order, lines) {
     fiscalizedAt:          new Date(),
     fiscalizationRequest:  signedXml,
     fiscalizationResponse: rawResponse,
+    // Snapshot the exact params used for this fiscalisation (audit trail)
+    companyOib:  cert.companyOib,
+    premisesId:  config.businessPremisesId,
+    deviceId:    config.deviceId,
+    operatorOib: config.operatorOib,
   });
 
-  return { success: true, jir, zkiCode, fiscalInvoiceNumber };
+  return { success: true, jir, zkiCode, fiscalInvoiceNumber, operatorOib: config.operatorOib };
 }
 
 /**

@@ -26,6 +26,7 @@ module.exports = {
       { label: "Dashboard", url: "/", order: 0 },
       { label: "Users", url: "/users", order: 10 },
       { label: "Orders", url: "/orders", order: 15 },
+      { label: "Invoices", url: "/invoices", order: 15 },
       { label: "Refund Requests", url: "/refund-requests", order: 17 },
       { label: "Products", url: "/products", order: 20 },
       { label: "Product Types", url: "/product-types", order: 25 },
@@ -60,9 +61,9 @@ module.exports = {
 
     const headerItems = [
       { label: "Products", url: "/products", order: 0 },
-      { label: "Collections", url: "/collections", order: 10 },
-      { label: "Blog", url: "/blog", order: 20 },
-      { label: "Contact", url: "/contact", order: 30 },
+      { label: "Webinars", url: "/webinars", order: 10 },
+      { label: "Seminars", url: "/seminars", order: 20 },
+      { label: "Classrooms", url: "/classrooms", order: 30 },
       { label: "Account", url: "/account", order: 90, icon: "fa-user", slug: "account" },
       { label: "Cart", url: "/cart", order: 100, icon: "fa-cart-shopping", slug: "cart" },
     ];

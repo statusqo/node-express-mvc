@@ -38,6 +38,9 @@ function getFiscalizationConfig() {
     // Whether the company is registered in the VAT (PDV) system
     inVatSystem: getEnv("COMPANY_IN_VAT_SYSTEM", "true") === "true",
 
+    // Invoice sequence label sent in SOAP XML (P = poslovni prostor / premises-based)
+    sequenceLabel: getEnv("FINA_SEQUENCE_LABEL", "P"),
+
     // Request timeout in milliseconds
     timeoutMs: parseInt(getEnv("FINA_TIMEOUT_MS", "10000"), 10),
   };

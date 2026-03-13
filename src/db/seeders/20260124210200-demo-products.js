@@ -13,16 +13,16 @@ module.exports = {
     const productTypeId = crypto.randomUUID();
     const productCategoryId = crypto.randomUUID();
     await queryInterface.bulkInsert("product_types", [
-      { id: productTypeId, name: "Course", slug: "course", createdAt: now, updatedAt: now },
+      { id: productTypeId, name: "Webinar", slug: "webinar", createdAt: now, updatedAt: now },
     ]);
     await queryInterface.bulkInsert("product_categories", [
       { id: productCategoryId, name: "Learning", slug: "learning", parentId: null, createdAt: now, updatedAt: now },
     ]);
 
     const products = [
-      { title: "Introduction to Web Development", slug: "intro-web-dev", description: "Learn HTML, CSS, and JavaScript basics.", price: 99 },
-      { title: "Node.js & Express", slug: "node-express", description: "Backend development with Node.js and Express.", price: 149 },
-      { title: "Database Fundamentals", slug: "database-fundamentals", description: "SQL, data modeling, and relational databases.", price: 79 },
+      { title: "Infekcije", slug: "infekcije", description: "Sve o infekcijama.", price: 30 },
+      { title: "Dekubitus", slug: "dekubitus", description: "Sve o dekubitusu.", price: 30 },
+      { title: "Prevencija Infekcija", slug: "prevencija-infekcija", description: "Preventivna medicina.", price: 30 },
     ];
 
     const collectionId = crypto.randomUUID();
@@ -39,7 +39,7 @@ module.exports = {
         { id: productId, title: p.title, slug: p.slug, description: p.description || null, productTypeId, productCategoryId, active: true, createdAt: now, updatedAt: now },
       ]);
       await queryInterface.bulkInsert("product_variants", [
-        { id: variantId, productId, title: "Default", isDefault: true, active: true, createdAt: now, updatedAt: now },
+        { id: variantId, productId, title: "Default Title", isDefault: true, active: true, createdAt: now, updatedAt: now },
       ]);
       await queryInterface.bulkInsert("product_prices", [
         { id: priceId, productVariantId: variantId, amount: p.price, currency: DEFAULT_CURRENCY, isDefault: true, createdAt: now, updatedAt: now },

@@ -6,9 +6,16 @@
 const path = require("path");
 const fs = require("fs");
 const PDFDocument = require("pdfkit");
+const QRCode = require("qrcode");
 const invoiceRepo = require("../repos/invoice.repo");
 const { sequelize } = require("../db");
 const logger = require("../config/logger");
+const { getCompanyConfig } = require("../config/company");
+const { getFiscalizationConfig } = require("../config/fiscalization");
+
+const FONTS_DIR  = path.resolve(__dirname, "../assets/fonts");
+const FONT_REGULAR = path.join(FONTS_DIR, "Roboto-Regular.ttf");
+const FONT_BOLD    = path.join(FONTS_DIR, "Roboto-Medium.ttf");
 
 // All invoice PDFs live under storage/invoices/ relative to the project root.
 // Only the relative segment (e.g. "invoices/INV-2026-000001.pdf") is persisted
@@ -28,32 +35,39 @@ function resolvePdfPath(relativePath) {
 }
 
 /**
- * Generate the next invoice number for a given type and year using an atomic
- * counter row in invoice_sequences.
+ * Generate the next invoice number using an atomic shared counter per year.
+ * All invoice types (receipt + R1) share one sequence to prevent numbering gaps
+ * and comply with Croatian fiscal law (Zakon o fiskalizaciji).
  *
- * @param {"receipt"|"r1"} type
+ * Format: BROJ_RAČUNA/OZNAKA_POSLOVNOG_PROSTORA/OZNAKA_NAPLATNOG_UREĐAJA
+ * Example: 7/WEB/1
+ *
  * @param {number} year
- * @param {object} t - Sequelize transaction (must be open)
+ * @param {string} premisesId - Oznaka poslovnog prostora (e.g. "WEB", "INTERNET1")
+ * @param {string} deviceId   - Oznaka naplatnog uređaja (e.g. "1")
+ * @param {object} t          - Sequelize transaction (must be open)
  * @returns {Promise<{ invoiceNumber: string, sequenceNumber: number }>}
  */
-async function generateNextInvoiceNumber(type, year, t) {
+async function generateNextInvoiceNumber(year, premisesId, deviceId, t) {
   const now = new Date().toISOString();
 
+  await sequelize.query(
+    `INSERT INTO invoice_sequences (premise, device, year, lastValue, createdAt, updatedAt)
+     VALUES (:premise, :device, :year, 1, :now, :now)
+     ON CONFLICT(premise, device, year)
+     DO UPDATE SET lastValue = invoice_sequences.lastValue + 1, updatedAt = :now`,
+    { replacements: { premise: premisesId, device: deviceId, year, now }, transaction: t }
+  );
+
   const [rows] = await sequelize.query(
-    `INSERT INTO invoice_sequences (type, year, lastValue, createdAt, updatedAt)
-     VALUES (:type, :year, 1, :now, :now)
-     ON CONFLICT(type, year)
-     DO UPDATE SET lastValue = invoice_sequences.lastValue + 1, updatedAt = :now
-     RETURNING lastValue`,
-    { replacements: { type, year, now }, transaction: t }
+    `SELECT lastValue FROM invoice_sequences WHERE premise = :premise AND device = :device AND year = :year`,
+    { replacements: { premise: premisesId, device: deviceId, year }, transaction: t }
   );
 
   const sequenceNumber = rows[0].lastValue;
-  const prefix = type === "r1" ? "R1" : "INV";
-  const padded = String(sequenceNumber).padStart(6, "0");
-  const invoiceNumber = `${prefix}-${year}-${padded}`;
+  const invoiceNumber  = `${sequenceNumber}/${premisesId}/${deviceId}`;
 
-  logger.info("Invoice sequence allocated", { type, year, sequenceNumber, invoiceNumber });
+  logger.info("Invoice sequence allocated", { year, premisesId, deviceId, sequenceNumber, invoiceNumber });
 
   return { invoiceNumber, sequenceNumber };
 }
@@ -79,63 +93,117 @@ function buildVatSummary(lines) {
   return Array.from(groups.entries())
     .sort(([a], [b]) => a - b)
     .map(([rate, { gross }]) => {
-      const divisor   = 1 + rate / 100;
-      const osnovica  = gross / divisor;
-      const vatAmount = gross - osnovica;
-      return { rate, osnovica, vatAmount, gross };
+      const divisor = 1 + rate / 100;
+      // Work in integer cents to avoid floating-point rounding drift.
+      // vatAmount is derived from rounded grossCents - rounded osnovicaCents so
+      // that osnovica + vatAmount always equals gross exactly (matches FINA logic).
+      const grossCents    = Math.round(gross * 100);
+      const osnovicaCents = Math.round(grossCents / divisor);
+      const vatAmountCents = grossCents - osnovicaCents;
+      return { rate, osnovica: osnovicaCents / 100, vatAmount: vatAmountCents / 100, gross };
     });
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const PAYMENT_METHOD_LABELS = { K: "Kartica", G: "Gotovina", T: "Transakcijski račun", O: "Ostalo" };
+
+/**
+ * Build the Porezna uprava verification URL encoded in the QR code.
+ * Format: https://porezna.gov.hr/HR01/?jir=<JIR>&datv=YYYYMMDD_HHmmss&iznos=X.XX
+ */
+function buildFiscalVerificationUrl(jir, invoiceDate, total) {
+  const d = invoiceDate instanceof Date ? invoiceDate : new Date(invoiceDate);
+  const pad = (n) => String(n).padStart(2, "0");
+  const datv = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+  const iznos = Number(total).toFixed(2);
+  return `https://porezna.gov.hr/HR01/?jir=${jir}&datv=${datv}&iznos=${iznos}`;
 }
 
 // ─── PDF generation ───────────────────────────────────────────────────────────
 
 /**
  * Build a PDF receipt/R1 buffer using pdfkit.
- * Includes VAT breakdown and optional ZKI / JIR fiscalisation codes.
  *
  * @param {object}   order
  * @param {object[]} lines         - [{title, quantity, price, vatRate}]
- * @param {string}   invoiceNumber - Human-readable invoice number (e.g. "R1-2026-000001")
+ * @param {string}   invoiceNumber - Internal invoice number (e.g. "INV-2026-000001")
  * @param {"receipt"|"r1"} type
- * @param {object}   [fiscal]      - Optional { zki, jir, fiscalInvoiceNumber }
+ * @param {object}   [fiscal]      - Optional fiscal data:
+ *   { zki, jir, fiscalInvoiceNumber, operatorOib, paymentMethod, invoiceDate }
  * @returns {Promise<Buffer>}
  */
-function generatePdfBuffer(order, lines, invoiceNumber, type, fiscal = {}) {
+async function generatePdfBuffer(order, lines, invoiceNumber, type, fiscal = {}) {
+  const company  = getCompanyConfig();
+  const isR1     = type === "r1";
+  const currency = order.currency || "EUR";
+
+  const invoiceDate = fiscal.invoiceDate
+    ? (fiscal.invoiceDate instanceof Date ? fiscal.invoiceDate : new Date(fiscal.invoiceDate))
+    : (order.createdAt ? new Date(order.createdAt) : new Date());
+
+  const dateStr = invoiceDate.toLocaleDateString("hr-HR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const timeStr = invoiceDate.toLocaleTimeString("hr-HR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+  // Pre-generate QR code buffer if we have a JIR
+  let qrBuffer = null;
+  if (fiscal.jir) {
+    try {
+      const url = buildFiscalVerificationUrl(fiscal.jir, invoiceDate, order.total || 0);
+      qrBuffer = await QRCode.toBuffer(url, { type: "png", width: 120, margin: 1 });
+    } catch (_) { /* non-fatal */ }
+  }
+
   return new Promise((resolve, reject) => {
     const chunks = [];
     const doc = new PDFDocument({ size: "A4", margin: 50 });
-
-    doc.on("data", (chunk) => chunks.push(chunk));
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("data", (c) => chunks.push(c));
+    doc.on("end",  () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    const isR1     = type === "r1";
-    const currency = order.currency || "EUR";
-    const date     = order.createdAt
-      ? new Date(order.createdAt).toLocaleDateString("hr-HR", { day: "2-digit", month: "2-digit", year: "numeric" })
-      : new Date().toLocaleDateString("hr-HR", { day: "2-digit", month: "2-digit", year: "numeric" });
+    doc.registerFont("Regular", FONT_REGULAR);
+    doc.registerFont("Bold",    FONT_BOLD);
 
-    // ── Header ─────────────────────────────────────────────────────────────
-    doc.fontSize(20).font("Helvetica-Bold").text(isR1 ? "R1 Račun" : "Potvrda o plaćanju", { align: "left" });
-    doc.moveDown(0.5);
-    doc.fontSize(10).font("Helvetica").fillColor("#555555");
-    doc.text(`Broj: ${invoiceNumber}`);
-    if (fiscal.fiscalInvoiceNumber) {
-      doc.text(`Fiskalni broj: ${fiscal.fiscalInvoiceNumber}`);
+    const L = 50;   // left margin
+    const R = 545;  // right edge
+    const W = R - L; // usable width
+
+    // ── Company header (right-aligned block) ──────────────────────────────
+    if (company.name || company.oib) {
+      const companyTop = doc.y;
+      doc.fontSize(11).font("Bold").fillColor("#000000")
+        .text(company.name || "", L, companyTop, { align: "right", width: W });
+      doc.fontSize(9).font("Regular").fillColor("#444444");
+      if (company.addressLine1) doc.text(company.addressLine1, { align: "right", width: W });
+      if (company.addressLine2) doc.text(company.addressLine2, { align: "right", width: W });
+      if (company.oib)          doc.text(`OIB: ${company.oib}`, { align: "right", width: W });
+      if (isR1 && company.vatId) doc.text(`PDV ID: ${company.vatId}`, { align: "right", width: W });
+      doc.moveDown(1.5);
     }
-    doc.text(`Datum: ${date}`);
+
+    // ── Invoice title + number ─────────────────────────────────────────────
+    doc.fontSize(18).font("Bold").fillColor("#000000")
+      .text(isR1 ? "R1 Račun" : "Račun", { align: "left" });
+    doc.moveDown(0.4);
+
+    doc.fontSize(10).font("Regular").fillColor("#333333");
+
+    doc.text(`Broj računa: ${invoiceNumber}`);
+    doc.text(`Datum: ${dateStr}`);
+    doc.text(`Vrijeme: ${timeStr}`);
     doc.moveDown(1);
 
-    // ── Buyer info ──────────────────────────────────────────────────────────
-    doc.fontSize(11).font("Helvetica-Bold").fillColor("#000000").text("Kupac:");
-    doc.fontSize(10).font("Helvetica");
+    // ── Customer ──────────────────────────────────────────────────────────
+    doc.fontSize(10).font("Bold").fillColor("#000000").text("Kupac:");
+    doc.fontSize(10).font("Regular").fillColor("#333333");
 
-    const name = [order.forename, order.surname].filter(Boolean).join(" ") || order.email || "—";
-    doc.text(name);
+    const customerName = [order.forename, order.surname].filter(Boolean).join(" ") || order.email || "—";
+    doc.text(customerName);
     if (order.email) doc.text(order.email);
 
     if (isR1) {
       doc.moveDown(0.25);
-      doc.text(`Naziv tvrtke: ${order.companyName || "—"}`);
+      doc.text(`Tvrtka: ${order.companyName || "—"}`);
       doc.text(`OIB: ${order.companyOib || "—"}`);
     }
 
@@ -152,24 +220,21 @@ function generatePdfBuffer(order, lines, invoiceNumber, type, fiscal = {}) {
 
     doc.moveDown(1);
 
-    // ── Line items table ────────────────────────────────────────────────────
-    doc.fontSize(11).font("Helvetica-Bold").text("Stavke:");
-    doc.moveDown(0.5);
-
-    const colX     = { item: 50, qty: 260, unit: 320, vat: 370, total: 440 };
+    // ── Line items table ──────────────────────────────────────────────────
+    const col = { item: L, qty: 290, unit: 340, vat: 390, total: 460 };
     const tableTop = doc.y;
 
-    doc.fontSize(9).font("Helvetica-Bold").fillColor("#333333");
-    doc.text("Opis",   colX.item,  tableTop);
-    doc.text("Kol.",   colX.qty,   tableTop, { width: 50, align: "right" });
-    doc.text("Cijena", colX.unit,  tableTop, { width: 45, align: "right" });
-    doc.text("PDV%",   colX.vat,   tableTop, { width: 40, align: "right" });
-    doc.text("Ukupno", colX.total, tableTop, { width: 70, align: "right" });
+    doc.fontSize(9).font("Bold").fillColor("#333333");
+    doc.text("Opis",    col.item,  tableTop, { width: 230 });
+    doc.text("Kol.",    col.qty,   tableTop, { width: 45,  align: "right" });
+    doc.text("Cijena",  col.unit,  tableTop, { width: 45,  align: "right" });
+    doc.text("PDV%",    col.vat,   tableTop, { width: 40,  align: "right" });
+    doc.text("Ukupno",  col.total, tableTop, { width: 70,  align: "right" });
 
-    doc.moveTo(50, doc.y + 4).lineTo(520, doc.y + 4).strokeColor("#cccccc").stroke();
+    doc.moveTo(L, doc.y + 3).lineTo(R, doc.y + 3).strokeColor("#cccccc").stroke();
     doc.moveDown(0.75);
 
-    doc.fontSize(9).font("Helvetica").fillColor("#000000");
+    doc.fontSize(9).font("Regular").fillColor("#000000");
     let grandTotal = 0;
 
     (lines || []).forEach((line) => {
@@ -177,72 +242,98 @@ function generatePdfBuffer(order, lines, invoiceNumber, type, fiscal = {}) {
       const qty       = line.quantity || 1;
       const unitPrice = Number(line.price) || 0;
       const lineTotal = qty * unitPrice;
-      const vat       = line.vatRate != null ? `${line.vatRate}%` : "—";
+      const vatLabel  = line.vatRate != null ? `${line.vatRate}%` : "—";
       grandTotal += lineTotal;
 
       const rowY = doc.y;
-      doc.text(title,                colX.item,  rowY, { width: 200 });
-      doc.text(String(qty),          colX.qty,   rowY, { width: 50,  align: "right" });
-      doc.text(unitPrice.toFixed(2), colX.unit,  rowY, { width: 45,  align: "right" });
-      doc.text(vat,                  colX.vat,   rowY, { width: 40,  align: "right" });
-      doc.text(lineTotal.toFixed(2), colX.total, rowY, { width: 70,  align: "right" });
-      doc.moveDown(0.5);
+      doc.text(title,                 col.item,  rowY, { width: 230 });
+      doc.text(String(qty),           col.qty,   rowY, { width: 45,  align: "right" });
+      doc.text(unitPrice.toFixed(2),  col.unit,  rowY, { width: 45,  align: "right" });
+      doc.text(vatLabel,              col.vat,   rowY, { width: 40,  align: "right" });
+      doc.text(lineTotal.toFixed(2),  col.total, rowY, { width: 70,  align: "right" });
+      doc.moveDown(0.6);
     });
 
-    doc.moveTo(50, doc.y + 2).lineTo(520, doc.y + 2).strokeColor("#cccccc").stroke();
+    doc.moveTo(L, doc.y + 2).lineTo(R, doc.y + 2).strokeColor("#cccccc").stroke();
     doc.moveDown(0.75);
 
-    // ── VAT summary ─────────────────────────────────────────────────────────
+    // ── VAT summary + totals (right-aligned) ──────────────────────────────
     const vatGroups  = buildVatSummary(lines || []);
     const orderTotal = order.total != null ? Number(order.total) : grandTotal;
+    const sumL = 330;
+    const sumV = 460;
 
-    if (vatGroups.length > 0) {
-      const summaryX = { label: 310, value: 440 };
-      doc.fontSize(9).font("Helvetica").fillColor("#333333");
-
-      for (const g of vatGroups) {
-        if (g.rate === 0) {
-          doc.text(`Osnovica (0%):`, summaryX.label, doc.y, { width: 125 });
-          doc.text(`${g.osnovica.toFixed(2)} ${currency}`, summaryX.value, doc.y - doc.currentLineHeight(), { width: 70, align: "right" });
-        } else {
-          doc.text(`Osnovica (${g.rate}%):`, summaryX.label, doc.y, { width: 125 });
-          doc.text(`${g.osnovica.toFixed(2)} ${currency}`, summaryX.value, doc.y - doc.currentLineHeight(), { width: 70, align: "right" });
-          doc.text(`PDV (${g.rate}%):`,      summaryX.label, doc.y, { width: 125 });
-          doc.text(`${g.vatAmount.toFixed(2)} ${currency}`, summaryX.value, doc.y - doc.currentLineHeight(), { width: 70, align: "right" });
-        }
+    doc.fontSize(9).font("Regular").fillColor("#555555");
+    for (const g of vatGroups) {
+      if (g.rate === 0) {
+        doc.text(`Osnovica (0%):`,      sumL, doc.y, { width: 125 });
+        doc.text(`${g.osnovica.toFixed(2)} ${currency}`,  sumV, doc.y - doc.currentLineHeight(), { width: 70, align: "right" });
+      } else {
+        doc.text(`Osnovica (${g.rate}%):`, sumL, doc.y, { width: 125 });
+        doc.text(`${g.osnovica.toFixed(2)} ${currency}`,  sumV, doc.y - doc.currentLineHeight(), { width: 70, align: "right" });
+        doc.text(`PDV (${g.rate}%):`,      sumL, doc.y, { width: 125 });
+        doc.text(`${g.vatAmount.toFixed(2)} ${currency}`, sumV, doc.y - doc.currentLineHeight(), { width: 70, align: "right" });
       }
-
-      doc.moveDown(0.25);
-      doc.moveTo(310, doc.y).lineTo(520, doc.y).strokeColor("#cccccc").stroke();
-      doc.moveDown(0.25);
     }
 
-    // ── Grand total ─────────────────────────────────────────────────────────
-    doc.fontSize(11).font("Helvetica-Bold").fillColor("#000000");
-    doc.text("Ukupno za platiti:", 310, doc.y, { width: 125 });
-    doc.text(`${orderTotal.toFixed(2)} ${currency}`, 440, doc.y - doc.currentLineHeight(), { width: 70, align: "right" });
+    doc.moveDown(0.3);
+    doc.moveTo(sumL, doc.y).lineTo(R, doc.y).strokeColor("#999999").stroke();
+    doc.moveDown(0.3);
 
-    doc.moveDown(2);
+    doc.fontSize(12).font("Bold").fillColor("#000000");
+    doc.text("UKUPNO:",            sumL, doc.y, { width: 125 });
+    doc.text(`${orderTotal.toFixed(2)} ${currency}`, sumV, doc.y - doc.currentLineHeight(), { width: 70, align: "right" });
 
-    // ── Fiscalisation footer ────────────────────────────────────────────────
-    doc.fontSize(8).font("Helvetica").fillColor("#888888");
+    doc.moveDown(1.5);
 
-    if (fiscal.zki) {
-      doc.text(`ZKI: ${fiscal.zki}`, { align: "left" });
+    // ── Payment method + operator OIB ─────────────────────────────────────
+    // Reset x to left margin — previous text commands left cursor at sumL (330)
+    doc.fontSize(9).font("Regular").fillColor("#333333");
+
+    const pmCode  = fiscal.paymentMethod;
+    const pmLabel = pmCode ? (PAYMENT_METHOD_LABELS[pmCode] || pmCode) : null;
+    if (pmLabel) {
+      doc.text(`Način plaćanja: ${pmLabel}`, L, doc.y, { width: W });
     }
-    if (fiscal.jir) {
-      doc.text(`JIR: ${fiscal.jir}`, { align: "left" });
-    } else if (fiscal.zki) {
-      doc.text("JIR: fiskalizacija u tijeku...", { align: "left" });
+    if (fiscal.operatorOib) {
+      doc.text(`Operator OIB: ${fiscal.operatorOib}`, L, doc.y, { width: W });
     }
 
-    doc.moveDown(0.5);
-    doc.text("Hvala na vašoj narudžbi.", { align: "center" });
+    doc.moveDown(1);
+
+    // ── Fiscal codes ──────────────────────────────────────────────────────
+    if (fiscal.zki || fiscal.jir) {
+      doc.moveTo(L, doc.y).lineTo(R, doc.y).strokeColor("#dddddd").stroke();
+      doc.moveDown(0.5);
+
+      doc.fontSize(8).font("Regular").fillColor("#555555");
+      if (fiscal.zki) doc.text(`ZKI: ${fiscal.zki}`, L, doc.y, { width: W });
+      if (fiscal.jir) {
+        doc.text(`JIR: ${fiscal.jir}`, L, doc.y, { width: W });
+      } else if (fiscal.zki) {
+        doc.text("JIR: fiskalizacija u tijeku...", L, doc.y, { width: W });
+      }
+      doc.moveDown(0.5);
+      doc.fontSize(7).fillColor("#888888")
+        .text("Račun izdan sukladno Zakonu o fiskalizaciji u prometu gotovinom (NN 133/12).", L, doc.y, { width: W, align: "center" });
+      doc.moveDown(0.75);
+    }
+
+    // ── QR code ──────────────────────────────────────────────────────────
+    if (qrBuffer) {
+      try {
+        doc.image(qrBuffer, L, doc.y, { width: 80 });
+        doc.moveDown(0.5);
+        doc.fontSize(7).fillColor("#888888").text("Skenirajte za provjeru računa", L, doc.y, { width: 80, align: "center" });
+      } catch (_) { /* non-fatal */ }
+      doc.moveDown(1);
+    }
+
+    // ── Footer ────────────────────────────────────────────────────────────
+    doc.fontSize(9).font("Regular").fillColor("#888888")
+      .text("Hvala na vašoj narudžbi.", L, doc.y, { width: W, align: "center" });
     if (isR1) {
-      doc.text("Ovaj dokument je R1 račun izdan sukladno važećim poreznim propisima.", { align: "center" });
-    }
-    if (fiscal.zki) {
-      doc.text("Račun izdan sukladno Zakonu o fiskalizaciji u prometu gotovinom (NN 133/12).", { align: "center" });
+      doc.text("Ovaj dokument je R1 račun izdan sukladno važećim poreznim propisima.", L, doc.y, { width: W, align: "center" });
     }
 
     doc.end();
@@ -252,20 +343,21 @@ function generatePdfBuffer(order, lines, invoiceNumber, type, fiscal = {}) {
 // ─── Core invoice creation ────────────────────────────────────────────────────
 
 /**
- * Generate and store an invoice for an order, then trigger fiscalisation.
+ * Generate and store an invoice for an order (DB record + initial PDF).
+ * Does NOT run fiscalisation — caller must commit the transaction first,
+ * then call fiscalizeAndUpdatePdf() separately.
  *
  * Operation order:
- *   1. Allocate sequence number atomically (within transaction)
- *   2. Generate initial PDF (no fiscal codes yet)
- *   3. Insert Invoice record (within transaction)
- *   4. Write PDF to disk (atomic tmp+rename)
- *   5. Commit transaction (caller's responsibility)
- *   6. Run fiscalisation outside transaction (network call)
- *   7. If fiscalisation returns codes: regenerate PDF and overwrite on disk
+ *   1. Compute accounting snapshot (total, vatTotal, paymentMethod)
+ *   2. Allocate sequence number atomically (within transaction)
+ *   3. Generate initial PDF (no fiscal codes yet)
+ *   4. Insert Invoice record (within transaction)
+ *   5. Write PDF to disk (atomic tmp+rename)
+ *   6. Return — caller commits transaction, then calls fiscalizeAndUpdatePdf()
  *
  * Failure contract:
- *   Steps 1–4 fail → exception propagates; caller rolls back; clean state.
- *   Fiscalisation fails → invoice stays on disk, status="failed"; admin can retry.
+ *   Steps 1–5 fail → exception propagates; caller rolls back; clean state.
+ *   Fiscalisation is handled outside this function after the commit.
  *
  * @param {object}   order
  * @param {object[]} lines - [{title, quantity, price, vatRate}]
@@ -278,12 +370,25 @@ async function createInvoiceForOrder(order, lines, t) {
 
   logger.info("Invoice generation: started", { orderId: order.id, type, year });
 
-  const { invoiceNumber, sequenceNumber } = await generateNextInvoiceNumber(type, year, t);
+  // ── Accounting snapshot ───────────────────────────────────────────────────
+  const vatGroups    = buildVatSummary(lines);
+  const total        = lines.reduce((sum, l) => sum + Number(l.price) * (l.quantity || 1), 0);
+  const vatTotal     = vatGroups.reduce((sum, g) => sum + g.vatAmount, 0);
+  const paymentMethod = order.stripePaymentIntentId ? "K" : "O";
+
+  const fiscalConfig = getFiscalizationConfig();
+  const premisesId   = fiscalConfig.businessPremisesId || "MAIN";
+  const deviceId     = fiscalConfig.deviceId || "1";
+
+  const { invoiceNumber, sequenceNumber } = await generateNextInvoiceNumber(year, premisesId, deviceId, t);
+
+  const invoiceDate = new Date();
 
   // Initial PDF — no fiscal codes yet (regenerated after fiscalisation)
-  const pdfBuffer = await generatePdfBuffer(order, lines, invoiceNumber, type, {});
+  const pdfBuffer = await generatePdfBuffer(order, lines, invoiceNumber, type, { paymentMethod, invoiceDate });
 
-  const filename     = `${invoiceNumber}.pdf`;
+  // Slashes in invoiceNumber (e.g. "7/WEB/1") are not valid in filenames — replace with dashes
+  const filename     = `${invoiceNumber.replace(/\//g, "-")}.pdf`;
   const relativePath = `${INVOICE_SUBDIR}/${filename}`;
 
   const invoice = await invoiceRepo.create(
@@ -293,8 +398,13 @@ async function createInvoiceForOrder(order, lines, t) {
       type,
       sequenceNumber,
       year,
-      pdfPath: relativePath,
-      generatedAt: new Date(),
+      premisesId,
+      deviceId,
+      total:             parseFloat(total.toFixed(2)),
+      vatTotal:          parseFloat(vatTotal.toFixed(2)),
+      paymentMethod,
+      pdfPath:           relativePath,
+      generatedAt:       new Date(),
       fiscalizationStatus: "pending",
     },
     { transaction: t }
@@ -314,45 +424,67 @@ async function createInvoiceForOrder(order, lines, t) {
   }
 
   logger.info("Invoice PDF written to disk", { invoiceNumber, pdfPath: relativePath });
+  logger.info("Invoice generation: completed (pre-fiscal)", { invoiceNumber, orderId: order.id, type });
 
-  const invoicePlain = invoice; // invoiceRepo.create already returns a plain object
+  return { invoice, pdfBuffer };
+}
 
-  // ── Fiscalisation (outside DB transaction — network call) ─────────────────
+/**
+ * Run fiscalisation for an already-committed invoice, then regenerate the PDF
+ * on disk with ZKI + JIR if the submission succeeds.
+ *
+ * Call this AFTER the invoice transaction has been committed.
+ * Safe to call from multiple places (payment webhook, free-order flow, admin retry).
+ *
+ * @param {object}   invoice - Plain invoice object from DB (post-commit)
+ * @param {object}   order
+ * @param {object[]} lines   - [{title, quantity, price, vatRate}]
+ * @returns {Promise<{ fiskalResult: object|null, pdfBuffer: Buffer|null }>}
+ *   pdfBuffer is the regenerated fiscal PDF on success, null otherwise.
+ */
+async function fiscalizeAndUpdatePdf(invoice, order, lines) {
+  const fiscalizationService = require("./fiscalization.service");
+
   let fiskalResult = null;
   try {
-    const fiscalizationService = require("./fiscalization.service");
-    fiskalResult = await fiscalizationService.fiscalizeInvoice(invoicePlain, order, lines);
+    fiskalResult = await fiscalizationService.fiscalizeInvoice(invoice, order, lines);
   } catch (fiskalErr) {
     logger.error("Invoice fiscalisation threw unexpectedly", {
       tag:          "fiscalization_error",
-      invoiceId:    invoicePlain.id,
-      invoiceNumber,
+      invoiceId:    invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
       error:        fiskalErr.message,
     });
+    return { fiskalResult: null, pdfBuffer: null };
   }
 
-  // ── Regenerate PDF with ZKI + JIR if we have fiscal codes ────────────────
-  if (fiskalResult && (fiskalResult.zkiCode || fiskalResult.jir)) {
-    try {
-      const fiscalPdfBuffer = await generatePdfBuffer(order, lines, invoiceNumber, type, {
-        zki:                fiskalResult.zkiCode,
-        jir:                fiskalResult.jir,
-        fiscalInvoiceNumber: fiskalResult.fiscalInvoiceNumber,
-      });
-      await fs.promises.writeFile(tmpPath, fiscalPdfBuffer);
-      await fs.promises.rename(tmpPath, finalPath);
-      logger.info("Invoice PDF regenerated with fiscal codes", { invoiceNumber });
-      logger.info("Invoice generation: completed", { invoiceNumber, orderId: order.id, type });
-      return { invoice: invoicePlain, pdfBuffer: fiscalPdfBuffer };
-    } catch (pdfErr) {
-      logger.warn("Invoice PDF regeneration with fiscal codes failed (original PDF kept)", {
-        invoiceNumber, error: pdfErr.message,
-      });
-    }
+  if (!fiskalResult || (!fiskalResult.zkiCode && !fiskalResult.jir)) {
+    return { fiskalResult, pdfBuffer: null };
   }
 
-  logger.info("Invoice generation: completed", { invoiceNumber, orderId: order.id, type });
-  return { invoice: invoicePlain, pdfBuffer };
+  // ── Regenerate PDF with ZKI + JIR ─────────────────────────────────────────
+  try {
+    const fiscalPdfBuffer = await generatePdfBuffer(order, lines, invoice.invoiceNumber, invoice.type, {
+      zki:                fiskalResult.zkiCode,
+      jir:                fiskalResult.jir,
+      fiscalInvoiceNumber: fiskalResult.fiscalInvoiceNumber,
+      operatorOib:        fiskalResult.operatorOib,
+      paymentMethod:      invoice.paymentMethod,
+      invoiceDate:        new Date(invoice.generatedAt),
+    });
+    const filename  = `${invoice.invoiceNumber.replace(/\//g, "-")}.pdf`;
+    const finalPath = path.join(INVOICE_DIR, filename);
+    const tmpPath   = `${finalPath}.tmp`;
+    await fs.promises.writeFile(tmpPath, fiscalPdfBuffer);
+    await fs.promises.rename(tmpPath, finalPath);
+    logger.info("Invoice PDF regenerated with fiscal codes", { invoiceNumber: invoice.invoiceNumber });
+    return { fiskalResult, pdfBuffer: fiscalPdfBuffer };
+  } catch (pdfErr) {
+    logger.warn("Invoice PDF regeneration with fiscal codes failed (original PDF kept)", {
+      invoiceNumber: invoice.invoiceNumber, error: pdfErr.message,
+    });
+    return { fiskalResult, pdfBuffer: null };
+  }
 }
 
 // ─── Query helpers ────────────────────────────────────────────────────────────
@@ -395,6 +527,7 @@ async function getInvoiceById(id) {
 
 module.exports = {
   createInvoiceForOrder,
+  fiscalizeAndUpdatePdf,
   getInvoiceById,
   getInvoiceForOrder,
   listInvoices,

@@ -45,8 +45,18 @@ module.exports = {
       updatedAt: { allowNull: false, type: Sequelize.DATE },
     });
 
-    await queryInterface.addIndex("invoices", ["orderId"], { unique: true });
-    await queryInterface.addIndex("invoices", ["year", "type"]);
+    // indices may already be present if the table definition included unique
+    // constraints or if the migration has been applied previously in a
+    // different order; check existing indexes before adding.
+    const existing = await queryInterface.showIndex("invoices");
+    const hasIndex = (name) => existing.some((i) => i.name === name);
+
+    if (!hasIndex("invoices_order_id")) {
+      await queryInterface.addIndex("invoices", ["orderId"], { unique: true });
+    }
+    if (!hasIndex("invoices_year_type")) {
+      await queryInterface.addIndex("invoices", ["year", "type"]);
+    }
   },
 
   async down(queryInterface) {

@@ -7,9 +7,7 @@ module.exports = {
   async up(queryInterface) {
     const now = new Date();
     const objects = [
-      { name: "Webinar", slug: "webinar" },
-      { name: "Service", slug: "service" },
-      { name: "Classroom", slug: "classroom" },
+      { name: "Colour", slug: "colour" },
     ];
 
     for (const { name, slug } of objects) {
@@ -36,7 +34,7 @@ module.exports = {
 
   async down(queryInterface) {
     await queryInterface.bulkDelete("meta_objects", {
-      slug: ["webinar", "service", "classroom"],
+      slug: ["colour"],
     });
   },
 };
