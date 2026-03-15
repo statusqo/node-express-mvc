@@ -54,10 +54,17 @@ function getPaymentMethodCode(order) {
 /**
  * Main fiscalisation entry point. Called after an invoice record is created.
  *
+ * Handles both original invoices and storno (cancellation) invoices transparently.
+ * For storno invoices (invoice.stornoOfInvoiceId is set):
+ *   - Loads the original invoice to build the StornRac reference element
+ *   - Passes negative amounts to the SOAP XML (FINA spec requires actual negative values)
+ *   - ZKI input uses the negative IznosUkupno string (confirmed per FINA v2.6 spec)
+ *
  * @param {object} invoice  - Plain invoice object (from DB)
  * @param {object} order    - Plain order object
- * @param {Array}  lines    - Order lines: [{ price, quantity, vatRate }]
- * @returns {Promise<{ success: boolean, jir?: string, zkiCode?: string, error?: string }>}
+ * @param {Array}  lines    - Order lines: [{ price, quantity, vatRate }].
+ *                            For storno invoices these must already have negative prices.
+ * @returns {Promise<{ success: boolean, jir?: string, zkiCode?: string, originalInvoiceNumber?: string, error?: string }>}
  */
 async function fiscalizeInvoice(invoice, order, lines) {
   const config = getFiscalizationConfig();
@@ -83,6 +90,27 @@ async function fiscalizeInvoice(invoice, order, lines) {
     return { success: false, error: certErr.message };
   }
 
+  // ── Storno detection ─────────────────────────────────────────────────────
+  // The f73 namespace (Fiskalizacija 1.x / 2012 API) does not support a
+  // StornRac XML element — a storno is submitted as a regular invoice with
+  // negative amounts. We still identify storno invoices so we can:
+  //   a) use invoice.total (negative) for ZKI/XML rather than order.total
+  //   b) log the relationship and return originalInvoiceNumber for the PDF
+  const isStorno = !!invoice.stornoOfInvoiceId;
+  let originalInvoiceNumber = null;
+
+  if (isStorno) {
+    const originalInvoice = await invoiceRepo.findById(invoice.stornoOfInvoiceId);
+    if (originalInvoice) {
+      originalInvoiceNumber = originalInvoice.invoiceNumber;
+    }
+    logger.info("Fiscalisation: storno invoice — submitting with negative amounts", {
+      invoiceId:             invoice.id,
+      invoiceNumber:         invoice.invoiceNumber,
+      originalInvoiceNumber,
+    });
+  }
+
   // ── Build fiscal invoice number ──────────────────────────────────────────
   const fiscalInvoiceNumber = buildFiscalInvoiceNumber(
     invoice.sequenceNumber,
@@ -91,11 +119,14 @@ async function fiscalizeInvoice(invoice, order, lines) {
   );
 
   // ── Compute ZKI ──────────────────────────────────────────────────────────
+  // For storno invoices the total is negative. Per FINA spec (v2.6 ch.12),
+  // IznosUkupno in the ZKI input string must match the value sent in the XML,
+  // so we pass the actual negative amount string.
   const invoiceDate     = new Date(invoice.generatedAt || Date.now());
   const fiscalDatetime  = formatFiskalDate(invoiceDate);
   const [seqNum, premisesId, deviceId] = fiscalInvoiceNumber.split("/");
-  const grandTotal      = Number(order.total || 0).toFixed(2);
-  const paymentMethod   = getPaymentMethodCode(order);
+  const grandTotal      = Number(invoice.total != null ? invoice.total : (order.total || 0)).toFixed(2);
+  const paymentMethod   = invoice.paymentMethod || getPaymentMethodCode(order);
 
   let zkiCode;
   try {
@@ -208,7 +239,14 @@ async function fiscalizeInvoice(invoice, order, lines) {
     operatorOib: config.operatorOib,
   });
 
-  return { success: true, jir, zkiCode, fiscalInvoiceNumber, operatorOib: config.operatorOib };
+  return {
+    success: true,
+    jir,
+    zkiCode,
+    fiscalInvoiceNumber,
+    operatorOib: config.operatorOib,
+    originalInvoiceNumber,  // non-null only for storno invoices
+  };
 }
 
 /**

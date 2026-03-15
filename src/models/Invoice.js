@@ -10,7 +10,20 @@ const Invoice = sequelize.define("Invoice", {
   orderId: {
     type: DataTypes.UUID,
     allowNull: false,
-    unique: true,
+    // Uniqueness is enforced by a partial DB index (WHERE stornoOfInvoiceId IS NULL)
+    // so that storno invoices can share the same orderId as the original.
+  },
+  // Set on storno invoices: UUID of the original invoice being cancelled.
+  // Null on original invoices.
+  stornoOfInvoiceId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+  },
+  // Denormalized reverse pointer set on the original invoice when its storno is created.
+  // Allows fetching the storno invoice without a join.
+  stornoInvoiceId: {
+    type: DataTypes.UUID,
+    allowNull: true,
   },
   invoiceNumber: {
     type: DataTypes.STRING,
@@ -122,6 +135,7 @@ const Invoice = sequelize.define("Invoice", {
 // invoiceNumber provides the second layer.
 const IMMUTABLE_INVOICE_FIELDS = [
   "orderId",
+  "stornoOfInvoiceId",
   "invoiceNumber",
   "type",
   "sequenceNumber",

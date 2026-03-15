@@ -6,7 +6,15 @@
       "Bash(node -e \":*)",
       "Bash(npm install:*)",
       "Bash(npm uninstall:*)",
-      "Bash(node src/scripts/test-fiscalization.js)"
+      "Bash(node src/scripts/test-fiscalization.js)",
+      "WebSearch",
+      "Bash(xargs grep:*)",
+      "Bash(grep -r \"Storno\\\\|StornoBill\\\\|CreditNote\" /d/DEFY/projects/node-express-mvc/src --include=*.js --include=*.pug)",
+      "WebFetch(domain:porezna.gov.hr)",
+      "WebFetch(domain:porezna-uprava.gov.hr)",
+      "WebFetch(domain:www.porezna-uprava.hr)",
+      "WebFetch(domain:github.com)",
+      "Bash(node src/scripts/test-fiscalization-storno.js)"
     ]
   }
 }

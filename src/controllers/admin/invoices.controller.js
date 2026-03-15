@@ -145,7 +145,13 @@ async function retryFiscalization(req, res) {
 
   const lines     = await orderRepo.getLines(plain.orderId);
   const orderPlain = order.get ? order.get({ plain: true }) : order;
-  const linesPlain = (lines || []).map((l) => ({ title: l.title, quantity: l.quantity, price: l.price, vatRate: l.vatRate != null ? Number(l.vatRate) : null }));
+  let linesPlain = (lines || []).map((l) => ({ title: l.title, quantity: l.quantity, price: l.price, vatRate: l.vatRate != null ? Number(l.vatRate) : null }));
+
+  // Storno invoices carry negative totals — negate line prices so the PDF and
+  // FINA XML both reflect the correct negative amounts on retry.
+  if (plain.stornoOfInvoiceId) {
+    linesPlain = linesPlain.map((l) => ({ ...l, price: -(Number(l.price) || 0) }));
+  }
 
   const { fiskalResult } = await invoiceService.fiscalizeAndUpdatePdf(plain, orderPlain, linesPlain);
 

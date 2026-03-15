@@ -138,6 +138,12 @@ Transaction.belongsTo(Order, { foreignKey: "orderId" });
 Order.hasOne(Invoice, { foreignKey: "orderId", as: "Invoice" });
 Invoice.belongsTo(Order, { foreignKey: "orderId" });
 
+// Self-referential storno associations.
+// stornoOfInvoiceId on the storno invoice points to the original.
+// stornoInvoiceId on the original is a denormalized reverse pointer.
+Invoice.belongsTo(Invoice, { as: "originalInvoice", foreignKey: "stornoOfInvoiceId" });
+Invoice.hasOne(Invoice, { as: "stornoInvoice", foreignKey: "stornoOfInvoiceId" });
+
 // --- RefundRequest ---
 Order.hasMany(RefundRequest, { foreignKey: "orderId" });
 RefundRequest.belongsTo(Order, { foreignKey: "orderId" });

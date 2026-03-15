@@ -76,12 +76,14 @@ module.exports = {
       refundRequestService.findByOrder(order.id),
       invoiceService.getInvoiceForOrder(order.id),
     ]);
+    const stornoInvoice = invoice ? await invoiceService.getStornoInvoiceForOrder(order.id) : null;
     const refundRequestsPlain = (refundRequests || []).map((r) => (r.get ? r.get({ plain: true }) : r));
     res.render("admin/orders/edit", {
       title: "Edit Order",
       order: orderPlain,
       refundRequests: refundRequestsPlain,
       invoice: invoice || null,
+      stornoInvoice: stornoInvoice || null,
       validFulfillmentStatuses: FULFILLMENT_STATUSES,
     });
   },
@@ -102,12 +104,14 @@ module.exports = {
         refundRequestService.findByOrder(order.id),
         invoiceService.getInvoiceForOrder(order.id),
       ]);
+      const stornoInvoice = invoice ? await invoiceService.getStornoInvoiceForOrder(order.id) : null;
       const refundRequestsPlain = (refundRequests || []).map((r) => (r.get ? r.get({ plain: true }) : r));
       return res.status(400).render("admin/orders/edit", {
         title: "Edit Order",
         order: orderPlain,
         refundRequests: refundRequestsPlain,
         invoice: invoice || null,
+        stornoInvoice: stornoInvoice || null,
         validFulfillmentStatuses: FULFILLMENT_STATUSES,
         error: result.errors[0].message,
       });
@@ -128,12 +132,14 @@ module.exports = {
             invoiceService.getInvoiceForOrder(order.id),
           ])
         : [[], null];
+      const stornoInvoice = invoice ? await invoiceService.getStornoInvoiceForOrder(order.id) : null;
       const refundRequestsPlain = (refundRequests || []).map((r) => (r.get ? r.get({ plain: true }) : r));
       return res.status(status).render("admin/orders/edit", {
         title: "Edit Order",
         order: orderPlain,
         refundRequests: refundRequestsPlain,
         invoice: invoice || null,
+        stornoInvoice: stornoInvoice || null,
         validFulfillmentStatuses: FULFILLMENT_STATUSES,
         error: message,
       });
@@ -149,8 +155,19 @@ module.exports = {
       return res.redirect((req.adminPrefix || "") + "/orders");
     }
     try {
-      await refundRequestService.approveRefundRequest(requestId, adminUserId);
-      res.setFlash("success", "Refund approved.");
+      const result = await refundRequestService.approveRefundRequest(requestId, adminUserId);
+      const stornoResult = result && result._stornoResult;
+      if (stornoResult && stornoResult.error) {
+        // Financial refund succeeded but storno invoice creation failed.
+        res.setFlash("success", "Refund approved.");
+        res.setFlash("warning", `Storno račun nije kreiran — potrebna ručna intervencija: ${stornoResult.error}`);
+      } else if (stornoResult && stornoResult.fiscalStatus === "failed") {
+        // Storno invoice created but FINA submission failed — retryable via invoice admin.
+        res.setFlash("success", "Refund approved.");
+        res.setFlash("warning", "Storno račun kreiran ali fiskalizacija nije uspjela. Pokušajte ponovo putem administracije računa.");
+      } else {
+        res.setFlash("success", "Refund approved.");
+      }
     } catch (err) {
       const msg = err.status === 404 ? "Refund request not found." : err.message || "Could not approve refund.";
       res.setFlash("error", msg);

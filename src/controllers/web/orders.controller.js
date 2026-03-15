@@ -61,6 +61,9 @@ module.exports = {
     const hasApprovedRefundRequest = refundRequests.some((r) => r.status === "approved");
 
     const invoice = await invoiceService.getInvoiceForOrder(order.id);
+    const stornoInvoice = order.paymentStatus === "refunded"
+      ? await invoiceService.getStornoInvoiceForOrder(order.id)
+      : null;
 
     res.render("web/order", {
       title: "Order",
@@ -70,6 +73,7 @@ module.exports = {
       hasPendingRefundRequest,
       hasApprovedRefundRequest,
       invoice,
+      stornoInvoice,
       stripePublishableKey: require("../../config").stripe?.publishableKey || "",
     });
   },
@@ -113,6 +117,46 @@ module.exports = {
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${invoice.invoiceNumber.replace(/\//g, "-")}.pdf"`);
+    fs.createReadStream(absolutePath).pipe(res);
+  },
+
+  async downloadStornoReceipt(req, res, next) {
+    const userId = req.user && req.user.id;
+    const sessionId = req.session && req.sessionID ? req.sessionID : null;
+    if (!userId) return res.redirect("/auth/login");
+
+    const orderId = req.params.id;
+    let order;
+    try {
+      ({ order } = await orderService.getOrderWithLines(orderId, userId, sessionId));
+    } catch (err) {
+      return next(err);
+    }
+
+    if (!order || order.paymentStatus !== "refunded") {
+      return res.status(404).send("Storno receipt not available.");
+    }
+
+    const stornoInvoice = await invoiceService.getStornoInvoiceForOrder(orderId);
+    if (!stornoInvoice || !stornoInvoice.pdfPath) {
+      return res.status(404).send("Storno receipt not found.");
+    }
+
+    const absolutePath = invoiceService.resolvePdfPath(stornoInvoice.pdfPath);
+
+    try {
+      await fs.promises.access(absolutePath);
+    } catch {
+      logger.error("Storno invoice PDF missing from disk", {
+        invoiceNumber: stornoInvoice.invoiceNumber,
+        pdfPath: stornoInvoice.pdfPath,
+        absolutePath,
+      });
+      return res.status(404).send("Storno receipt file not found.");
+    }
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${stornoInvoice.invoiceNumber.replace(/\//g, "-")}.pdf"`);
     fs.createReadStream(absolutePath).pipe(res);
   },
 

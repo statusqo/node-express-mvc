@@ -190,6 +190,31 @@ block content
                                 .da-detail-item
                                     span.da-detail-label Issued
                                     span.da-detail-line= invoice.generatedAt ? new Date(invoice.generatedAt).toLocaleDateString('hr-HR', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'
+
+                            //- ── Storno invoice (shown when refund was processed) ──
+                            if stornoInvoice
+                                hr(style='margin:1rem 0;border-color:var(--ds-border)')
+                                p(style='font-size:0.75rem;color:var(--ds-text-3);margin-bottom:0.5rem') Storno račun
+                                .da-detail-list
+                                    .da-detail-item
+                                        span.da-detail-label Number
+                                        span.da-detail-line.da-cell-mono= stornoInvoice.invoiceNumber
+                                    .da-detail-item
+                                        span.da-detail-label Fiscalisation
+                                        span.da-detail-line
+                                            - var sfClass = stornoInvoice.fiscalizationStatus === 'fiscalized' ? 'success' : stornoInvoice.fiscalizationStatus === 'failed' ? 'danger' : stornoInvoice.fiscalizationStatus === 'not_required' ? 'neutral' : 'warning'
+                                            - var sfLabel = stornoInvoice.fiscalizationStatus === 'fiscalized' ? 'Fiscalised' : stornoInvoice.fiscalizationStatus === 'failed' ? 'Failed' : stornoInvoice.fiscalizationStatus === 'not_required' ? 'N/A' : 'Pending'
+                                            span.da-badge(class='da-badge--' + sfClass)= sfLabel
+                                    if stornoInvoice.fiscalizationJir
+                                        .da-detail-item
+                                            span.da-detail-label JIR
+                                            span.da-detail-line(style='font-family:monospace;font-size:0.72rem')= stornoInvoice.fiscalizationJir
+                                    .da-detail-item
+                                        span.da-detail-label Issued
+                                        span.da-detail-line= stornoInvoice.generatedAt ? new Date(stornoInvoice.generatedAt).toLocaleDateString('hr-HR', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'
+                                if stornoInvoice.fiscalizationStatus === 'pending' || stornoInvoice.fiscalizationStatus === 'failed'
+                                    form(method='post' action=(adminPrefix || '') + '/invoices/' + stornoInvoice.id + '/fiscalize' style='margin-top:0.75rem')
+                                        button.da-btn.da-btn--secondary(type='submit') Retry Fiscalisation
                         else
                             if order.paymentStatus === 'paid'
                                 p.da-refund-empty Invoice not generated.

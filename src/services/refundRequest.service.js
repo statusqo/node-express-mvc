@@ -3,6 +3,9 @@ const orderRepo = require("../repos/order.repo");
 const transactionRepo = require("../repos/transaction.repo");
 const orderService = require("./order.service");
 const stripeGateway = require("../gateways/stripe.gateway");
+const invoiceService = require("./invoice.service");
+const { sequelize } = require("../db");
+const logger = require("../config/logger");
 const { PAYMENT_STATUS } = require("../constants/order");
 const { TRANSACTION_STATUS } = require("../constants/transaction");
 
@@ -172,7 +175,73 @@ async function approveRefundRequest(requestId, processedByUserId) {
   await orderRepo.update(order.id, { paymentStatus: "refunded", fulfillmentStatus: "refunded" });
   await orderService.restoreVariantQuantitiesForOrder(order.id);
 
-  return await refundRequestRepo.findById(requestId);
+  // ── Fiscal storno — create and fiscalize a cancellation invoice ───────────
+  // The Zakon o fiskalizaciji requires a storno (cancellation) invoice whenever
+  // a fiscalized invoice is reversed. The storno is a new fiscal document with
+  // a new sequence number, negative amounts, and a reference to the original.
+  //
+  // The refund approval (Stripe, order status) has already been committed above.
+  // Storno creation is best-effort: a failure is logged and surfaced as a warning
+  // but does NOT roll back the financial refund.
+  const stornoResult = { stornoInvoice: null, fiscalStatus: null, error: null };
+  try {
+    const originalInvoice = await invoiceService.getInvoiceForOrder(order.id);
+
+    if (!originalInvoice) {
+      logger.warn("Storno skipped: no invoice found for refunded order", { orderId: order.id });
+    } else if (originalInvoice.fiscalizationStatus === "not_required") {
+      // Invoice was never submitted to FINA — void it in-system without storno.
+      const invoiceRepo = require("../repos/invoice.repo");
+      await invoiceRepo.updateFiscalFields(originalInvoice.id, { status: "voided" });
+      logger.info("Original invoice voided (fiscalization was not_required, no storno needed)", {
+        invoiceId: originalInvoice.id,
+      });
+    } else {
+      // Original was fiscalized (or attempted) — create a proper storno invoice.
+      const lines = await orderRepo.getLines(order.id);
+
+      let stornoInvoice;
+      const t = await sequelize.transaction();
+      try {
+        ({ stornoInvoice } = await invoiceService.createStornoInvoiceForRefund(
+          originalInvoice, order, lines, t
+        ));
+        await t.commit();
+      } catch (createErr) {
+        await t.rollback();
+        throw createErr;
+      }
+
+      stornoResult.stornoInvoice = stornoInvoice;
+
+      // Fiscalize outside the transaction — failure is non-fatal.
+      const { fiskalResult } = await invoiceService.fiscalizeAndUpdatePdf(
+        stornoInvoice, order, lines.map((l) => ({ ...l, price: -(Number(l.price) || 0) }))
+      );
+
+      stornoResult.fiscalStatus = fiskalResult
+        ? (fiskalResult.success ? "fiscalized" : "failed")
+        : "failed";
+
+      logger.info("Storno invoice fiscalization result", {
+        stornoInvoiceId:     stornoInvoice.id,
+        stornoInvoiceNumber: stornoInvoice.invoiceNumber,
+        fiscalStatus:        stornoResult.fiscalStatus,
+        jir:                 fiskalResult && fiskalResult.jir,
+      });
+    }
+  } catch (stornoErr) {
+    stornoResult.error = stornoErr.message;
+    logger.error("Storno invoice creation failed (refund already processed)", {
+      orderId:  order.id,
+      error:    stornoErr.message,
+    });
+  }
+
+  const refundRequest = await refundRequestRepo.findById(requestId);
+  // Attach storno result so the controller can surface a warning if needed.
+  refundRequest._stornoResult = stornoResult;
+  return refundRequest;
 }
 
 /**

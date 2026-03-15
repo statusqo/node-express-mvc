@@ -52,6 +52,19 @@ module.exports = {
   },
 
   /**
+   * Find the storno invoice that cancels a given original invoice.
+   * Returns null if no storno has been created yet.
+   *
+   * @param {string} originalInvoiceId - id of the original invoice
+   * @returns {Promise<object|null>} plain invoice object or null
+   */
+  async findByOriginalInvoiceId(originalInvoiceId) {
+    if (!originalInvoiceId) return null;
+    const invoice = await Invoice.findOne({ where: { stornoOfInvoiceId: originalInvoiceId } });
+    return invoice ? invoice.get({ plain: true }) : null;
+  },
+
+  /**
    * Update mutable fiscalisation fields on an invoice record.
    *
    * Uses the static Model.update (bulk update) which does NOT trigger individual
@@ -61,7 +74,9 @@ module.exports = {
    * @param {string} id
    * @param {object} fields - Only the fiscal fields should ever be passed here
    */
-  async updateFiscalFields(id, fields) {
-    await Invoice.update(fields, { where: { id } });
+  async updateFiscalFields(id, fields, transaction = null) {
+    const opts = { where: { id } };
+    if (transaction) opts.transaction = transaction;
+    await Invoice.update(fields, opts);
   },
 };

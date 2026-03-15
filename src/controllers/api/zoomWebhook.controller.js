@@ -94,8 +94,8 @@ async function webhook(req, res) {
 
   if (!verifyZoomSignature(req, secret)) {
     logger.warn(
-      { event: body.event },
-      "Zoom webhook: signature verification failed — request rejected"
+      "Zoom webhook: signature verification failed — request rejected",
+      { event: body.event }
     );
     return res.status(401).json({ error: "Invalid signature" });
   }
@@ -104,8 +104,8 @@ async function webhook(req, res) {
   const payload = body.payload || {};
 
   logger.info(
-    { event: eventType, payloadKeys: Object.keys(payload) },
-    "Zoom webhook received"
+    "Zoom webhook received",
+    { event: eventType, payloadKeys: Object.keys(payload) }
   );
 
   if (eventType === "meeting.deleted") {
@@ -115,8 +115,8 @@ async function webhook(req, res) {
 
     if (!meetingId) {
       logger.warn(
-        { payloadKeys: Object.keys(payload), objectKeys: object && typeof object === "object" ? Object.keys(object) : [] },
-        "Zoom meeting.deleted: no meeting id in payload"
+        "Zoom meeting.deleted: no meeting id in payload",
+        { payloadKeys: Object.keys(payload), objectKeys: object && typeof object === "object" ? Object.keys(object) : [] }
       );
       return res.status(200).send();
     }
@@ -129,18 +129,18 @@ async function webhook(req, res) {
         // Remove the stale meeting record so the dead join URL is no longer served.
         // resyncOrphanedEvent will create a fresh EventMeeting when the admin re-syncs.
         await row.destroy();
-        logger.info({ eventId, meetingId }, "Event marked orphaned and stale meeting record removed (Zoom meeting deleted)");
+        logger.info("Event marked orphaned and stale meeting record removed (Zoom meeting deleted)", { eventId, meetingId });
       } else {
         logger.info(
-          { meetingId },
-          "Zoom meeting.deleted: no linked event (meeting may have been deleted from app)"
+          "Zoom meeting.deleted: no linked event (meeting may have been deleted from app)",
+          { meetingId }
         );
       }
     } catch (e) {
-      logger.error({ err: e.message, meetingId }, "Zoom webhook: failed to mark event orphaned");
+      logger.error("Zoom webhook: failed to mark event orphaned", { err: e.message, meetingId });
     }
   } else {
-    logger.info({ event: eventType }, "Zoom webhook: unhandled event type (ignored)");
+    logger.info("Zoom webhook: unhandled event type (ignored)", { event: eventType });
   }
 
   res.status(200).send();

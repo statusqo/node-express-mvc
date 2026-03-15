@@ -89,6 +89,13 @@ function buildPdvGroups(lines) {
  * @param {Array}    params.lines               - Order lines [{price, quantity, vatRate}]
  * @param {boolean}  [params.naknada=false]     - Late submission flag
  * @returns {string} Unsigned SOAP XML string
+ *
+ * NOTE on storno invoices (f73 namespace / Fiskalizacija 1.x):
+ *   The 2012 FINA API (namespace f73) does NOT include a StornRac element.
+ *   A storno is submitted as a plain new invoice with negative amounts.
+ *   The application tracks the cancellation relationship internally via
+ *   stornoOfInvoiceId on the Invoice model. If the system is ever upgraded
+ *   to Fiskalizacija 2.0 (different namespace), StornRac support can be added.
  */
 function buildRacunZahtjev(params) {
   const {

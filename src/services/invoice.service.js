@@ -127,15 +127,19 @@ function buildFiscalVerificationUrl(jir, invoiceDate, total) {
  *
  * @param {object}   order
  * @param {object[]} lines         - [{title, quantity, price, vatRate}]
- * @param {string}   invoiceNumber - Internal invoice number (e.g. "INV-2026-000001")
+ * @param {string}   invoiceNumber - Internal invoice number (e.g. "7/WEB/1")
  * @param {"receipt"|"r1"} type
  * @param {object}   [fiscal]      - Optional fiscal data:
- *   { zki, jir, fiscalInvoiceNumber, operatorOib, paymentMethod, invoiceDate }
+ *   { zki, jir, fiscalInvoiceNumber, operatorOib, paymentMethod, invoiceDate,
+ *     isStorno, originalInvoiceNumber }
+ *   Set isStorno=true and originalInvoiceNumber to the cancelled invoice's number
+ *   when generating a storno PDF. Line amounts are expected to already be negative.
  * @returns {Promise<Buffer>}
  */
 async function generatePdfBuffer(order, lines, invoiceNumber, type, fiscal = {}) {
   const company  = getCompanyConfig();
   const isR1     = type === "r1";
+  const isStorno = !!fiscal.isStorno;
   const currency = order.currency || "EUR";
 
   const invoiceDate = fiscal.invoiceDate
@@ -145,11 +149,16 @@ async function generatePdfBuffer(order, lines, invoiceNumber, type, fiscal = {})
   const dateStr = invoiceDate.toLocaleDateString("hr-HR", { day: "2-digit", month: "2-digit", year: "numeric" });
   const timeStr = invoiceDate.toLocaleTimeString("hr-HR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
-  // Pre-generate QR code buffer if we have a JIR
+  // Pre-generate QR code buffer if we have a JIR.
+  // For storno invoices the verification URL uses the absolute (positive) total
+  // because the Porezna uprava lookup expects a positive iznos value.
   let qrBuffer = null;
   if (fiscal.jir) {
     try {
-      const url = buildFiscalVerificationUrl(fiscal.jir, invoiceDate, order.total || 0);
+      const qrTotal = isStorno
+        ? Math.abs(Number(order.total || 0))
+        : Number(order.total || 0);
+      const url = buildFiscalVerificationUrl(fiscal.jir, invoiceDate, qrTotal);
       qrBuffer = await QRCode.toBuffer(url, { type: "png", width: 120, margin: 1 });
     } catch (_) { /* non-fatal */ }
   }
@@ -182,13 +191,22 @@ async function generatePdfBuffer(order, lines, invoiceNumber, type, fiscal = {})
     }
 
     // ── Invoice title + number ─────────────────────────────────────────────
+    let titleLabel;
+    if (isStorno) {
+      titleLabel = isR1 ? "Storno R1 Račun" : "Storno Račun";
+    } else {
+      titleLabel = isR1 ? "R1 Račun" : "Račun";
+    }
     doc.fontSize(18).font("Bold").fillColor("#000000")
-      .text(isR1 ? "R1 Račun" : "Račun", { align: "left" });
+      .text(titleLabel, { align: "left" });
     doc.moveDown(0.4);
 
     doc.fontSize(10).font("Regular").fillColor("#333333");
 
     doc.text(`Broj računa: ${invoiceNumber}`);
+    if (isStorno && fiscal.originalInvoiceNumber) {
+      doc.text(`Storno za račun: ${fiscal.originalInvoiceNumber}`);
+    }
     doc.text(`Datum: ${dateStr}`);
     doc.text(`Vrijeme: ${timeStr}`);
     doc.moveDown(1);
@@ -463,17 +481,27 @@ async function fiscalizeAndUpdatePdf(invoice, order, lines) {
   }
 
   // ── Regenerate PDF with ZKI + JIR ─────────────────────────────────────────
+  const isStorno = !!invoice.stornoOfInvoiceId;
+  const fiscalOpts = {
+    zki:                 fiskalResult.zkiCode,
+    jir:                 fiskalResult.jir,
+    fiscalInvoiceNumber: fiskalResult.fiscalInvoiceNumber,
+    operatorOib:         fiskalResult.operatorOib,
+    paymentMethod:       invoice.paymentMethod,
+    invoiceDate:         new Date(invoice.generatedAt),
+    isStorno,
+  };
+  if (isStorno && fiskalResult.originalInvoiceNumber) {
+    fiscalOpts.originalInvoiceNumber = fiskalResult.originalInvoiceNumber;
+  }
+
   try {
-    const fiscalPdfBuffer = await generatePdfBuffer(order, lines, invoice.invoiceNumber, invoice.type, {
-      zki:                fiskalResult.zkiCode,
-      jir:                fiskalResult.jir,
-      fiscalInvoiceNumber: fiskalResult.fiscalInvoiceNumber,
-      operatorOib:        fiskalResult.operatorOib,
-      paymentMethod:      invoice.paymentMethod,
-      invoiceDate:        new Date(invoice.generatedAt),
-    });
-    const filename  = `${invoice.invoiceNumber.replace(/\//g, "-")}.pdf`;
-    const finalPath = path.join(INVOICE_DIR, filename);
+    const fiscalPdfBuffer = await generatePdfBuffer(order, lines, invoice.invoiceNumber, invoice.type, fiscalOpts);
+    // Derive the write path from the stored pdfPath rather than recomputing the
+    // filename — storno PDFs use a "-storno" suffix that must be preserved.
+    const finalPath = invoice.pdfPath
+      ? resolvePdfPath(invoice.pdfPath)
+      : path.join(INVOICE_DIR, `${invoice.invoiceNumber.replace(/\//g, "-")}.pdf`);
     const tmpPath   = `${finalPath}.tmp`;
     await fs.promises.writeFile(tmpPath, fiscalPdfBuffer);
     await fs.promises.rename(tmpPath, finalPath);
@@ -487,10 +515,128 @@ async function fiscalizeAndUpdatePdf(invoice, order, lines) {
   }
 }
 
+// ─── Storno invoice creation ──────────────────────────────────────────────────
+
+/**
+ * Create a storno (cancellation) invoice for an already-committed original invoice.
+ *
+ * Must be called inside an open Sequelize transaction. The caller commits after
+ * this returns, then calls fiscalizeAndUpdatePdf() outside the transaction.
+ *
+ * Operation order:
+ *   1. Validate: original not already voided, no storno already exists
+ *   2. Allocate a new sequence number (same counter as originals — correct per law)
+ *   3. Generate initial storno PDF (no fiscal codes yet)
+ *   4. Insert storno Invoice record (stornoOfInvoiceId → original.id, negative totals)
+ *   5. Mark original invoice status → 'voided' and set its stornoInvoiceId pointer
+ *   6. Write PDF to disk atomically
+ *
+ * @param {object}   originalInvoice - Plain invoice object from DB (committed)
+ * @param {object}   order           - Plain order object
+ * @param {object[]} lines           - Original order lines [{title, quantity, price, vatRate}]
+ * @param {object}   t               - Sequelize transaction (caller commits/rolls back)
+ * @returns {Promise<{ stornoInvoice: object, pdfBuffer: Buffer }>}
+ */
+async function createStornoInvoiceForRefund(originalInvoice, order, lines, t) {
+  if (originalInvoice.status === "voided") {
+    throw new Error(`Invoice ${originalInvoice.invoiceNumber} is already voided; cannot create storno.`);
+  }
+  if (originalInvoice.stornoInvoiceId) {
+    throw new Error(`Invoice ${originalInvoice.invoiceNumber} already has a storno invoice.`);
+  }
+
+  const year       = new Date(originalInvoice.generatedAt || Date.now()).getFullYear();
+  const premisesId = originalInvoice.premisesId || getFiscalizationConfig().businessPremisesId || "MAIN";
+  const deviceId   = originalInvoice.deviceId   || getFiscalizationConfig().deviceId || "1";
+
+  logger.info("Storno invoice creation: started", {
+    originalInvoiceId:     originalInvoice.id,
+    originalInvoiceNumber: originalInvoice.invoiceNumber,
+  });
+
+  const { invoiceNumber, sequenceNumber } = await generateNextInvoiceNumber(year, premisesId, deviceId, t);
+
+  // Storno totals are the negatives of the original
+  const total    = -(Number(originalInvoice.total)    || 0);
+  const vatTotal = -(Number(originalInvoice.vatTotal) || 0);
+
+  const invoiceDate = new Date();
+
+  // Negate line prices so the PDF and fiscal XML reflect the correct negative amounts.
+  const stornoLines = lines.map((l) => ({
+    ...l,
+    price: -(Number(l.price) || 0),
+  }));
+
+  const pdfBuffer = await generatePdfBuffer(order, stornoLines, invoiceNumber, originalInvoice.type, {
+    paymentMethod:          originalInvoice.paymentMethod,
+    invoiceDate,
+    isStorno:               true,
+    originalInvoiceNumber:  originalInvoice.invoiceNumber,
+  });
+
+  const filename     = `${invoiceNumber.replace(/\//g, "-")}-storno.pdf`;
+  const relativePath = `${INVOICE_SUBDIR}/${filename}`;
+
+  const stornoInvoice = await invoiceRepo.create(
+    {
+      orderId:             originalInvoice.orderId,
+      stornoOfInvoiceId:   originalInvoice.id,
+      invoiceNumber,
+      type:                originalInvoice.type,
+      sequenceNumber,
+      year,
+      premisesId,
+      deviceId,
+      total:               parseFloat(total.toFixed(2)),
+      vatTotal:            parseFloat(vatTotal.toFixed(2)),
+      paymentMethod:       originalInvoice.paymentMethod,
+      pdfPath:             relativePath,
+      generatedAt:         invoiceDate,
+      fiscalizationStatus: "pending",
+    },
+    { transaction: t }
+  );
+
+  // Mark the original invoice as voided and record the reverse pointer.
+  // updateFiscalFields uses Model.update (bulk) which bypasses the immutability
+  // hook — this is intentional: status and stornoInvoiceId are mutable fields.
+  await invoiceRepo.updateFiscalFields(originalInvoice.id, {
+    status:          "voided",
+    stornoInvoiceId: stornoInvoice.id,
+  }, t);
+
+  const finalPath = path.join(INVOICE_DIR, filename);
+  const tmpPath   = `${finalPath}.tmp`;
+
+  await fs.promises.mkdir(INVOICE_DIR, { recursive: true });
+  try {
+    await fs.promises.writeFile(tmpPath, pdfBuffer);
+    await fs.promises.rename(tmpPath, finalPath);
+  } catch (writeErr) {
+    try { await fs.promises.unlink(tmpPath); } catch (_) { /* ignore */ }
+    throw writeErr;
+  }
+
+  logger.info("Storno invoice created (pre-fiscal)", {
+    invoiceNumber,
+    originalInvoiceNumber: originalInvoice.invoiceNumber,
+    orderId: originalInvoice.orderId,
+  });
+
+  return { stornoInvoice, pdfBuffer };
+}
+
 // ─── Query helpers ────────────────────────────────────────────────────────────
 
 async function getInvoiceForOrder(orderId) {
-  return await invoiceRepo.findOne({ orderId });
+  // Explicitly exclude storno invoices — only the original invoice per order.
+  return await invoiceRepo.findOne({ orderId, stornoOfInvoiceId: null });
+}
+
+async function getStornoInvoiceForOrder(orderId) {
+  const { Op } = require("sequelize");
+  return await invoiceRepo.findOne({ orderId, stornoOfInvoiceId: { [Op.ne]: null } });
 }
 
 async function readInvoicePdf(invoice) {
@@ -527,9 +673,11 @@ async function getInvoiceById(id) {
 
 module.exports = {
   createInvoiceForOrder,
+  createStornoInvoiceForRefund,
   fiscalizeAndUpdatePdf,
   getInvoiceById,
   getInvoiceForOrder,
+  getStornoInvoiceForOrder,
   listInvoices,
   readInvoicePdf,
   resolvePdfPath,
