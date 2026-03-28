@@ -16,9 +16,11 @@ const ProductCategory = sequelize.define("ProductCategory", {
     allowNull: false,
     unique: true,
   },
-  parentId: {
-    type: DataTypes.UUID,
-    allowNull: true,
+  // KPD (NKD) classification code required for Croatian Fiscalization 2.0 e-invoices.
+  // Format: "62.01.11". Snapshotted to order_lines at order creation time.
+  kpdCode: {
+    type: DataTypes.STRING(20),
+    allowNull: false,
   },
 }, {
   timestamps: true,

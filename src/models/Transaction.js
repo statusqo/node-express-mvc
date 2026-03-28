@@ -1,6 +1,7 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../db/client");
 const { DEFAULT_CURRENCY } = require("../config/constants");
+const { TRANSACTION_STATUS_LIST, TRANSACTION_STATUS } = require("../constants/transaction");
 
 const Transaction = sequelize.define("Transaction", {
   id: {
@@ -23,12 +24,9 @@ const Transaction = sequelize.define("Transaction", {
     defaultValue: DEFAULT_CURRENCY,
   },
   status: {
-    type: DataTypes.STRING,
+    type: DataTypes.ENUM(...TRANSACTION_STATUS_LIST),
     allowNull: false,
-    defaultValue: "pending",
-    validate: {
-      isIn: [["pending", "success", "failed", "refunded"]],
-    },
+    defaultValue: TRANSACTION_STATUS.PENDING,
   },
   // e.g. "stripe"
   gateway: {

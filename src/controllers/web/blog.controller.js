@@ -3,7 +3,7 @@ const postService = require("../../services/post.service");
 module.exports = {
   async index(req, res) {
     const posts = await postService.findPublished();
-    res.render("web/blog", {
+    res.render("web/blog/index", {
       title: "Blog",
       posts: posts || [],
     });
@@ -22,7 +22,7 @@ module.exports = {
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       return res.send(post.body);
     }
-    res.render("web/blog-post", {
+    res.render("web/blog/show", {
       title: post.title,
       post: post.get ? post.get({ plain: true }) : post,
     });

@@ -85,14 +85,6 @@ block content
                                 //- currency is fixed to default site value; user cannot change it
                                 input.da-form-input(type='text' readonly value=(DEFAULT_CURRENCY || 'EUR'))
                             .da-form-group
-                                label.da-form-label(for='vatRate') VAT Rate (PDV)
-                                select#vatRate.da-form-select(name='vatRate')
-                                    - var currentVat = product && product.vatRate != null ? Number(product.vatRate) : 25
-                                    option(value='0'  selected=(currentVat === 0))  0%
-                                    option(value='5'  selected=(currentVat === 5))  5%
-                                    option(value='13' selected=(currentVat === 13)) 13%
-                                    option(value='25' selected=(currentVat === 25)) 25%
-                            .da-form-group
                                 label.da-form-label(for='quantity') Default quantity
                                 input#quantity.da-form-input(
                                     type='number'
@@ -115,11 +107,37 @@ block content
                                     each pt in productTypes
                                         option(value=pt.id selected=(product && product.productTypeId === pt.id))= pt.name
                             .da-form-group
-                                label.da-form-label(for='productCategoryId') Category
-                                select#productCategoryId.da-form-select(name='productCategoryId')
-                                    option(value='') — None —
+                                label.da-form-label(for='productCategoryId')
+                                    | Category
+                                    span.req *
+                                select#productCategoryId.da-form-select(name='productCategoryId' required)
+                                    option(value='' disabled selected=(!(product && product.productCategoryId))) — Select category —
                                     each pc in productCategories
-                                        option(value=pc.id selected=(product && product.productCategoryId === pc.id))= pc.name
+                                        option(value=pc.id selected=(product && product.productCategoryId === pc.id))
+                                            = pc.name + ' (' + pc.kpdCode + ')'
+                            .da-form-group
+                                label.da-form-label(for='taxRateId')
+                                    | Tax Rate
+                                    span.req *
+                                select#taxRateId.da-form-select(name='taxRateId' required)
+                                    option(value='' disabled selected=(!(product && product.taxRateId))) — Select tax rate —
+                                    each tr in taxRates
+                                        option(value=tr.id selected=(product && product.taxRateId === tr.id))
+                                            = tr.name + ' (' + tr.stripeTaxRateId + ')'
+                                p.da-form-hint Stripe Tax Rate applied to this product on invoices for e-racuni.hr VAT compliance.
+                            .da-form-group
+                                label.da-form-label(for='unitOfMeasure')
+                                    | Unit of Measure
+                                    span.req *
+                                select#unitOfMeasure.da-form-select(name='unitOfMeasure' required)
+                                    - var currentUnit = product && product.unitOfMeasure ? product.unitOfMeasure : ''
+                                    option(value='' disabled selected=(currentUnit === '')) — Select unit —
+                                    option(value='kom' selected=(currentUnit === 'kom')) kom (piece)
+                                    option(value='h' selected=(currentUnit === 'h')) h (hour)
+                                    option(value='mj' selected=(currentUnit === 'mj')) mj (month)
+                                    option(value='god' selected=(currentUnit === 'god')) god (year)
+                                    option(value='usl' selected=(currentUnit === 'usl')) usl (service)
+                                p.da-form-hint Required for Croatian invoice line items and Stripe e-racuni sync.
 
                 //- ── Shipping ────────────────────────────────────────
                 .da-card
@@ -200,17 +218,4 @@ block content
                     a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/products') Cancel
 
 block append scripts
-    script.
-        (function () {
-            'use strict';
-            var isPhysical = document.getElementById('isPhysical');
-            var physicalFields = document.getElementById('physicalProductFields');
-
-            function togglePhysicalFields() {
-                if (!physicalFields) return;
-                physicalFields.style.display = isPhysical && isPhysical.checked ? 'grid' : 'none';
-            }
-
-            if (isPhysical) isPhysical.addEventListener('change', togglePhysicalFields);
-            togglePhysicalFields();
-        })();
+    script(src='/public/js/admin-product-form.js')

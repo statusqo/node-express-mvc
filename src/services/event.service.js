@@ -184,11 +184,8 @@ module.exports = {
       await EventMeeting.create(
         {
           eventId,
-          provider: result.provider || "zoom",
-          providerMeetingId: result.providerMeetingId,
-          joinUrl: result.joinUrl,
-          startUrl: result.startUrl || null,
-          hostAccountId: result.hostAccountId ?? null,
+          zoomMeetingId: result.zoomMeetingId,
+          zoomHostAccountId: result.zoomHostAccountId ?? null,
         },
         options
       );
@@ -209,7 +206,7 @@ module.exports = {
       where: { eventStatus: "active", isOnline: true },
       include: [{ model: EventMeeting, as: "EventMeeting", required: false }],
     });
-    const toSync = (events || []).filter((e) => !e.EventMeeting || !e.EventMeeting.providerMeetingId);
+    const toSync = (events || []).filter((e) => !e.EventMeeting || !e.EventMeeting.zoomMeetingId);
     let created = 0;
     const errors = [];
     for (const ev of toSync) {
@@ -232,7 +229,7 @@ module.exports = {
       where: { eventStatus: EVENT_STATUS.ACTIVE, isOnline: true },
       include: [{ model: EventMeeting, as: "EventMeeting", required: false }],
     });
-    const toSync = (events || []).filter((e) => !e.EventMeeting || !e.EventMeeting.providerMeetingId);
+    const toSync = (events || []).filter((e) => !e.EventMeeting || !e.EventMeeting.zoomMeetingId);
     let created = 0;
     const errors = [];
     for (const ev of toSync) {
@@ -261,11 +258,11 @@ module.exports = {
     const meeting = event.EventMeeting;
     const provider = getMeetingProvider();
 
-    if (provider && meeting && meeting.providerMeetingId) {
+    if (provider && meeting && meeting.zoomMeetingId) {
       for (const reg of registrations) {
-        if (reg.providerRegistrantId) {
+        if (reg.zoomRegistrantId) {
           try {
-            await provider.removeRegistrant(meeting.get ? meeting.get({ plain: true }) : meeting, reg.providerRegistrantId);
+            await provider.removeRegistrant(meeting.get ? meeting.get({ plain: true }) : meeting, reg.zoomRegistrantId);
           } catch (_) {}
         }
       }
@@ -361,10 +358,10 @@ module.exports = {
       for (const reg of registrations) {
         try {
           const regPlain = reg.get ? reg.get({ plain: true }) : reg;
-          const { providerRegistrantId } = await provider.addRegistrant(meetingPlain, regPlain);
+          const { zoomRegistrantId } = await provider.addRegistrant(meetingPlain, regPlain);
           // Persist the new registrant ID so future cancellations can remove the registrant
-          if (providerRegistrantId) {
-            await reg.update({ providerRegistrantId });
+          if (zoomRegistrantId) {
+            await reg.update({ zoomRegistrantId });
           }
         } catch (_) {}
       }
@@ -390,7 +387,7 @@ module.exports = {
       const meetingRow = await EventMeeting.findOne({ where: { eventId: id }, ...opts });
       if (!meetingRow || !eventPlain.isOnline) return;
       const meeting = meetingRow.get ? meetingRow.get({ plain: true }) : meetingRow;
-      if (!meeting.providerMeetingId) return;
+      if (!meeting.zoomMeetingId) return;
       const provider = getMeetingProvider();
       if (provider && typeof provider.deleteMeeting === "function") {
         await provider.deleteMeeting(meeting);

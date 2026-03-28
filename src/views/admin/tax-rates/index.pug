@@ -1,0 +1,43 @@
+extends ../../layouts/admin
+
+block content
+    .da-page
+
+        .da-page-header
+            .da-page-header-left
+                h1.da-page-title Tax Rates
+                p.da-page-subtitle Stripe Tax Rate IDs used for e-racuni.hr VAT compliance
+            .da-page-header-right
+                a.da-btn.da-btn--primary(href=(adminPrefix || '') + '/tax-rates/new') New Tax Rate
+
+        .da-section
+            .da-panel
+                if taxRates && taxRates.length
+                    .da-table-scroll
+                        table.da-table
+                            thead
+                                tr
+                                    th Name
+                                    th Stripe Tax Rate ID
+                                    th Percentage
+                                    th Actions
+                            tbody
+                                each tr in taxRates
+                                    tr.da-row(data-id=tr.id)
+                                        td.da-cell-primary= tr.name
+                                        td
+                                            code(style='font-size:0.8rem')= tr.stripeTaxRateId
+                                        td
+                                            span.da-badge.da-badge--info= tr.percentage + '%'
+                                        td
+                                            .da-cell-actions
+                                                a.da-row-btn.da-row-btn--edit(href=(adminPrefix || '') + '/tax-rates/' + tr.id + '/edit') Edit
+                                                .da-delete-wrap
+                                                    button.da-row-btn.da-row-btn--delete.da-delete-trigger(type='button' aria-expanded='false') Delete
+                                                    .da-confirm-group(role='group')
+                                                        button.da-row-btn.da-row-btn--cancel.da-delete-cancel(type='button') No
+                                                        span.da-confirm-sep(aria-hidden='true')
+                                                        form.da-form-inline.da-delete-form(method='post' action=(adminPrefix || '') + '/tax-rates/' + tr.id + '/delete')
+                                                            button.da-row-btn.da-row-btn--confirm(type='submit') Yes, delete
+                else
+                    p.da-table-empty No tax rates yet. Create one using a Stripe Tax Rate ID from your Stripe Dashboard.

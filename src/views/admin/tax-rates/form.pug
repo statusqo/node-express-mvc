@@ -1,0 +1,59 @@
+extends ../../layouts/admin
+
+block content
+    .da-page
+
+        .da-page-header
+            .da-page-header-left
+                h1.da-page-title= isEdit ? 'Edit Tax Rate' : 'New Tax Rate'
+                p.da-page-subtitle= isEdit ? (taxRate && taxRate.name) : 'Add a Stripe Tax Rate ID for e-racuni.hr VAT compliance'
+            .da-page-header-right
+                a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/tax-rates') Back to Tax Rates
+
+        if error
+            p.admin-flash.admin-flash-error= error
+
+        form(method='post' action=isEdit ? (adminPrefix || '') + '/tax-rates/' + taxRate.id + '/edit' : (adminPrefix || '') + '/tax-rates/new')
+            .da-card
+                .da-card-header
+                    h2.da-card-title Details
+                .da-card-body
+                    .da-form-group
+                        label.da-form-label(for='name')
+                            | Name
+                            span.req *
+                        input#name.da-form-input(
+                            type='text'
+                            name='name'
+                            required
+                            value=taxRate ? taxRate.name : ''
+                            placeholder='e.g. PDV 25%'
+                        )
+                    .da-form-group
+                        label.da-form-label(for='stripeTaxRateId')
+                            | Stripe Tax Rate ID
+                            span.req *
+                        input#stripeTaxRateId.da-form-input(
+                            type='text'
+                            name='stripeTaxRateId'
+                            required
+                            value=taxRate ? taxRate.stripeTaxRateId : ''
+                            placeholder='txr_xxxxxxxxxxxxxxxxxx'
+                        )
+                        p.da-form-hint Create this in your Stripe Dashboard under Products → Tax rates, then paste the ID here.
+                    .da-form-group
+                        label.da-form-label(for='percentage')
+                            | VAT Percentage
+                            span.req *
+                        select#percentage.da-form-select(name='percentage' required)
+                            - var currentPct = taxRate && taxRate.percentage != null ? Number(taxRate.percentage) : ''
+                            option(value='' disabled selected=(currentPct === '')) — Select percentage —
+                            option(value='0'  selected=(currentPct === 0))  0%
+                            option(value='5'  selected=(currentPct === 5))  5%
+                            option(value='13' selected=(currentPct === 13)) 13%
+                            option(value='25' selected=(currentPct === 25)) 25%
+                        p.da-form-hint Must match the percentage configured on the Stripe Tax Rate object.
+
+            .da-product-form-actions(style='margin-top:1.5rem')
+                button.da-btn.da-btn--primary(type='submit')= isEdit ? 'Update Tax Rate' : 'Create Tax Rate'
+                a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/tax-rates') Cancel

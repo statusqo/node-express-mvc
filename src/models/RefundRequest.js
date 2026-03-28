@@ -1,7 +1,6 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../db/client");
-
-const REFUND_REQUEST_STATUSES = ["pending", "approved", "rejected"];
+const { REFUND_REQUEST_STATUS_LIST, REFUND_REQUEST_STATUS } = require("../constants/refundRequest");
 
 const RefundRequest = sequelize.define("RefundRequest", {
   id: {
@@ -14,12 +13,9 @@ const RefundRequest = sequelize.define("RefundRequest", {
     allowNull: false,
   },
   status: {
-    type: DataTypes.STRING,
+    type: DataTypes.ENUM(...REFUND_REQUEST_STATUS_LIST),
     allowNull: false,
-    defaultValue: "pending",
-    validate: {
-      isIn: [REFUND_REQUEST_STATUSES],
-    },
+    defaultValue: REFUND_REQUEST_STATUS.PENDING,
   },
   reason: {
     type: DataTypes.TEXT,
@@ -50,7 +46,5 @@ const RefundRequest = sequelize.define("RefundRequest", {
     { fields: ["requestedByUserId"] },
   ],
 });
-
-RefundRequest.STATUSES = REFUND_REQUEST_STATUSES;
 
 module.exports = RefundRequest;

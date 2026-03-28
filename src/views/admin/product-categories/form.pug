@@ -1,0 +1,62 @@
+extends ../../layouts/admin
+
+block content
+    .da-page
+
+        .da-page-header
+            .da-page-header-left
+                h1.da-page-title= isEdit ? 'Edit Product Category' : 'New Product Category'
+                p.da-page-subtitle= isEdit && productCategory && productCategory.name ? productCategory.name : 'Define a category and its KPD classification code'
+            .da-page-header-right
+                a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/product-categories')
+                    svg(xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                        polyline(points='15 18 9 12 15 6')
+                    | Back to Categories
+
+        if error
+            p.admin-flash.admin-flash-error= error
+
+        .da-pt-form-wrap
+            .da-card
+                .da-card-header
+                    h2.da-card-title Details
+                .da-card-body
+                    form#catForm(
+                        method='post'
+                        action=isEdit ? (adminPrefix || '') + '/product-categories/' + productCategory.id + '/edit' : (adminPrefix || '') + '/product-categories/new'
+                    )
+                        .da-form-group
+                            label.da-form-label(for='name')
+                                | Name
+                                span.req *
+                            input#name.da-form-input(
+                                type='text'
+                                name='name'
+                                required
+                                value=productCategory ? productCategory.name : ''
+                                placeholder='e.g. Online Courses'
+                                autofocus
+                            )
+                        .da-form-group
+                            label.da-form-label(for='slug') Slug
+                            input#slug.da-form-input(
+                                type='text'
+                                name='slug'
+                                value=productCategory ? productCategory.slug : ''
+                                placeholder='Auto-generated from name if left blank'
+                            )
+                            p.da-form-hint Used in URLs and API identifiers. Lowercase letters, numbers, and hyphens only.
+                        .da-form-group
+                            label.da-form-label(for='kpdCode') KPD Code
+                            input#kpdCode.da-form-input(
+                                type='text'
+                                name='kpdCode'
+                                value=productCategory && productCategory.kpdCode ? productCategory.kpdCode : ''
+                                placeholder='e.g. 62.01.11'
+                                maxlength='20'
+                            )
+                            p.da-form-hint NKD/KPD classification code required for Croatian Fiscalization 2.0 (B2B e-invoices). Leave blank if not applicable.
+
+                .da-card-footer
+                    button.da-btn.da-btn--primary(type='submit' form='catForm')= isEdit ? 'Save Changes' : 'Create Category'
+                    a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/product-categories') Cancel

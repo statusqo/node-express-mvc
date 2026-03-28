@@ -27,7 +27,7 @@ module.exports = {
         sameAsDelivery: !!parsed.data.sameAsDelivery,
         errors: parsed.errors,
       });
-      return res.render("web/account", viewData);
+      return res.render("web/account/index", viewData);
     }
     const { sameAsDelivery } = parsed.data;
     await addressService.saveDeliveryAddress(userId, {

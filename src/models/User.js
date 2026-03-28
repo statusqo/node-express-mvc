@@ -1,5 +1,6 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../db/client");
+const { PERSON_TYPE_LIST, PERSON_TYPE } = require("../constants/user");
 
 // Define User model
 // Ensure sequelize is initialized before this is required
@@ -60,9 +61,9 @@ const User = sequelize.define("User", {
     unique: true,
   },
   personType: {
-    type: DataTypes.ENUM('private', 'legal'),
+    type: DataTypes.ENUM(...PERSON_TYPE_LIST),
     allowNull: false,
-    defaultValue: 'private',
+    defaultValue: PERSON_TYPE.PRIVATE,
   },
   companyName: {
     type: DataTypes.STRING,

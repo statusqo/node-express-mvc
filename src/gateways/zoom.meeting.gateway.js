@@ -113,7 +113,7 @@ async function refreshAccessToken(account) {
       : null,
   });
 
-  logger.info({ userId: account.userId }, "Zoom access token refreshed");
+  logger.info("Zoom access token refreshed", { userId: account.userId });
   return data.access_token;
 }
 
@@ -143,7 +143,7 @@ async function getValidToken(account) {
  * Create a Zoom meeting for an event. Resolves host from userId (AdminZoomAccount).
  * @param {Object} event - Event plain object: startDate, startTime, durationMinutes, ...
  * @param {string} userId - Admin user id (must have connected Zoom)
- * @returns {Promise<{ providerMeetingId, joinUrl, startUrl?, provider, hostAccountId }>}
+ * @returns {Promise<{ zoomMeetingId, joinUrl, startUrl?, provider, zoomHostAccountId }>}
  */
 async function createMeeting(event, userId) {
   const account = await AdminZoomAccount.findOne({ where: { userId } });
@@ -183,35 +183,30 @@ async function createMeeting(event, userId) {
     body,
   });
 
-  const joinUrl = data.join_url || "";
-  const startUrl = data.start_url || "";
-  const providerMeetingId = data.id ? String(data.id) : "";
-  if (!providerMeetingId || !joinUrl) {
-    throw new Error("Zoom did not return meeting id or join URL.");
+  const zoomMeetingId = data.id ? String(data.id) : "";
+  if (!zoomMeetingId) {
+    throw new Error("Zoom did not return a meeting id.");
   }
 
-  logger.info({ zoomMeetingId: providerMeetingId, eventId: event.id }, "Zoom meeting created");
+  logger.info("Zoom meeting created", { zoomMeetingId: zoomMeetingId, eventId: event.id });
   return {
-    providerMeetingId,
-    joinUrl,
-    startUrl,
-    provider: "zoom",
-    hostAccountId: account.id,
+    zoomMeetingId,
+    zoomHostAccountId: account.id,
   };
 }
 
 /**
- * Add a registrant to a Zoom meeting. Resolves host token from meeting (hostAccountId -> AdminZoomAccount).
- * @param {Object} meeting - EventMeeting-like plain: { providerMeetingId, hostAccountId }
+ * Add a registrant to a Zoom meeting. Resolves host token from meeting (zoomHostAccountId -> AdminZoomAccount).
+ * @param {Object} meeting - EventMeeting-like plain: { zoomMeetingId, zoomHostAccountId }
  * @param {Object} registration - Registration-like plain: { email, forename, surname }
- * @returns {Promise<{ providerRegistrantId?: string }>}
+ * @returns {Promise<{ zoomRegistrantId?: string }>}
  */
 async function addRegistrant(meeting, registration) {
-  if (!meeting || !meeting.providerMeetingId) {
-    throw new Error("Meeting or providerMeetingId missing.");
+  if (!meeting || !meeting.zoomMeetingId) {
+    throw new Error("Meeting or zoomMeetingId missing.");
   }
-  const account = meeting.hostAccountId
-    ? await AdminZoomAccount.findByPk(meeting.hostAccountId)
+  const account = meeting.zoomHostAccountId
+    ? await AdminZoomAccount.findByPk(meeting.zoomHostAccountId)
     : null;
   if (!account || !account.accessToken) {
     throw new Error("Zoom access token missing for add registrant.");
@@ -232,31 +227,31 @@ async function addRegistrant(meeting, registration) {
 
   const data = await zoomRequest(
     accessToken,
-    `/meetings/${meeting.providerMeetingId}/registrants`,
+    `/meetings/${meeting.zoomMeetingId}/registrants`,
     { method: "POST", body }
   );
 
   // The Zoom add-registrant response shape:
   //   data.id            → the MEETING id (integer) — not the registrant id
   //   data.registrant_id → the unique registrant UUID — this is what we store
-  const providerRegistrantId = data.registrant_id ? String(data.registrant_id) : undefined;
-  if (providerRegistrantId) {
-    logger.info({ meetingId: meeting.providerMeetingId, registrantId: providerRegistrantId }, "Zoom registrant added");
+  const zoomRegistrantId = data.registrant_id ? String(data.registrant_id) : undefined;
+  if (zoomRegistrantId) {
+    logger.info({ meetingId: meeting.zoomMeetingId, registrantId: zoomRegistrantId }, "Zoom registrant added");
   }
-  return { providerRegistrantId };
+  return { zoomRegistrantId };
 }
 
 /**
  * Remove a registrant from a Zoom meeting.
  * Zoom API: DELETE /meetings/{meetingId}/registrants   body: { registrants: [{ id }] }
- * @param {Object} meeting - EventMeeting-like: { providerMeetingId, hostAccountId }
- * @param {string} providerRegistrantId - Zoom registrant id
+ * @param {Object} meeting - EventMeeting-like: { zoomMeetingId, zoomHostAccountId }
+ * @param {string} zoomRegistrantId - Zoom registrant id
  * @returns {Promise<void>}
  */
-async function removeRegistrant(meeting, providerRegistrantId) {
-  if (!meeting || !meeting.providerMeetingId || !providerRegistrantId) return;
-  const account = meeting.hostAccountId
-    ? await AdminZoomAccount.findByPk(meeting.hostAccountId)
+async function removeRegistrant(meeting, zoomRegistrantId) {
+  if (!meeting || !meeting.zoomMeetingId || !zoomRegistrantId) return;
+  const account = meeting.zoomHostAccountId
+    ? await AdminZoomAccount.findByPk(meeting.zoomHostAccountId)
     : null;
   if (!account || !account.accessToken) return;
 
@@ -264,34 +259,34 @@ async function removeRegistrant(meeting, providerRegistrantId) {
   try {
     accessToken = await getValidToken(account);
   } catch (e) {
-    logger.warn({ err: e.message, meetingId: meeting.providerMeetingId }, "Zoom remove registrant: could not get valid token");
+    logger.warn({ err: e.message, meetingId: meeting.zoomMeetingId }, "Zoom remove registrant: could not get valid token");
     return;
   }
 
   try {
     await zoomRequest(
       accessToken,
-      `/meetings/${meeting.providerMeetingId}/registrants`,
+      `/meetings/${meeting.zoomMeetingId}/registrants`,
       {
         method: "DELETE",
-        body: { registrants: [{ id: String(providerRegistrantId) }] },
+        body: { registrants: [{ id: String(zoomRegistrantId) }] },
       }
     );
-    logger.info({ meetingId: meeting.providerMeetingId, registrantId: providerRegistrantId }, "Zoom registrant removed");
+    logger.info({ meetingId: meeting.zoomMeetingId, registrantId: zoomRegistrantId }, "Zoom registrant removed");
   } catch (e) {
-    logger.warn({ err: e.message, meetingId: meeting.providerMeetingId }, "Zoom remove registrant failed");
+    logger.warn({ err: e.message, meetingId: meeting.zoomMeetingId }, "Zoom remove registrant failed");
   }
 }
 
 /**
  * Delete a Zoom meeting.
- * @param {Object} meeting - EventMeeting-like: { providerMeetingId, hostAccountId }
+ * @param {Object} meeting - EventMeeting-like: { zoomMeetingId, zoomHostAccountId }
  * @returns {Promise<void>}
  */
 async function deleteMeeting(meeting) {
-  if (!meeting || !meeting.providerMeetingId) return;
-  const account = meeting.hostAccountId
-    ? await AdminZoomAccount.findByPk(meeting.hostAccountId)
+  if (!meeting || !meeting.zoomMeetingId) return;
+  const account = meeting.zoomHostAccountId
+    ? await AdminZoomAccount.findByPk(meeting.zoomHostAccountId)
     : null;
   if (!account || !account.accessToken) return;
 
@@ -299,15 +294,15 @@ async function deleteMeeting(meeting) {
   try {
     accessToken = await getValidToken(account);
   } catch (e) {
-    logger.warn({ err: e.message, meetingId: meeting.providerMeetingId }, "Zoom delete meeting: could not get valid token");
+    logger.warn({ err: e.message, meetingId: meeting.zoomMeetingId }, "Zoom delete meeting: could not get valid token");
     return;
   }
 
   try {
-    await zoomRequest(accessToken, `/meetings/${meeting.providerMeetingId}`, { method: "DELETE" });
-    logger.info({ meetingId: meeting.providerMeetingId }, "Zoom meeting deleted");
+    await zoomRequest(accessToken, `/meetings/${meeting.zoomMeetingId}`, { method: "DELETE" });
+    logger.info({ meetingId: meeting.zoomMeetingId }, "Zoom meeting deleted");
   } catch (e) {
-    logger.warn({ err: e.message, meetingId: meeting.providerMeetingId }, "Zoom delete meeting failed");
+    logger.warn({ err: e.message, meetingId: meeting.zoomMeetingId }, "Zoom delete meeting failed");
   }
 }
 

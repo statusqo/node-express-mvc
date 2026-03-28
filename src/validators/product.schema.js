@@ -1,4 +1,5 @@
 const { z } = require("zod");
+const { UNIT_OF_MEASURE_LIST, WEIGHT_UNIT_LIST } = require("../constants/product");
 
 const slugSchema = z
   .string()
@@ -11,7 +12,8 @@ const ProductSchema = z.object({
   slug: z.string().trim().max(255).optional().nullable(),
   description: z.string().trim().max(10000).optional().nullable().transform((v) => (v && v.trim() ? v.trim() : null)),
   productTypeId: z.string().trim().max(36).optional().nullable().transform((v) => (v && v.trim() ? v.trim() : null)),
-  productCategoryId: z.string().trim().max(36).optional().nullable().transform((v) => (v && v.trim() ? v.trim() : null)),
+  productCategoryId: z.string().trim().min(1, "Product category is required.").max(36),
+  taxRateId: z.string().trim().min(1, "Tax rate is required.").max(36),
   priceAmount: z
     .union([z.string(), z.number()])
     .optional()
@@ -30,12 +32,11 @@ const ProductSchema = z.object({
     .optional()
     .nullable()
     .transform((v) => (v === "" || v === undefined || v === null ? null : Number(v))),
-  weightUnit: z.string().trim().max(10).optional().nullable().transform((v) => (v && v.trim() ? v.trim() : null)),
-  vatRate: z
-    .union([z.string(), z.number()])
-    .optional()
-    .transform((v) => (v === "" || v === undefined || v === null ? 25 : parseInt(String(v), 10)))
-    .refine((n) => [0, 5, 13, 25].includes(n), "VAT rate must be 0, 5, 13, or 25."),
+  weightUnit: z.enum(WEIGHT_UNIT_LIST).optional().nullable(),
+  unitOfMeasure: z.enum(UNIT_OF_MEASURE_LIST, {
+    required_error: "Unit of measure is required.",
+    invalid_type_error: `Unit of measure must be one of: ${UNIT_OF_MEASURE_LIST.join(", ")}.`,
+  }),
 });
 
 function validateProduct(body, slugValue) {
@@ -52,6 +53,7 @@ function validateProduct(body, slugValue) {
       description: parsed.data.description,
       productTypeId: parsed.data.productTypeId,
       productCategoryId: parsed.data.productCategoryId,
+      taxRateId: parsed.data.taxRateId,
       priceAmount: parsed.data.priceAmount,
       currency: undefined, // will be set server‑side to DEFAULT_CURRENCY
       quantity: parsed.data.quantity ?? 0,
@@ -59,7 +61,7 @@ function validateProduct(body, slugValue) {
       isPhysical: parsed.data.isPhysical ?? false,
       weight: parsed.data.weight,
       weightUnit: parsed.data.weightUnit,
-      vatRate: parsed.data.vatRate ?? 25,
+      unitOfMeasure: parsed.data.unitOfMeasure,
     },
   };
 }

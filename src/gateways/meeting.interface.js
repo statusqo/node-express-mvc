@@ -5,13 +5,13 @@
  * types (e.g. AdminZoomAccount) in core; the provider resolves host credentials.
  *
  * Implementations (e.g. Zoom) provide:
- * - createMeeting(event, userId) -> Promise<{ providerMeetingId, joinUrl, startUrl?, provider, hostAccountId }>
+ * - createMeeting(event, userId) -> Promise<{ zoomMeetingId, zoomHostAccountId }>
  *   Provider resolves host account from userId (e.g. Zoom loads AdminZoomAccount by userId).
  * - addRegistrant(meeting, registration) -> Promise<{ providerRegistrantId? }>
- *   Provider resolves host token from meeting (e.g. meeting.hostAccountId -> AdminZoomAccount).
+ *   Provider resolves host token from meeting (e.g. meeting.zoomHostAccountId -> AdminZoomAccount).
  *
  * event: plain { id, startDate, startTime, durationMinutes, ... }
- * meeting: EventMeeting-like plain object (providerMeetingId, joinUrl, hostAccountId, ...)
+ * meeting: EventMeeting-like plain object (zoomMeetingId, zoomHostAccountId, ...)
  * registration: Registration-like plain { email, forename, surname, ... }
  */
 

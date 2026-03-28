@@ -1,7 +1,7 @@
 const { Op } = require("sequelize");
 const { sequelize } = require("../db/client");
 const { Order, OrderLine, ProductVariant, Product, ProductPrice, RefundRequest } = require("../models");
-const { PAYMENT_STATUSES, FULFILLMENT_STATUSES } = require("../constants/order");
+const { PAYMENT_STATUS_LIST, FULFILLMENT_STATUS_LIST } = require("../constants/order");
 
 const defaultLineInclude = [
   {
@@ -91,10 +91,10 @@ module.exports = {
   async findAllWithFilters(filters = {}, options = {}) {
     const where = {};
 
-    if (filters.paymentStatus && PAYMENT_STATUSES.includes(filters.paymentStatus)) {
+    if (filters.paymentStatus && PAYMENT_STATUS_LIST.includes(filters.paymentStatus)) {
       where.paymentStatus = filters.paymentStatus;
     }
-    if (filters.fulfillmentStatus && FULFILLMENT_STATUSES.includes(filters.fulfillmentStatus)) {
+    if (filters.fulfillmentStatus && FULFILLMENT_STATUS_LIST.includes(filters.fulfillmentStatus)) {
       where.fulfillmentStatus = filters.fulfillmentStatus;
     }
 
@@ -175,6 +175,10 @@ module.exports = {
         price: snapshot.price,
         quantity: quantity ?? 1,
         vatRate: snapshot.vatRate != null ? snapshot.vatRate : null,
+        sku: snapshot.sku || null,
+        kpd: snapshot.kpd || null,
+        unit: snapshot.unit || null,
+        stripeTaxRateId: snapshot.stripeTaxRateId || null,
         ...(eventId != null && { eventId }),
       },
       createOptions

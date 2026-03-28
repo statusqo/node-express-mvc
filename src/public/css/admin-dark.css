@@ -2584,3 +2584,14 @@ tr.da-row--entering {
     color: var(--ds-text-1);
     border-color: var(--ds-border-accent);
 }
+
+/* ── Pending row accent ───────────────────────────────────────────────── */
+tr.da-row--pending {
+    box-shadow: inset 3px 0 0 var(--ds-warning);
+}
+
+/* ── Narrow single-column form grid ──────────────────────────────────── */
+.da-form-grid--narrow {
+    grid-template-columns: 1fr;
+    max-width: 640px;
+}

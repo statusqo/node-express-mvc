@@ -1,4 +1,4 @@
-const { Cart, CartLine, ProductVariant, Product, ProductPrice } = require("../models");
+const { Cart, CartLine, ProductVariant, Product, ProductPrice, TaxRate } = require("../models");
 
 const defaultLineInclude = [
   {
@@ -7,7 +7,7 @@ const defaultLineInclude = [
     attributes: ["id", "title", "productId"],
     required: true,
     include: [
-      { model: Product, as: "Product", attributes: ["id", "title", "slug", "isPhysical"] },
+      { model: Product, as: "Product", attributes: ["id", "title", "slug", "isPhysical"], include: [{ model: TaxRate, as: "TaxRate", attributes: ["percentage"], required: false }] },
       { model: ProductPrice, as: "ProductPrices", where: { isDefault: true }, required: false, limit: 1, attributes: ["amount", "currency"] },
     ],
   },

@@ -1,0 +1,65 @@
+extends ../../layouts/main
+
+block content
+  h1 Order
+  p Order ID: #{order.id}
+  p Payment: #{order.paymentStatus} · Fulfillment: #{order.fulfillmentStatus}
+  p Total: #{Number(order.total).toFixed(2)} #{order.currency}
+  p Date: #{new Date(order.createdAt).toLocaleString()}
+
+  h2 Items
+  ul(style="list-style:none; padding:0")
+    each line in lines
+      - const variant = line.ProductVariant || {}
+      - const product = variant.Product || {}
+      - const title = line.title || (product && product.title) || variant.title || ''
+      li(style="padding:0.5rem 0")= title + " × " + (line.quantity || 1) + " @ " + Number(line.price).toFixed(2) + " = " + (Number(line.price) * (line.quantity || 1)).toFixed(2)
+
+  if order.paymentStatus === "pending"
+    p Your order is pending payment.
+    form(action="/checkout/pay/" + order.id method="post" style="display:inline")
+      button(type="submit" style="background:#635bff;color:#fff;padding:0.75rem 1.5rem;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:1rem") Pay with Stripe
+    p(style="margin-top:0.5rem;font-size:0.9rem;color:#666") You will be redirected to Stripe Checkout to complete your payment.
+  else if order.paymentStatus === "paid"
+    p(style="color:#4caf50;font-weight:600") ✓ Payment successful!
+    if order.sessionId && !order.userId && order.email
+      p(style="margin-top:0.5rem") Register or log in with #{order.email} to access your order history.
+      p(style="margin-top:0.5rem")
+        a(href="/auth/register") Register
+        |  ·
+        a(href="/auth/login") Log in
+    else
+      p(style="margin-top:0.5rem") Thank you for your order.
+  else if order.paymentStatus === "failed"
+    p(style="color:#dc3545") Payment failed. Please try again.
+    form(action="/checkout/pay/" + order.id method="post" style="display:inline")
+      button(type="submit" style="background:#635bff;color:#fff;padding:0.75rem 1.5rem;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:1rem") Retry Payment
+  else if order.paymentStatus === "refunded"
+    p(style="color:#666") This order has been refunded.
+
+  if order.paymentStatus === "paid"
+    if hasApprovedRefundRequest
+      p(style="color:#666") This order has already been refunded.
+    else if hasPendingRefundRequest
+      p(style="color:#f0ad4e;font-weight:600") Refund requested — pending review.
+    else if order.fulfillmentStatus === "delivered"
+      form(action="/orders/" + order.id + "/refund-request" method="post" style="margin-top:0.5rem")
+        label(for="refund-reason" style="display:block;margin-bottom:0.25rem") Reason (optional)
+        textarea#refund-reason(name="reason" rows="2" style="width:100%;max-width:24rem;padding:0.5rem")
+        button(type="submit" style="background:#6c757d;color:#fff;padding:0.5rem 1rem;border:none;border-radius:6px;cursor:pointer;margin-top:0.5rem") Request refund
+    else
+      p(style="color:#666") Refund can only be requested for delivered orders.
+
+  if refundRequests && refundRequests.length
+    h3(style="margin-top:1.5rem") Refund requests
+    ul(style="list-style:none;padding:0")
+      each r in refundRequests
+        li(style="padding:0.5rem 0;border-bottom:1px solid #eee")
+          | #{r.status} — #{r.createdAt ? new Date(r.createdAt).toLocaleString() : ''}
+          if r.reason
+            |  — #{r.reason}
+          if r.status === 'approved'
+            |  — Full amount refunded
+
+  p(style="margin-top:1.5rem")
+    a(href="/orders") Back to orders

@@ -7,13 +7,12 @@ const CartLine = require("./CartLine");
 const Order = require("./Order");
 const OrderLine = require("./OrderLine");
 const Transaction = require("./Transaction");
-const Shipping = require("./Shipping");
 const PaymentMethod = require("./PaymentMethod");
-const UserGatewayProfile = require("./UserGatewayProfile");
 const Post = require("./Post");
 
 const ProductType = require("./ProductType");
 const ProductCategory = require("./ProductCategory");
+const TaxRate = require("./TaxRate");
 const Tag = require("./Tag");
 const Product = require("./Product");
 const ProductVariant = require("./ProductVariant");
@@ -31,7 +30,6 @@ const RefundRequest = require("./RefundRequest");
 const Registration = require("./Registration");
 const AdminZoomAccount = require("./AdminZoomAccount");
 const EventMeeting = require("./EventMeeting");
-const Invoice = require("./Invoice");
 const ProcessedStripeEvent = require("./ProcessedStripeEvent");
 
 // --- Menu <-> MenuItem ---
@@ -49,6 +47,10 @@ ProductType.hasMany(Product, { foreignKey: "productTypeId" });
 Product.belongsTo(ProductType, { foreignKey: "productTypeId" });
 ProductCategory.hasMany(Product, { foreignKey: "productCategoryId" });
 Product.belongsTo(ProductCategory, { foreignKey: "productCategoryId" });
+
+// --- TaxRate <-> Product ---
+TaxRate.hasMany(Product, { foreignKey: "taxRateId" });
+Product.belongsTo(TaxRate, { foreignKey: "taxRateId", as: "TaxRate" });
 
 // --- Product & variants & price (Product has many variants; each product gets a default variant on create) ---
 Product.hasMany(ProductVariant, { foreignKey: "productId", as: "ProductVariants" });
@@ -134,16 +136,6 @@ Registration.belongsTo(User, { foreignKey: "userId" });
 Order.hasMany(Transaction, { foreignKey: "orderId" });
 Transaction.belongsTo(Order, { foreignKey: "orderId" });
 
-// --- Invoice ---
-Order.hasOne(Invoice, { foreignKey: "orderId", as: "Invoice" });
-Invoice.belongsTo(Order, { foreignKey: "orderId" });
-
-// Self-referential storno associations.
-// stornoOfInvoiceId on the storno invoice points to the original.
-// stornoInvoiceId on the original is a denormalized reverse pointer.
-Invoice.belongsTo(Invoice, { as: "originalInvoice", foreignKey: "stornoOfInvoiceId" });
-Invoice.hasOne(Invoice, { as: "stornoInvoice", foreignKey: "stornoOfInvoiceId" });
-
 // --- RefundRequest ---
 Order.hasMany(RefundRequest, { foreignKey: "orderId" });
 RefundRequest.belongsTo(Order, { foreignKey: "orderId" });
@@ -152,19 +144,9 @@ RefundRequest.belongsTo(User, { as: "RequestedByUser", foreignKey: "requestedByU
 User.hasMany(RefundRequest, { as: "ProcessedRefunds", foreignKey: "processedByUserId" });
 RefundRequest.belongsTo(User, { as: "ProcessedByUser", foreignKey: "processedByUserId" });
 
-// --- Shipping ---
-Order.hasMany(Shipping, { foreignKey: "orderId" });
-Shipping.belongsTo(Order, { foreignKey: "orderId" });
-Address.hasMany(Shipping, { foreignKey: "addressId" });
-Shipping.belongsTo(Address, { foreignKey: "addressId" });
-
 // --- PaymentMethod ---
 User.hasMany(PaymentMethod, { foreignKey: "userId" });
 PaymentMethod.belongsTo(User, { foreignKey: "userId" });
-
-// --- UserGatewayProfile (Stripe customer IDs, etc.) ---
-User.hasMany(UserGatewayProfile, { foreignKey: "userId" });
-UserGatewayProfile.belongsTo(User, { foreignKey: "userId" });
 
 // --- AdminZoomAccount (Zoom OAuth for admins hosting online events) ---
 User.hasOne(AdminZoomAccount, { foreignKey: "userId" });
@@ -182,12 +164,11 @@ module.exports = {
   Order,
   OrderLine,
   Transaction,
-  Shipping,
   PaymentMethod,
-  UserGatewayProfile,
   Post,
   ProductType,
   ProductCategory,
+  TaxRate,
   Tag,
   Product,
   ProductVariant,
@@ -205,6 +186,5 @@ module.exports = {
   Registration,
   AdminZoomAccount,
   EventMeeting,
-  Invoice,
   ProcessedStripeEvent,
 };

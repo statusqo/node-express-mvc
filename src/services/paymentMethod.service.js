@@ -1,5 +1,5 @@
 const paymentMethodRepo = require("../repos/paymentMethod.repo");
-const { getGateway } = require("../gateways");
+const { getDefaultGateway } = require("../gateways");
 
 async function listByUser(userId) {
   return await paymentMethodRepo.findByUser(userId);
@@ -39,17 +39,15 @@ async function setDefault(id, userId) {
 async function remove(id, userId) {
   const pm = await getById(id, userId);
   if (!pm) return false;
-  const gatewayName = pm.gateway || "stripe";
-  const gateway = getGateway(gatewayName);
-  if (pm.gatewayToken && gateway) {
+  const gateway = getDefaultGateway();
+  if (pm.stripePaymentMethodId && gateway) {
     try {
-      await gateway.detachPaymentMethod(pm.gatewayToken);
+      await gateway.detachPaymentMethod(pm.stripePaymentMethodId);
     } catch (err) {
       const logger = require("../config/logger");
       logger.warn("paymentMethod.remove: gateway detach failed", {
         id,
-        gateway: gatewayName,
-        gatewayTokenLast4: pm.gatewayToken ? pm.gatewayToken.slice(-4) : "(none)",
+        stripePaymentMethodId: pm.stripePaymentMethodId ? pm.stripePaymentMethodId.slice(-4) : "(none)",
         error: err.message,
       });
     }

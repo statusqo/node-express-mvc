@@ -4,8 +4,20 @@
  */
 const order = require("./order");
 const transaction = require("./transaction");
+const address = require("./address");
+const event = require("./event");
+const product = require("./product");
+const refundRequest = require("./refundRequest");
+const registration = require("./registration");
+const user = require("./user");
 
 module.exports = {
   ...order,
   ...transaction,
+  ...address,
+  ...event,
+  ...product,
+  ...refundRequest,
+  ...registration,
+  ...user,
 };

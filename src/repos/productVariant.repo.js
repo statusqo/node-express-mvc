@@ -1,4 +1,4 @@
-const { ProductVariant, Product, ProductPrice } = require("../models");
+const { ProductVariant, Product, ProductPrice, ProductCategory, TaxRate } = require("../models");
 const { DEFAULT_CURRENCY } = require("../config/constants");
 
 module.exports = {
@@ -33,7 +33,25 @@ module.exports = {
   async getOrderLineSnapshot(variantId, options = {}) {
     const variant = await ProductVariant.findByPk(variantId, {
       include: [
-        { model: Product, as: "Product", attributes: ["id", "title", "vatRate"] },
+        {
+          model: Product,
+          as: "Product",
+          attributes: ["id", "title", "unitOfMeasure"],
+          include: [
+            {
+              model: ProductCategory,
+              as: "ProductCategory",
+              attributes: ["id", "kpdCode"],
+              required: false,
+            },
+            {
+              model: TaxRate,
+              as: "TaxRate",
+              attributes: ["id", "stripeTaxRateId", "percentage"],
+              required: false,
+            },
+          ],
+        },
         { model: ProductPrice, as: "ProductPrices", where: { isDefault: true }, required: false, limit: 1 },
       ],
       ...options,
@@ -46,7 +64,11 @@ module.exports = {
       title: product?.title || variant.title || "Product",
       price: priceRow ? Number(priceRow.amount) : 0,
       currency: DEFAULT_CURRENCY,
-      vatRate: product?.vatRate != null ? Number(product.vatRate) : 25,
+      vatRate: product?.TaxRate?.percentage != null ? Number(product.TaxRate.percentage) : 25,
+      sku: variant.sku || null,
+      kpd: product?.ProductCategory?.kpdCode || null,
+      unit: product?.unitOfMeasure || null,
+      stripeTaxRateId: product?.TaxRate?.stripeTaxRateId || null,
     };
   },
 };

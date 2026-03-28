@@ -122,7 +122,7 @@ async function webhook(req, res) {
     }
 
     try {
-      const row = await EventMeeting.findOne({ where: { providerMeetingId: meetingId } });
+      const row = await EventMeeting.findOne({ where: { zoomMeetingId: meetingId } });
       if (row) {
         const eventId = row.eventId;
         await Event.update({ eventStatus: "orphaned" }, { where: { id: eventId } });

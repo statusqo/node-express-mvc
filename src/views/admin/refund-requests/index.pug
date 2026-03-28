@@ -128,9 +128,3 @@ block content
                                             path(d='M3.51 15a9 9 0 1 0 .49-4.95L1 10')
                                         span= filters && filters.status ? 'No ' + filters.status + ' refund requests.' : 'No refund requests found.'
 
-block append scripts
-    script.
-        /* Highlight pending rows with a subtle left border accent */
-        document.querySelectorAll('tr.da-row--pending').forEach(function (row) {
-            row.style.setProperty('box-shadow', 'inset 3px 0 0 var(--ds-warning)', '');
-        });

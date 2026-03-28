@@ -78,7 +78,7 @@ module.exports = {
             : null;
         const seatsRemaining =
           ev.ProductVariant && ev.ProductVariant.quantity != null ? Number(ev.ProductVariant.quantity) : null;
-        const hasMeeting = ev.isOnline && ev.EventMeeting && ev.EventMeeting.providerMeetingId;
+        const hasMeeting = ev.isOnline && ev.EventMeeting && ev.EventMeeting.zoomMeetingId;
         const meetingLinkStatus = !ev.isOnline ? null : ev.eventStatus === "active" && hasMeeting ? "synced" : "not_synced";
         const registrationCount = ev.Registrations ? ev.Registrations.length : 0;
         return {
@@ -239,7 +239,7 @@ module.exports = {
     const priceRow = ev.productVariantId
       ? await ProductPrice.findOne({ where: { productVariantId: ev.productVariantId, isDefault: true } })
       : null;
-    const hasMeeting = ev.isOnline && ev.EventMeeting && ev.EventMeeting.providerMeetingId;
+    const hasMeeting = ev.isOnline && ev.EventMeeting && ev.EventMeeting.zoomMeetingId;
     const meetingLinkStatus = !ev.isOnline ? null : ev.eventStatus === "active" && hasMeeting ? "synced" : "not_synced";
     const registrationCount = ev.Registrations ? ev.Registrations.length : 0;
     const defaultVariant = plain.ProductVariants && plain.ProductVariants[0];

@@ -68,7 +68,7 @@ module.exports = {
       const viewData = await getAccountViewData(userId, req.user);
       const config = require("../../config");
       viewData.stripePublishableKey = config.stripe.publishableKey || "";
-      return res.render("web/account", viewData);
+      return res.render("web/account/index", viewData);
     } catch (err) {
       logger.error("Account dashboard: failed", { error: err.message, stack: err.stack, userId });
       return next(err);

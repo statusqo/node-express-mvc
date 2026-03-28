@@ -89,13 +89,14 @@ module.exports = {
   },
 
   async newForm(req, res) {
-    const { types, categories } = await productService.getFormData();
+    const { types, categories, taxRates } = await productService.getFormData();
     res.render("admin/products/form", {
       title: "New Product",
       uploadsBaseUrl: getUploadsBaseUrl(),
       product: null,
       productTypes: (types || []).map(toPlain),
       productCategories: (categories || []).map(toPlain),
+      taxRates: (taxRates || []).map(toPlain),
       attachedMetaObjects: [],
       attachedMedia: [],
       isEdit: false,
@@ -107,7 +108,7 @@ module.exports = {
     const slugVal = req.body.slug ? String(req.body.slug).trim() : slugify(req.body.title);
     const result = validateProduct(req.body, slugVal);
     if (!result.ok) {
-      const { types, categories, metaObjects } = await productService.getFormData();
+      const { types, categories, taxRates, metaObjects } = await productService.getFormData();
       const metaObjectsWithPairs = withDefinitionPairs(metaObjects);
       const attachedMetaObjects = buildAttachedMetaObjects(normalizeMetaObjectIds(req.body.metaObjectIds), metaObjectsWithPairs, req.body.metaObjectValues || {});
       return res.status(400).render("admin/products/form", {
@@ -115,6 +116,7 @@ module.exports = {
         product: { ...req.body, slug: slugVal, active: req.body.active === "on", isPhysical: req.body.isPhysical === "on", metaObjectValues: req.body.metaObjectValues || {}, mediaIds: normalizeMediaIds(req.body.mediaIds), currency: DEFAULT_CURRENCY },
         productTypes: (types || []).map(toPlain),
         productCategories: (categories || []).map(toPlain),
+        taxRates: (taxRates || []).map(toPlain),
         attachedMetaObjects,
         attachedMedia: [],
         uploadsBaseUrl: getUploadsBaseUrl(),
@@ -123,7 +125,7 @@ module.exports = {
         DEFAULT_CURRENCY,
       });
     }
-    const { types, categories, metaObjects } = await productService.getFormData();
+    const { types, categories, taxRates, metaObjects } = await productService.getFormData();
     const ids = normalizeMetaObjectIds(req.body.metaObjectIds);
     const allowedAttributesByMetaObjectId = {};
     (metaObjects || []).forEach((mo) => {
@@ -153,6 +155,7 @@ module.exports = {
         product: { ...req.body, slug: slugVal, active: req.body.active === "on", metaObjectIds: ids, metaObjectValues: req.body.metaObjectValues || {}, mediaIds: normalizeMediaIds(req.body.mediaIds), currency: DEFAULT_CURRENCY },
         productTypes: (types || []).map(toPlain),
         productCategories: (categories || []).map(toPlain),
+        taxRates: (taxRates || []).map(toPlain),
         attachedMetaObjects,
         attachedMedia: [],
         uploadsBaseUrl: getUploadsBaseUrl(),
@@ -171,6 +174,7 @@ module.exports = {
         product: { ...req.body, slug: slugVal, active: req.body.active === "on", metaObjectIds: ids, metaObjectValues: req.body.metaObjectValues || {}, mediaIds: normalizeMediaIds(req.body.mediaIds), currency: DEFAULT_CURRENCY },
         productTypes: (types || []).map(toPlain),
         productCategories: (categories || []).map(toPlain),
+        taxRates: (taxRates || []).map(toPlain),
         attachedMetaObjects,
         attachedMedia: [],
         uploadsBaseUrl: getUploadsBaseUrl(),
@@ -209,7 +213,7 @@ module.exports = {
     const sortedMedia = [...mediaList].sort((a, b) => (a.ProductMedia?.sortOrder ?? 0) - (b.ProductMedia?.sortOrder ?? 0));
     const mediaIds = sortedMedia.map((m) => m.id);
     const attachedMedia = sortedMedia.map(toAttachedMediaItem);
-    const { types, categories, metaObjects } = await productService.getFormData();
+    const { types, categories, taxRates, metaObjects } = await productService.getFormData();
     const metaObjectsWithPairs = withDefinitionPairs(metaObjects);
     const attachedMetaObjects = buildAttachedMetaObjects(metaObjectIds, metaObjectsWithPairs, metaObjectValues);
     res.render("admin/products/form", {
@@ -226,6 +230,7 @@ module.exports = {
       },
       productTypes: (types || []).map(toPlain),
       productCategories: (categories || []).map(toPlain),
+      taxRates: (taxRates || []).map(toPlain),
       attachedMetaObjects,
       attachedMedia,
       isEdit: true,
@@ -250,7 +255,7 @@ module.exports = {
     const slugVal = req.body.slug ? String(req.body.slug).trim() : slugify(req.body.title);
     const result = validateProduct(req.body, slugVal);
     if (!result.ok) {
-      const { types, categories, metaObjects, media } = await productService.getFormData();
+      const { types, categories, taxRates, metaObjects, media } = await productService.getFormData();
       const metaObjectsWithPairs = withDefinitionPairs(metaObjects);
       const attachedMetaObjects = buildAttachedMetaObjects(existingMetaObjectIds, metaObjectsWithPairs, req.body.metaObjectValues || existingMetaObjectValues);
       const mediaIdsOrder = normalizeMediaIds(req.body.mediaIds);
@@ -261,6 +266,7 @@ module.exports = {
         product: { id, ...req.body, slug: slugVal, active: req.body.active === "on", metaObjectIds: existingMetaObjectIds, metaObjectValues: req.body.metaObjectValues || existingMetaObjectValues, mediaIds: mediaIdsOrder, currency: DEFAULT_CURRENCY },
         productTypes: (types || []).map(toPlain),
         productCategories: (categories || []).map(toPlain),
+        taxRates: (taxRates || []).map(toPlain),
         attachedMetaObjects,
         attachedMedia,
         uploadsBaseUrl: getUploadsBaseUrl(),
@@ -269,7 +275,7 @@ module.exports = {
         DEFAULT_CURRENCY,
       });
     }
-    const { types, categories, metaObjects, media } = await productService.getFormData();
+    const { types, categories, taxRates, metaObjects, media } = await productService.getFormData();
     const ids = normalizeMetaObjectIds(req.body.metaObjectIds);
     const validMetaIds = new Set((metaObjects || []).map((m) => String(m.id)));
     const validIds = ids.filter((mid) => validMetaIds.has(String(mid)));
@@ -304,6 +310,7 @@ module.exports = {
         product: { id, ...req.body, slug: slugVal, active: req.body.active === "on", metaObjectIds: ids, metaObjectValues: req.body.metaObjectValues || filteredMetaObjectValues, mediaIds: mediaIdsOrder, currency: DEFAULT_CURRENCY },
         productTypes: (types || []).map(toPlain),
         productCategories: (categories || []).map(toPlain),
+        taxRates: (taxRates || []).map(toPlain),
         attachedMetaObjects,
         attachedMedia,
         uploadsBaseUrl: getUploadsBaseUrl(),

@@ -52,6 +52,36 @@ block content
                                         autocomplete='email'
                                     )
 
+                                .da-form-row
+                                    .da-form-group
+                                        label.da-form-label(for='forename') Forename
+                                        input#forename.da-form-input(
+                                            type='text'
+                                            name='forename'
+                                            value=user ? (user.forename || '') : ''
+                                            placeholder='First name'
+                                            autocomplete='given-name'
+                                        )
+                                    .da-form-group
+                                        label.da-form-label(for='surname') Surname
+                                        input#surname.da-form-input(
+                                            type='text'
+                                            name='surname'
+                                            value=user ? (user.surname || '') : ''
+                                            placeholder='Last name'
+                                            autocomplete='family-name'
+                                        )
+
+                                .da-form-group
+                                    label.da-form-label(for='mobile') Mobile
+                                    input#mobile.da-form-input(
+                                        type='tel'
+                                        name='mobile'
+                                        value=user ? (user.mobile || '') : ''
+                                        placeholder='+385 91 234 5678'
+                                        autocomplete='tel'
+                                    )
+
                                 .da-form-group
                                     label.da-form-label(for='username') Username
                                     input#username.da-form-input(
@@ -198,8 +228,15 @@ block content
 
         //- ── Danger zone (edit only) ─────────────────────────────────
         if isEdit
-            form(method='post' action=(adminPrefix || '') + '/users/' + user.id + '/delete' onsubmit='return confirm("Are you sure you want to delete this user? This cannot be undone.")' style='margin-top:1.5rem')
-                button.da-btn.da-btn--danger(type='submit') Delete User
+            form#delete-user-form(method='post' action=(adminPrefix || '') + '/users/' + user.id + '/delete' style='margin-top:1.5rem')
+                button.da-btn.da-btn--danger(
+                    type='button'
+                    data-confirm-modal
+                    data-confirm-title='Delete User'
+                    data-confirm-msg='This cannot be undone. The following will be removed:'
+                    data-confirm-bullets='["User account and login","All saved addresses","All saved payment methods"]'
+                    data-form-id='delete-user-form'
+                ) Delete User
 
         //- ── Orders table (edit only) ────────────────────────────────
         if isEdit
@@ -247,105 +284,4 @@ block content
                                             .da-table-empty No orders yet.
 
 block append scripts
-    script.
-        (function () {
-            'use strict';
-
-            /* ── Narrow single-column grid when no aside ─────────── */
-            var formGrid = document.querySelector('.da-form-grid--narrow');
-            if (formGrid) {
-                formGrid.style.gridTemplateColumns = '1fr';
-                formGrid.style.maxWidth = '640px';
-            }
-
-            /* ── Password reset panel ─────────────────────────────── */
-            var showResetBtn    = document.getElementById('showResetBtn');
-            var resetFields     = document.getElementById('resetFields');
-            var cancelResetBtn  = document.getElementById('cancelResetBtn');
-            var setPasswordBtn  = document.getElementById('setPasswordBtn');
-            var newPassword     = document.getElementById('newPassword');
-            var confirmPassword = document.getElementById('confirmPassword');
-            var resetError      = document.getElementById('resetError');
-            var hiddenPassword  = document.getElementById('hiddenPassword');
-            var userEditForm    = document.getElementById('userEditForm');
-
-            if (showResetBtn && resetFields) {
-                showResetBtn.addEventListener('click', function () {
-                    resetFields.classList.add('da-reset-fields--open');
-                    showResetBtn.disabled = true;
-                    showResetBtn.style.opacity = '0.38';
-                    showResetBtn.style.pointerEvents = 'none';
-                    setTimeout(function () {
-                        if (newPassword) newPassword.focus();
-                    }, 320);
-                });
-            }
-
-            if (cancelResetBtn) {
-                cancelResetBtn.addEventListener('click', function () {
-                    collapseReset();
-                });
-            }
-
-            function collapseReset() {
-                if (!resetFields) return;
-                resetFields.classList.remove('da-reset-fields--open');
-                hideError();
-                setTimeout(function () {
-                    if (newPassword)     newPassword.value = '';
-                    if (confirmPassword) confirmPassword.value = '';
-                    if (showResetBtn) {
-                        showResetBtn.disabled = false;
-                        showResetBtn.style.opacity = '';
-                        showResetBtn.style.pointerEvents = '';
-                        showResetBtn.focus();
-                    }
-                }, 320);
-            }
-
-            if (setPasswordBtn) {
-                setPasswordBtn.addEventListener('click', function () {
-                    hideError();
-                    var pw  = newPassword  ? newPassword.value  : '';
-                    var cpw = confirmPassword ? confirmPassword.value : '';
-
-                    if (!pw) {
-                        showError('Please enter a new password.');
-                        if (newPassword) newPassword.focus();
-                        return;
-                    }
-                    if (pw.length < 4) {
-                        showError('Password must be at least 4 characters.');
-                        if (newPassword) newPassword.focus();
-                        return;
-                    }
-                    if (pw !== cpw) {
-                        showError('Passwords do not match.');
-                        if (confirmPassword) confirmPassword.focus();
-                        return;
-                    }
-
-                    if (hiddenPassword) hiddenPassword.value = pw;
-                    if (userEditForm)   userEditForm.submit();
-                });
-            }
-
-            function showError(msg) {
-                if (!resetError) return;
-                resetError.textContent = msg;
-                resetError.style.display = 'block';
-            }
-
-            function hideError() {
-                if (resetError) resetError.style.display = 'none';
-            }
-
-            /* ── Escape: collapse reset panel ─────────────────────── */
-            document.addEventListener('keydown', function (e) {
-                if (e.key !== 'Escape') return;
-                if (resetFields && resetFields.classList.contains('da-reset-fields--open')) {
-                    collapseReset();
-                }
-            });
-
-        })();
+    script(src='/public/js/admin-user-form.js')

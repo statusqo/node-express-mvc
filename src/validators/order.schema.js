@@ -1,5 +1,5 @@
 const { z } = require("zod");
-const { FULFILLMENT_STATUSES } = require("../constants/order");
+const { FULFILLMENT_STATUS_LIST } = require("../constants/order");
 
 const OrderUpdateSchema = z.object({
   fulfillmentStatus: z
@@ -7,7 +7,7 @@ const OrderUpdateSchema = z.object({
     .trim()
     .min(1, "Fulfillment status is required.")
     .transform((s) => s.toLowerCase())
-    .refine((s) => FULFILLMENT_STATUSES.includes(s), "Invalid fulfillment status."),
+    .refine((s) => FULFILLMENT_STATUS_LIST.includes(s), "Invalid fulfillment status."),
 });
 
 function validateOrderUpdate(body) {

@@ -26,10 +26,11 @@ module.exports = {
       { label: "Dashboard", url: "/", order: 0 },
       { label: "Users", url: "/users", order: 10 },
       { label: "Orders", url: "/orders", order: 15 },
-      { label: "Invoices", url: "/invoices", order: 15 },
       { label: "Refund Requests", url: "/refund-requests", order: 17 },
+      { label: "Tax Rates", url: "/tax-rates", order: 18 },
       { label: "Products", url: "/products", order: 20 },
       { label: "Product Types", url: "/product-types", order: 25 },
+      { label: "Product Categories", url: "/product-categories", order: 26 },
       { label: "Collections", url: "/collections", order: 30 },
       { label: "Webinars", url: "/webinars", order: 32 },
       { label: "Seminars", url: "/seminars", order: 34 },
@@ -64,9 +65,12 @@ module.exports = {
       { label: "Webinars", url: "/webinars", order: 10 },
       { label: "Seminars", url: "/seminars", order: 20 },
       { label: "Classrooms", url: "/classrooms", order: 30 },
+      { label: "Blog", url: "/blog", order: 40 },
+      { label: "Contact", url: "/contact", order: 50 },
       { label: "Account", url: "/account", order: 90, icon: "fa-user", slug: "account" },
       { label: "Cart", url: "/cart", order: 100, icon: "fa-cart-shopping", slug: "cart" },
     ];
+
     for (const item of headerItems) {
       await queryInterface.bulkInsert("menu_items", [{
         id: crypto.randomUUID(),
@@ -85,23 +89,6 @@ module.exports = {
         updatedAt: now,
       }]);
     }
-
-    await queryInterface.bulkInsert("menu_items", [{
-      id: crypto.randomUUID(),
-      menuId: footerId,
-      label: "Contact",
-      url: "/contact",
-      order: 0,
-      active: true,
-      parentId: null,
-      icon: null,
-      target: null,
-      method: "GET",
-      slug: null,
-      cssClass: null,
-      createdAt: now,
-      updatedAt: now,
-    }]);
   },
 
   async down(queryInterface) {

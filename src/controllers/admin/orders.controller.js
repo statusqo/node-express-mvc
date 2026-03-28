@@ -1,9 +1,8 @@
 // src/controllers/admin/orders.controller.js
 const orderService = require("../../services/order.service");
 const refundRequestService = require("../../services/refundRequest.service");
-const invoiceService = require("../../services/invoice.service");
 const { validateOrderUpdate } = require("../../validators/order.schema");
-const { PAYMENT_STATUSES, FULFILLMENT_STATUSES } = require("../../constants/order");
+const { PAYMENT_STATUS_LIST, FULFILLMENT_STATUS_LIST } = require("../../constants/order");
 
 /**
  * Parse and validate query params for order filters.
@@ -14,13 +13,13 @@ function parseFilters(query) {
   const filters = {};
   if (query.paymentStatus && typeof query.paymentStatus === "string") {
     const s = query.paymentStatus.trim().toLowerCase();
-    if (PAYMENT_STATUSES.includes(s)) {
+    if (PAYMENT_STATUS_LIST.includes(s)) {
       filters.paymentStatus = s;
     }
   }
   if (query.fulfillmentStatus && typeof query.fulfillmentStatus === "string") {
     const s = query.fulfillmentStatus.trim().toLowerCase();
-    if (FULFILLMENT_STATUSES.includes(s)) {
+    if (FULFILLMENT_STATUS_LIST.includes(s)) {
       filters.fulfillmentStatus = s;
     }
   }
@@ -59,8 +58,8 @@ module.exports = {
         dateTo: filters.dateTo || "",
         refundRequest: filters.refundRequest || "",
       },
-      validPaymentStatuses: PAYMENT_STATUSES,
-      validFulfillmentStatuses: FULFILLMENT_STATUSES,
+      validPaymentStatuses: PAYMENT_STATUS_LIST,
+      validFulfillmentStatuses: FULFILLMENT_STATUS_LIST,
     });
   },
 
@@ -72,19 +71,13 @@ module.exports = {
       return res.redirect((req.adminPrefix || "") + "/orders");
     }
     const orderPlain = order.get ? order.get({ plain: true }) : order;
-    const [refundRequests, invoice] = await Promise.all([
-      refundRequestService.findByOrder(order.id),
-      invoiceService.getInvoiceForOrder(order.id),
-    ]);
-    const stornoInvoice = invoice ? await invoiceService.getStornoInvoiceForOrder(order.id) : null;
+    const refundRequests = await refundRequestService.findByOrder(order.id);
     const refundRequestsPlain = (refundRequests || []).map((r) => (r.get ? r.get({ plain: true }) : r));
     res.render("admin/orders/edit", {
       title: "Edit Order",
       order: orderPlain,
       refundRequests: refundRequestsPlain,
-      invoice: invoice || null,
-      stornoInvoice: stornoInvoice || null,
-      validFulfillmentStatuses: FULFILLMENT_STATUSES,
+      validFulfillmentStatuses: FULFILLMENT_STATUS_LIST,
     });
   },
 
@@ -100,19 +93,13 @@ module.exports = {
         return res.redirect(ordersPath);
       }
       const orderPlain = order.get ? order.get({ plain: true }) : order;
-      const [refundRequests, invoice] = await Promise.all([
-        refundRequestService.findByOrder(order.id),
-        invoiceService.getInvoiceForOrder(order.id),
-      ]);
-      const stornoInvoice = invoice ? await invoiceService.getStornoInvoiceForOrder(order.id) : null;
+      const refundRequests = await refundRequestService.findByOrder(order.id);
       const refundRequestsPlain = (refundRequests || []).map((r) => (r.get ? r.get({ plain: true }) : r));
       return res.status(400).render("admin/orders/edit", {
         title: "Edit Order",
         order: orderPlain,
         refundRequests: refundRequestsPlain,
-        invoice: invoice || null,
-        stornoInvoice: stornoInvoice || null,
-        validFulfillmentStatuses: FULFILLMENT_STATUSES,
+        validFulfillmentStatuses: FULFILLMENT_STATUS_LIST,
         error: result.errors[0].message,
       });
     }
@@ -126,21 +113,13 @@ module.exports = {
       const message = status === 404 ? "Order not found." : err.message || "Could not update order.";
       const order = await orderService.getOrderByIdForAdmin(id);
       const orderPlain = order ? (order.get ? order.get({ plain: true }) : order) : { id };
-      const [refundRequests, invoice] = order
-        ? await Promise.all([
-            refundRequestService.findByOrder(order.id),
-            invoiceService.getInvoiceForOrder(order.id),
-          ])
-        : [[], null];
-      const stornoInvoice = invoice ? await invoiceService.getStornoInvoiceForOrder(order.id) : null;
+      const refundRequests = order ? await refundRequestService.findByOrder(order.id) : [];
       const refundRequestsPlain = (refundRequests || []).map((r) => (r.get ? r.get({ plain: true }) : r));
       return res.status(status).render("admin/orders/edit", {
         title: "Edit Order",
         order: orderPlain,
         refundRequests: refundRequestsPlain,
-        invoice: invoice || null,
-        stornoInvoice: stornoInvoice || null,
-        validFulfillmentStatuses: FULFILLMENT_STATUSES,
+        validFulfillmentStatuses: FULFILLMENT_STATUS_LIST,
         error: message,
       });
     }
@@ -155,19 +134,8 @@ module.exports = {
       return res.redirect((req.adminPrefix || "") + "/orders");
     }
     try {
-      const result = await refundRequestService.approveRefundRequest(requestId, adminUserId);
-      const stornoResult = result && result._stornoResult;
-      if (stornoResult && stornoResult.error) {
-        // Financial refund succeeded but storno invoice creation failed.
-        res.setFlash("success", "Refund approved.");
-        res.setFlash("warning", `Storno račun nije kreiran — potrebna ručna intervencija: ${stornoResult.error}`);
-      } else if (stornoResult && stornoResult.fiscalStatus === "failed") {
-        // Storno invoice created but FINA submission failed — retryable via invoice admin.
-        res.setFlash("success", "Refund approved.");
-        res.setFlash("warning", "Storno račun kreiran ali fiskalizacija nije uspjela. Pokušajte ponovo putem administracije računa.");
-      } else {
-        res.setFlash("success", "Refund approved.");
-      }
+      await refundRequestService.approveRefundRequest(requestId, adminUserId);
+      res.setFlash("success", "Refund approved.");
     } catch (err) {
       const msg = err.status === 404 ? "Refund request not found." : err.message || "Could not approve refund.";
       res.setFlash("error", msg);

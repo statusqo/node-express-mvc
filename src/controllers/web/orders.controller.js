@@ -1,9 +1,5 @@
-const fs = require("fs");
 const orderService = require("../../services/order.service");
 const refundRequestService = require("../../services/refundRequest.service");
-const invoiceService = require("../../services/invoice.service");
-const { getDefaultGateway } = require("../../gateways");
-const logger = require("../../config/logger");
 
 function getUserIdAndSession(req) {
   const userId = req.user ? req.user.id : null;
@@ -15,7 +11,7 @@ module.exports = {
   async list(req, res) {
     const { userId, sessionId } = getUserIdAndSession(req);
     const orders = await orderService.listOrders(userId, sessionId);
-    res.render("web/orders", {
+    res.render("web/orders/index", {
       title: "My Orders",
       orders,
     });
@@ -26,138 +22,19 @@ module.exports = {
     const orderId = req.params.id;
     const { order, lines } = await orderService.getOrderWithLines(orderId, userId, sessionId);
 
-    // After checkout, user lands here with ?pay=1. Redirect to Stripe Checkout (standard HTTP 302 on GET).
-    // If Stripe is unavailable, render order page with flash; user can use "Pay with Stripe" button.
-    const shouldRedirectToStripe = req.query.pay === "1" && (order.paymentStatus === "pending" || order.paymentStatus === "failed");
-    if (shouldRedirectToStripe) {
-      try {
-        const gateway = getDefaultGateway();
-        if (gateway) {
-          const result = await gateway.createCheckoutSession(order.id, userId, sessionId);
-          if (result && result.success && result.url) {
-            return res.redirect(302, result.url);
-          }
-        }
-      } catch (stripeErr) {
-        logger.error("Orders show: Stripe checkout session failed", stripeErr);
-        res.locals.flash = {
-          type: "error",
-          message: "Payment could not be started. Please try the button below.",
-        };
-      }
-    }
-
-    // Returning from Stripe with session_id: show processing message
-    const stripeSessionId = req.query.session_id;
-    if (stripeSessionId && order.paymentStatus === "pending") {
-      res.locals.flash = {
-        type: "info",
-        message: "Payment is being processed. Your order will be updated shortly.",
-      };
-    }
-
     const refundRequests = await refundRequestService.findByOrder(order.id);
     const hasPendingRefundRequest = refundRequests.some((r) => r.status === "pending");
     const hasApprovedRefundRequest = refundRequests.some((r) => r.status === "approved");
 
-    const invoice = await invoiceService.getInvoiceForOrder(order.id);
-    const stornoInvoice = order.paymentStatus === "refunded"
-      ? await invoiceService.getStornoInvoiceForOrder(order.id)
-      : null;
-
-    res.render("web/order", {
+    res.render("web/orders/show", {
       title: "Order",
       order,
       lines,
       refundRequests,
       hasPendingRefundRequest,
       hasApprovedRefundRequest,
-      invoice,
-      stornoInvoice,
       stripePublishableKey: require("../../config").stripe?.publishableKey || "",
     });
-  },
-
-  async downloadReceipt(req, res, next) {
-    const userId = req.user && req.user.id;
-    const sessionId = req.session && req.sessionID ? req.sessionID : null;
-    if (!userId) return res.redirect("/auth/login");
-
-    const orderId = req.params.id;
-    let order;
-    try {
-      ({ order } = await orderService.getOrderWithLines(orderId, userId, sessionId));
-    } catch (err) {
-      return next(err);
-    }
-
-    if (!order || order.paymentStatus !== "paid") {
-      return res.status(404).send("Receipt not available.");
-    }
-
-    const invoice = await invoiceService.getInvoiceForOrder(orderId);
-    if (!invoice || !invoice.pdfPath) {
-      return res.status(404).send("Receipt not found.");
-    }
-
-    // invoice.pdfPath is stored as a relative path (e.g. "invoices/INV-2026-000001.pdf").
-    // Resolve it to an absolute path before streaming.
-    const absolutePath = invoiceService.resolvePdfPath(invoice.pdfPath);
-
-    try {
-      await fs.promises.access(absolutePath);
-    } catch {
-      logger.error("Invoice PDF missing from disk", {
-        invoiceNumber: invoice.invoiceNumber,
-        pdfPath: invoice.pdfPath,
-        absolutePath,
-      });
-      return res.status(404).send("Receipt file not found.");
-    }
-
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${invoice.invoiceNumber.replace(/\//g, "-")}.pdf"`);
-    fs.createReadStream(absolutePath).pipe(res);
-  },
-
-  async downloadStornoReceipt(req, res, next) {
-    const userId = req.user && req.user.id;
-    const sessionId = req.session && req.sessionID ? req.sessionID : null;
-    if (!userId) return res.redirect("/auth/login");
-
-    const orderId = req.params.id;
-    let order;
-    try {
-      ({ order } = await orderService.getOrderWithLines(orderId, userId, sessionId));
-    } catch (err) {
-      return next(err);
-    }
-
-    if (!order || order.paymentStatus !== "refunded") {
-      return res.status(404).send("Storno receipt not available.");
-    }
-
-    const stornoInvoice = await invoiceService.getStornoInvoiceForOrder(orderId);
-    if (!stornoInvoice || !stornoInvoice.pdfPath) {
-      return res.status(404).send("Storno receipt not found.");
-    }
-
-    const absolutePath = invoiceService.resolvePdfPath(stornoInvoice.pdfPath);
-
-    try {
-      await fs.promises.access(absolutePath);
-    } catch {
-      logger.error("Storno invoice PDF missing from disk", {
-        invoiceNumber: stornoInvoice.invoiceNumber,
-        pdfPath: stornoInvoice.pdfPath,
-        absolutePath,
-      });
-      return res.status(404).send("Storno receipt file not found.");
-    }
-
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${stornoInvoice.invoiceNumber.replace(/\//g, "-")}.pdf"`);
-    fs.createReadStream(absolutePath).pipe(res);
   },
 
   async refundRequest(req, res) {

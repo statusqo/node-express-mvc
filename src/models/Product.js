@@ -1,5 +1,6 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../db/client");
+const { UNIT_OF_MEASURE_LIST, WEIGHT_UNIT_LIST } = require("../constants/product");
 
 const Product = sequelize.define("Product", {
   id: {
@@ -26,6 +27,10 @@ const Product = sequelize.define("Product", {
   },
   productCategoryId: {
     type: DataTypes.UUID,
+    allowNull: false,
+  },
+  taxRateId: {
+    type: DataTypes.UUID,
     allowNull: true,
   },
   active: {
@@ -42,15 +47,13 @@ const Product = sequelize.define("Product", {
     allowNull: true,
   },
   weightUnit: {
-    type: DataTypes.ENUM("g", "kg"),
+    type: DataTypes.ENUM(...WEIGHT_UNIT_LIST),
     allowNull: true,
   },
-  // Croatian PDV (VAT) rate as a percentage integer: 0, 5, 13, or 25.
-  // Prices are stored gross (VAT-inclusive). Net = gross / (1 + vatRate/100).
-  vatRate: {
-    type: DataTypes.INTEGER,
+  // Unit of measure for Croatian invoice line items. Snapshotted to order_lines at order time.
+  unitOfMeasure: {
+    type: DataTypes.ENUM(...UNIT_OF_MEASURE_LIST),
     allowNull: false,
-    defaultValue: 25,
   },
 }, {
   timestamps: true,

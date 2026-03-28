@@ -1,0 +1,45 @@
+extends ../../layouts/admin
+
+block content
+    .da-page
+
+        .da-page-header
+            .da-page-header-left
+                h1.da-page-title Product Categories
+                p.da-page-subtitle Manage categories and their KPD classification codes
+            .da-page-header-right
+                a.da-btn.da-btn--primary(href=(adminPrefix || '') + '/product-categories/new') New Category
+
+        .da-section
+            .da-panel
+                if productCategories && productCategories.length
+                    .da-table-scroll
+                        table.da-table
+                            thead
+                                tr
+                                    th Name
+                                    th Slug
+                                    th KPD Code
+                                    th Actions
+                            tbody
+                                each cat in productCategories
+                                    tr.da-row(data-id=cat.id)
+                                        td.da-cell-primary= cat.name
+                                        td= cat.slug
+                                        td
+                                            if cat.kpdCode
+                                                span.da-badge.da-badge--info= cat.kpdCode
+                                            else
+                                                span.da-badge.da-badge--neutral —
+                                        td
+                                            .da-cell-actions
+                                                a.da-row-btn.da-row-btn--edit(href=(adminPrefix || '') + '/product-categories/' + cat.id + '/edit') Edit
+                                                .da-delete-wrap
+                                                    button.da-row-btn.da-row-btn--delete.da-delete-trigger(type='button' aria-expanded='false') Delete
+                                                    .da-confirm-group(role='group')
+                                                        button.da-row-btn.da-row-btn--cancel.da-delete-cancel(type='button') No
+                                                        span.da-confirm-sep(aria-hidden='true')
+                                                        form.da-form-inline.da-delete-form(method='post' action=(adminPrefix || '') + '/product-categories/' + cat.id + '/delete')
+                                                            button.da-row-btn.da-row-btn--confirm(type='submit') Yes, delete
+                else
+                    p.da-table-empty No product categories yet.

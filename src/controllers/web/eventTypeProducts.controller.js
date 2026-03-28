@@ -222,7 +222,7 @@ module.exports = {
     const gatewayOptions = { email: gatewayEmail };
     if (paymentMethodId && userId) {
       const list = await paymentMethodService.listByUser(userId);
-      const owned = list.find((p) => p.gatewayToken === paymentMethodId);
+      const owned = list.find((p) => p.stripePaymentMethodId === paymentMethodId);
       if (owned) gatewayOptions.paymentMethodId = paymentMethodId;
     }
     try {

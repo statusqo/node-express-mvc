@@ -1,6 +1,6 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../db/client");
-const { PAYMENT_STATUSES, FULFILLMENT_STATUSES } = require("../constants/order");
+const { PAYMENT_STATUS_LIST, FULFILLMENT_STATUS_LIST, PAYMENT_STATUS, FULFILLMENT_STATUS } = require("../constants/order");
 const { DEFAULT_CURRENCY } = require("../config/constants");
 const Order = sequelize.define("Order", {
   id: {
@@ -93,20 +93,15 @@ const Order = sequelize.define("Order", {
     type: DataTypes.STRING(11),
     allowNull: true,
   },
-  // Deprecated: use paymentStatus + fulfillmentStatus. Kept for migration compatibility.
-  status: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
   paymentStatus: {
-    type: DataTypes.ENUM(...PAYMENT_STATUSES),
+    type: DataTypes.ENUM(...PAYMENT_STATUS_LIST),
     allowNull: false,
-    defaultValue: "paid",
+    defaultValue: PAYMENT_STATUS.PAID,
   },
   fulfillmentStatus: {
-    type: DataTypes.ENUM(...FULFILLMENT_STATUSES),
+    type: DataTypes.ENUM(...FULFILLMENT_STATUS_LIST),
     allowNull: false,
-    defaultValue: "pending",
+    defaultValue: FULFILLMENT_STATUS.PENDING,
   },
   total: {
     type: DataTypes.DECIMAL(10, 2),

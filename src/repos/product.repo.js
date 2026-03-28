@@ -1,7 +1,9 @@
-const { Product, ProductVariant, ProductPrice, ProductType, ProductCategory, MetaObject, ProductMetaObject, Media, ProductMedia, OrderLine } = require("../models");
+const { Product, ProductVariant, ProductPrice, ProductType, ProductCategory, TaxRate, MetaObject, ProductMetaObject, Media, ProductMedia, OrderLine } = require("../models");
 const { DEFAULT_CURRENCY } = require("../config/constants");
+const { WEIGHT_UNIT } = require("../constants/product");
 const productTypeRepo = require("./productType.repo");
 const { sequelize } = require("../db");
+const { generateVariantSku } = require("../utils/skuGenerator");
 
 function normalizeMetaObjectIds(metaObjectIds) {
   if (metaObjectIds == null) return [];
@@ -18,10 +20,11 @@ const DEFAULT_VARIANT_INCLUDE = [
   { model: Media, as: "media", through: { attributes: ["sortOrder"] }, required: false },
 ];
 
-/** Include for admin edit: default variant with price, ProductType, MetaObjects, Media. */
+/** Include for admin edit: default variant with price, ProductType, TaxRate, MetaObjects, Media. */
 const EDIT_FORM_INCLUDE = [
   { model: ProductVariant, as: "ProductVariants", where: { isDefault: true }, required: false, limit: 1, include: [{ model: ProductPrice, as: "ProductPrices", where: { isDefault: true }, required: false, limit: 1 }] },
   { model: ProductType, as: "ProductType", attributes: ["id", "name", "slug"], required: false },
+  { model: TaxRate, as: "TaxRate", attributes: ["id", "name", "stripeTaxRateId", "percentage"], required: false },
   { model: MetaObject, as: "metaObjects", through: { attributes: ["id", "productId", "metaObjectId", "sortOrder", "values"] }, required: false },
   { model: Media, as: "media", through: { attributes: ["id", "productId", "mediaId", "sortOrder"] }, required: false },
 ];
@@ -199,6 +202,7 @@ module.exports = {
       where: { slug, active: true },
       include: options.include || [
         { model: ProductType, as: "ProductType", attributes: ["id", "name", "slug"], required: false },
+        { model: TaxRate, as: "TaxRate", attributes: ["percentage"], required: false },
         { model: ProductVariant, as: "ProductVariants", where: { isDefault: true, active: true }, required: false, limit: 1, include: [{ model: ProductPrice, as: "ProductPrices", where: { isDefault: true }, required: false, limit: 1 }] },
       ],
       ...options,
@@ -272,10 +276,14 @@ module.exports = {
    * Create a single variant with one default price for a product (e.g. for event-based offerings).
    */
   async createVariantWithDefaultPrice(productId, { title = "Default", amount = 0, currency = DEFAULT_CURRENCY, quantity = 0 }, options = {}) {
+    const product = await Product.findByPk(productId, { attributes: ["id", "title"], ...options });
+    const variantCount = await ProductVariant.count({ where: { productId }, ...options });
+    const sku = generateVariantSku(product ? product.title : title, variantCount);
     const variant = await ProductVariant.create(
       {
         productId,
         title: String(title).trim() || "Default",
+        sku,
         isDefault: false,
         active: true,
         quantity: Number(quantity) >= 0 ? Number(quantity) : 0,
@@ -299,14 +307,13 @@ module.exports = {
    * Accepts metaObjectIds and metaObjectValues for per-product meta object instance values.
    */
   async create(data, options = {}) {
-    const { title, slug, description, productTypeId, productCategoryId, active = true, priceAmount, /* currency is ignored */ quantity, metaObjectIds, metaObjectValues, mediaIds, isPhysical, weight, weightUnit, vatRate } = data;
+    const { title, slug, description, productTypeId, productCategoryId, taxRateId, active = true, priceAmount, /* currency is ignored */ quantity, metaObjectIds, metaObjectValues, mediaIds, isPhysical, weight, weightUnit, unitOfMeasure } = data;
     const t = options.transaction || (await sequelize.transaction());
     const ownTransaction = !options.transaction;
     try {
       const physical = isPhysical === "on" || isPhysical === true;
       const weightVal = physical && weight !== "" && weight != null && !isNaN(Number(weight)) ? Number(weight) : null;
-      const unitVal = weightVal != null && (weightUnit === "g" || weightUnit === "kg") ? weightUnit : (weightVal != null ? "kg" : null);
-      const vatRateVal = [0, 5, 13, 25].includes(Number(vatRate)) ? Number(vatRate) : 25;
+      const unitVal = weightVal != null && (weightUnit === WEIGHT_UNIT.G || weightUnit === WEIGHT_UNIT.KG) ? weightUnit : (weightVal != null ? "kg" : null);
       const product = await Product.create(
         {
           title: String(title).trim(),
@@ -314,11 +321,12 @@ module.exports = {
           description: description ? String(description).trim() : null,
           productTypeId: productTypeId || null,
           productCategoryId: productCategoryId || null,
+          taxRateId: taxRateId || null,
           active: !!active,
           isPhysical: physical,
           weight: weightVal,
           weightUnit: unitVal,
-          vatRate: vatRateVal,
+          unitOfMeasure: unitOfMeasure || null,
         },
         { transaction: t }
       );
@@ -327,6 +335,7 @@ module.exports = {
         {
           productId: product.id,
           title: "Default",
+          sku: generateVariantSku(String(title).trim(), 0),
           isDefault: true,
           active: true,
           quantity: defaultQuantity,
@@ -362,13 +371,14 @@ module.exports = {
   async update(id, data, options = {}) {
     const product = await Product.findByPk(id, options);
     if (!product) return null;
-    const { title, slug, description, productTypeId, productCategoryId, active, priceAmount, currency, quantity, metaObjectIds, metaObjectValues, mediaIds, isPhysical, weight, weightUnit, vatRate } = data;
+    const { title, slug, description, productTypeId, productCategoryId, taxRateId, active, priceAmount, currency, quantity, metaObjectIds, metaObjectValues, mediaIds, isPhysical, weight, weightUnit, unitOfMeasure } = data;
     const payload = {};
     if (title !== undefined) payload.title = String(title).trim();
     if (slug !== undefined) payload.slug = String(slug).trim();
     if (description !== undefined) payload.description = description ? String(description).trim() : null;
     if (productTypeId !== undefined) payload.productTypeId = productTypeId || null;
     if (productCategoryId !== undefined) payload.productCategoryId = productCategoryId || null;
+    if (taxRateId !== undefined) payload.taxRateId = taxRateId || null;
     if (active !== undefined) payload.active = !!active;
     if (isPhysical !== undefined) {
       const physical = isPhysical === "on" || isPhysical === true;
@@ -379,15 +389,15 @@ module.exports = {
       } else if (weight !== undefined || weightUnit !== undefined) {
         const weightVal = weight !== "" && weight != null && !isNaN(Number(weight)) ? Number(weight) : null;
         payload.weight = weightVal;
-        payload.weightUnit = weightVal != null && (weightUnit === "g" || weightUnit === "kg") ? weightUnit : (weightVal != null ? "kg" : null);
+        payload.weightUnit = weightVal != null && (weightUnit === WEIGHT_UNIT.G || weightUnit === WEIGHT_UNIT.KG) ? weightUnit : (weightVal != null ? "kg" : null);
       }
     } else if (weight !== undefined || weightUnit !== undefined) {
       const weightVal = weight !== "" && weight != null && !isNaN(Number(weight)) ? Number(weight) : null;
       payload.weight = weightVal;
-      payload.weightUnit = weightVal != null && (weightUnit === "g" || weightUnit === "kg") ? weightUnit : (weightVal != null ? "kg" : null);
+      payload.weightUnit = weightVal != null && (weightUnit === WEIGHT_UNIT.G || weightUnit === WEIGHT_UNIT.KG) ? weightUnit : (weightVal != null ? "kg" : null);
     }
-    if (vatRate !== undefined) {
-      payload.vatRate = [0, 5, 13, 25].includes(Number(vatRate)) ? Number(vatRate) : 25;
+    if (unitOfMeasure !== undefined) {
+      payload.unitOfMeasure = unitOfMeasure || null;
     }
     await product.update(payload, options);
     if (priceAmount !== undefined || currency !== undefined) {

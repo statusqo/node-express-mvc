@@ -14,7 +14,8 @@
       "WebFetch(domain:porezna-uprava.gov.hr)",
       "WebFetch(domain:www.porezna-uprava.hr)",
       "WebFetch(domain:github.com)",
-      "Bash(node src/scripts/test-fiscalization-storno.js)"
+      "Bash(node src/scripts/test-fiscalization-storno.js)",
+      "Bash(ls -la d:/DEFY/projects/node-express-mvc/src/views/admin/*/index.pug)"
     ]
   }
 }

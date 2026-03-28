@@ -8,11 +8,12 @@ const collectionsController = require("../../controllers/admin/collections.contr
 const metaObjectsController = require("../../controllers/admin/metaObjects.controller");
 const mediaController = require("../../controllers/admin/media.controller");
 const productTypesController = require("../../controllers/admin/productTypes.controller");
+const productCategoriesController = require("../../controllers/admin/productCategories.controller");
+const taxRatesController = require("../../controllers/admin/taxRates.controller");
 const postsController = require("../../controllers/admin/posts.controller");
 const menusController = require("../../controllers/admin/menus.controller");
 const menuItemsController = require("../../controllers/admin/menuItems.controller");
 const ordersController = require("../../controllers/admin/orders.controller");
-const invoicesController = require("../../controllers/admin/invoices.controller");
 const refundRequestsController = require("../../controllers/admin/refundRequests.controller");
 const webinarsRoutes = require("./webinars.routes");
 const seminarsRoutes = require("./seminars.routes");
@@ -66,12 +67,6 @@ router.get("/orders/:id/edit", asyncHandler(ordersController.editForm));
 router.post("/orders/:id/edit", asyncHandler(ordersController.update));
 router.post("/orders/:id/refund-request/:requestId/approve", asyncHandler(ordersController.approveRefundRequest));
 router.post("/orders/:id/refund-request/:requestId/reject", asyncHandler(ordersController.rejectRefundRequest));
-router.post("/orders/:id/regenerate-invoice", asyncHandler(invoicesController.regenerateInvoice));
-
-// Invoices
-router.get("/invoices", asyncHandler(invoicesController.listInvoices));
-router.post("/invoices/:id/fiscalize", asyncHandler(invoicesController.retryFiscalization));
-
 // Users CRUD
 router.get("/users", asyncHandler(usersController.index));
 router.get("/users/new", asyncHandler(usersController.newForm));
@@ -109,6 +104,22 @@ router.post("/product-types/new", asyncHandler(productTypesController.create));
 router.get("/product-types/:id/edit", asyncHandler(productTypesController.editForm));
 router.post("/product-types/:id/edit", asyncHandler(productTypesController.update));
 router.post("/product-types/:id/delete", asyncHandler(productTypesController.delete));
+
+// Product Categories CRUD
+router.get("/product-categories", asyncHandler(productCategoriesController.index));
+router.get("/product-categories/new", asyncHandler(productCategoriesController.newForm));
+router.post("/product-categories/new", asyncHandler(productCategoriesController.create));
+router.get("/product-categories/:id/edit", asyncHandler(productCategoriesController.editForm));
+router.post("/product-categories/:id/edit", asyncHandler(productCategoriesController.update));
+router.post("/product-categories/:id/delete", asyncHandler(productCategoriesController.delete));
+
+// Tax Rates CRUD
+router.get("/tax-rates", asyncHandler(taxRatesController.index));
+router.get("/tax-rates/new", asyncHandler(taxRatesController.newForm));
+router.post("/tax-rates/new", asyncHandler(taxRatesController.create));
+router.get("/tax-rates/:id/edit", asyncHandler(taxRatesController.editForm));
+router.post("/tax-rates/:id/edit", asyncHandler(taxRatesController.update));
+router.post("/tax-rates/:id/delete", asyncHandler(taxRatesController.delete));
 
 // Meta Objects CRUD
 router.get("/api/meta-objects", asyncHandler(metaObjectsController.listApi));

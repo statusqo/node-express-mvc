@@ -50,12 +50,12 @@ module.exports = {
     }
     try {
       const existing = await paymentMethodService.listByUser(userId);
-      if (existing.some((p) => p.gatewayToken === paymentMethodId)) {
+      if (existing.some((p) => p.stripePaymentMethodId === paymentMethodId)) {
         return res.status(409).json({ error: "This card is already saved." });
       }
       await gateway.savePaymentMethod(userId, paymentMethodId);
       const list = await paymentMethodService.listByUser(userId);
-      const pm = list.find((p) => p.gatewayToken === paymentMethodId);
+      const pm = list.find((p) => p.stripePaymentMethodId === paymentMethodId);
       if (!pm) {
         return res.status(400).json({ error: "Could not save card." });
       }

@@ -3,9 +3,7 @@
  * Import and wire all background jobs here so server.js stays clean.
  */
 
-const fiscalizationRetry = require("./fiscalizationRetry.job");
-
-const jobs = [fiscalizationRetry];
+const jobs = [];
 
 function start() {
   jobs.forEach((job) => job.start());

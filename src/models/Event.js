@@ -1,5 +1,6 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../db/client");
+const { EVENT_STATUS_LIST, EVENT_STATUS } = require("../constants/event");
 
 const Event = sequelize.define("Event", {
   id: {
@@ -47,10 +48,9 @@ const Event = sequelize.define("Event", {
     comment: "IANA timezone for startDate/startTime (e.g. Europe/London)",
   },
   eventStatus: {
-    type: DataTypes.STRING,
+    type: DataTypes.ENUM(...EVENT_STATUS_LIST),
     allowNull: false,
-    defaultValue: "active",
-    comment: "active | cancelled | orphaned",
+    defaultValue: EVENT_STATUS.ACTIVE,
   },
 }, {
   timestamps: true,

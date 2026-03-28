@@ -5,6 +5,7 @@
 const productRepo = require("../repos/product.repo");
 const productTypeRepo = require("../repos/productType.repo");
 const productCategoryRepo = require("../repos/productCategory.repo");
+const taxRateRepo = require("../repos/taxRate.repo");
 const metaObjectRepo = require("../repos/metaObject.repo");
 const mediaRepo = require("../repos/media.repo");
 
@@ -50,13 +51,14 @@ module.exports = {
   },
 
   async getFormData() {
-    const [types, categories, metaObjects, media] = await Promise.all([
+    const [types, categories, taxRates, metaObjects, media] = await Promise.all([
       productTypeRepo.findAll(),
       productCategoryRepo.findAll(),
+      taxRateRepo.findAll(),
       metaObjectRepo.findAllForAdmin(),
       mediaRepo.findAllForAdmin(),
     ]);
-    return { types, categories, metaObjects, media };
+    return { types, categories, taxRates, metaObjects, media };
   },
 
   async create(data, options = {}) {

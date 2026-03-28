@@ -1,7 +1,8 @@
 const { z } = require("zod");
+const { ADDRESS_LABEL_LIST } = require("../constants/address");
 
 const AddressSchema = z.object({
-  label: z.string().max(60).optional(),
+  label: z.enum(ADDRESS_LABEL_LIST).optional(),
   line1: z.string().min(1, "Address line 1 is required").max(120),
   line2: z.string().max(120).optional(),
   city: z.string().min(1, "City is required").max(80),

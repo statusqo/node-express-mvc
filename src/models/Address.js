@@ -1,5 +1,6 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../db/client");
+const { ADDRESS_LABEL_LIST, ADDRESS_LABEL } = require("../constants/address");
 
 const Address = sequelize.define("Address", {
   id: {
@@ -12,8 +13,9 @@ const Address = sequelize.define("Address", {
     allowNull: true,
   },
   label: {
-    type: DataTypes.STRING,
-    allowNull: true,
+    type: DataTypes.ENUM(...ADDRESS_LABEL_LIST),
+    allowNull: false,
+    defaultValue: ADDRESS_LABEL.DELIVERY,
   },
   line1: {
     type: DataTypes.STRING,

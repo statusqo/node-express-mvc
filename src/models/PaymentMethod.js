@@ -15,14 +15,9 @@ const PaymentMethod = sequelize.define("PaymentMethod", {
     type: DataTypes.STRING,
     allowNull: false,
   },
-  gatewayToken: {
+  stripePaymentMethodId: {
     type: DataTypes.STRING,
     allowNull: false,
-  },
-  gateway: {
-    type: DataTypes.STRING,
-    allowNull: false,
-    defaultValue: "stripe",
   },
   last4: {
     type: DataTypes.STRING(4),

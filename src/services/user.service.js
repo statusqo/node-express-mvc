@@ -6,7 +6,6 @@
 const { sequelize } = require("../db/client");
 const userRepo = require("../repos/user.repo");
 const paymentMethodRepo = require("../repos/paymentMethod.repo");
-const userGatewayProfileRepo = require("../repos/userGatewayProfile.repo");
 const cartRepo = require("../repos/cart.repo");
 const addressRepo = require("../repos/address.repo");
 const orderRepo = require("../repos/order.repo");
@@ -32,7 +31,6 @@ async function deleteUser(id) {
   const t = await sequelize.transaction();
   try {
     await paymentMethodRepo.deleteByUserId(id, { transaction: t });
-    await userGatewayProfileRepo.deleteByUserId(id, { transaction: t });
 
     const carts = await cartRepo.findAllByUserId(id, { transaction: t });
     for (const cart of carts) {

@@ -24,4 +24,4 @@ block content
           div(style="margin-top:0.5rem")
             a(href="/account/addresses/" + addr.id + "/edit") Edit
             form(action="/account/addresses/" + addr.id + "/delete" method="post" style="display:inline; margin-left:1rem")
-              button(type="submit") Delete
+              button(type="submit" onclick='return confirm("Remove this address?")') Delete

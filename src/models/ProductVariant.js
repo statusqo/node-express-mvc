@@ -18,7 +18,7 @@ const ProductVariant = sequelize.define("ProductVariant", {
   },
   sku: {
     type: DataTypes.STRING,
-    allowNull: true,
+    allowNull: false,
   },
   isDefault: {
     type: DataTypes.BOOLEAN,

@@ -11,26 +11,11 @@ const EventMeeting = sequelize.define("EventMeeting", {
     type: DataTypes.UUID,
     allowNull: false,
   },
-  provider: {
-    type: DataTypes.STRING,
-    allowNull: false,
-    defaultValue: "zoom",
-  },
-  providerMeetingId: {
+  zoomMeetingId: {
     type: DataTypes.STRING,
     allowNull: false,
   },
-  // TEXT (not STRING/VARCHAR) — Zoom URLs, especially start_url, contain embedded
-  // JWTs (zak tokens) that routinely exceed 255 characters.
-  joinUrl: {
-    type: DataTypes.TEXT,
-    allowNull: false,
-  },
-  startUrl: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-  },
-  hostAccountId: {
+  zoomHostAccountId: {
     type: DataTypes.UUID,
     allowNull: true,
   },
@@ -39,7 +24,7 @@ const EventMeeting = sequelize.define("EventMeeting", {
   tableName: "event_meetings",
   indexes: [
     { unique: true, fields: ["eventId"] },
-    { fields: ["providerMeetingId"] },
+    { fields: ["zoomMeetingId"] },
   ],
 });
 

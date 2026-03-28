@@ -1,7 +1,8 @@
 const addressRepo = require("../repos/address.repo");
+const { ADDRESS_LABEL } = require("../constants/address");
 
-const LABEL_DELIVERY = "delivery";
-const LABEL_BILLING = "billing";
+const LABEL_DELIVERY = ADDRESS_LABEL.DELIVERY;
+const LABEL_BILLING = ADDRESS_LABEL.BILLING;
 
 async function listByUser(userId) {
   return await addressRepo.findByUser(userId);

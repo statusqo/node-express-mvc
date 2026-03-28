@@ -10,7 +10,7 @@ const SALT_ROUNDS = 10;
 
 /**
  * Fetch user detail data (orders, addresses, payment methods) for admin edit view.
- * Returns plain objects; payment methods exclude sensitive gatewayToken.
+ * Returns plain objects; payment methods exclude sensitive stripePaymentMethodId.
  * Orders include both userId-linked and email-matched guest orders.
  */
 async function getUserDetailData(user) {
@@ -87,7 +87,7 @@ module.exports = {
 
     if (!result.ok) return renderFormWithError(result.errors[0].message);
 
-    const { email, username, password, isAdmin, personType, companyName, companyOib } = result.data;
+    const { email, username, password, isAdmin, forename, surname, mobile, personType, companyName, companyOib } = result.data;
     const existing = await userService.findByEmail(email);
     if (existing) return renderFormWithError("A user with this email already exists.");
 
@@ -102,6 +102,9 @@ module.exports = {
       username,
       passwordHash,
       isAdmin,
+      forename,
+      surname,
+      mobile,
       personType,
       companyName,
       companyOib,
@@ -196,8 +199,8 @@ module.exports = {
         });
       }
     }
-    const { personType, companyName, companyOib } = result.data;
-    const updateData = { email: newEmail, username: newUsername, isAdmin, personType, companyName, companyOib };
+    const { forename, surname, mobile, personType, companyName, companyOib } = result.data;
+    const updateData = { email: newEmail, username: newUsername, isAdmin, forename, surname, mobile, personType, companyName, companyOib };
     if (password) {
       updateData.passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
     }

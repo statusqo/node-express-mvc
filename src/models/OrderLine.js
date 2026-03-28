@@ -37,6 +37,31 @@ const OrderLine = sequelize.define("OrderLine", {
     allowNull: true,
     defaultValue: null,
   },
+  // Snapshotted from ProductVariant.sku at order time. Used in Stripe metadata for e-racuni sync.
+  sku: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+    defaultValue: null,
+  },
+  // Snapshotted from ProductCategory.kpdCode at order time. Required for Fiscalization 2.0.
+  kpd: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+    defaultValue: null,
+  },
+  // Snapshotted from Product.unitOfMeasure at order time (e.g. "kom", "h", "mj").
+  unit: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+    defaultValue: null,
+  },
+  // Snapshotted from Product.TaxRate.stripeTaxRateId at order time (e.g. "txr_xxx").
+  // Attached to Stripe InvoiceItems so e-racuni.hr reads VAT natively via Stripe tax_rates.
+  stripeTaxRateId: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    defaultValue: null,
+  },
 }, {
   timestamps: true,
   tableName: "order_lines",

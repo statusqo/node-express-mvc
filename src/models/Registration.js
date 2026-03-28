@@ -1,5 +1,6 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../db/client");
+const { REGISTRATION_STATUS_LIST, REGISTRATION_STATUS } = require("../constants/registration");
 
 const Registration = sequelize.define("Registration", {
   id: {
@@ -36,11 +37,11 @@ const Registration = sequelize.define("Registration", {
     allowNull: true,
   },
   status: {
-    type: DataTypes.STRING,
+    type: DataTypes.ENUM(...REGISTRATION_STATUS_LIST),
     allowNull: false,
-    defaultValue: "registered",
+    defaultValue: REGISTRATION_STATUS.REGISTERED,
   },
-  providerRegistrantId: {
+  zoomRegistrantId: {
     type: DataTypes.STRING,
     allowNull: true,
   },

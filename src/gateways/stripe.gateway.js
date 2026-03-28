@@ -20,9 +20,7 @@ const orderRepo = require("../repos/order.repo");
 const orderLineRepo = require("../repos/orderLine.repo");
 const userRepo = require("../repos/user.repo");
 const transactionRepo = require("../repos/transaction.repo");
-const userGatewayProfileRepo = require("../repos/userGatewayProfile.repo");
 const logger = require("../config/logger");
-const { DEFAULT_CURRENCY } = require("../config/constants");
 
 const { normalizeError, toError } = require("./errors");
 const { PAYMENT_STATUS } = require("../constants/order");
@@ -90,8 +88,25 @@ function logPaymentOp(params) {
 
 /**
  * Get or create Stripe customer for user. Uses user_gateway_profiles; falls back to users.stripeCustomerId during migration.
+ * When userId is null (guest checkout), creates a fresh ephemeral customer with just the email — no caching.
  */
 async function getOrCreateStripeCustomer(userId, email) {
+  // Guest checkout: no userId — create an ephemeral customer with the provided email.
+  // The customer ID is recorded on the Stripe Charge so e-racuni can read it via the Charge object.
+  if (!userId) {
+    const guestEmail = email && typeof email === "string" && email.trim() ? email.trim() : undefined;
+    const customer = await withTimeout(
+      stripe.customers.create({
+        email: guestEmail,
+        metadata: { userId: "" },
+      })
+    );
+    logger.info("Stripe guest customer created", {
+      emailDomain: guestEmail ? guestEmail.split("@")[1] : "(none)",
+    });
+    return customer;
+  }
+
   const user = await userRepo.findById(userId);
   if (!user) {
     throw toError(normalizeError(new Error("User not found."), GATEWAY_NAME));
@@ -99,172 +114,104 @@ async function getOrCreateStripeCustomer(userId, email) {
 
   const preferredEmail = email || user.email;
 
-  // Prefer user_gateway_profiles
-  let profile = await userGatewayProfileRepo.findByUserAndGateway(userId, GATEWAY_NAME);
-  if (profile) {
+  if (user.stripeCustomerId) {
     try {
-      const customer = await withTimeout(stripe.customers.retrieve(profile.externalCustomerId));
+      const customer = await withTimeout(stripe.customers.retrieve(user.stripeCustomerId));
       if (preferredEmail && !customer.email) {
         await withTimeout(stripe.customers.update(customer.id, { email: preferredEmail }));
       }
       return customer;
     } catch (err) {
       logger.warn("Stripe customer not found, creating new one", {
-        externalCustomerIdLast4: safeId(profile.externalCustomerId),
-        userId,
-      });
-    }
-  }
-
-  // Fallback: users.stripeCustomerId (during migration)
-  if (user.stripeCustomerId) {
-    try {
-      const customer = await withTimeout(stripe.customers.retrieve(user.stripeCustomerId));
-      await userGatewayProfileRepo.upsert({
-        userId,
-        gateway: GATEWAY_NAME,
-        externalCustomerId: customer.id,
-      });
-      return customer;
-    } catch (err) {
-      logger.warn("Stripe customer from users table not found", {
         stripeCustomerIdLast4: safeId(user.stripeCustomerId),
         userId,
       });
     }
   }
 
-  const customerCreateParams = {
+  const customer = await withTimeout(stripe.customers.create({
     email: preferredEmail,
     metadata: { userId: String(userId) },
-  };
-  if (user.personType === 'legal' && user.companyName) {
-    customerCreateParams.name = user.companyName;
-    customerCreateParams.metadata.personType = 'legal';
-    if (user.companyOib) customerCreateParams.metadata.companyOib = user.companyOib;
-  }
-  const customer = await withTimeout(stripe.customers.create(customerCreateParams));
+  }));
 
-  await userGatewayProfileRepo.upsert({
-    userId,
-    gateway: GATEWAY_NAME,
-    externalCustomerId: customer.id,
-  });
+  await userRepo.update(userId, { stripeCustomerId: customer.id });
 
   return customer;
 }
 
-async function createPaymentIntentForCart(amount, currency, userId, sessionId, options = {}) {
-  const start = Date.now();
-  if (!stripe) {
-    const err = toError(normalizeError(new Error("Stripe is not configured."), GATEWAY_NAME));
-    err.status = 500;
-    throw err;
+/**
+ * Enrich an existing Stripe Customer with order billing data so e-racuni can
+ * read the buyer's identity and address from the Charge object reliably.
+ *
+ * Sets:
+ *   - name  — company name (B2B) or full name (B2C)
+ *   - address — billing address from the order
+ *   - tax_ids — adds hr_oib for B2B if not already present
+ *
+ * name + address update will throw on failure (critical for Stripe invoice generation).
+ * tax_id creation logs a warning on failure but does not abort the checkout.
+ *
+ * @param {string} customerId
+ * @param {Object} order - Sequelize Order instance or plain object
+ */
+async function syncStripeCustomerWithOrder(customerId, order) {
+  if (!stripe) return;
+
+  // Build display name: company for B2B, full name for B2C
+  const name =
+    order.personType === "legal" && order.companyName
+      ? order.companyName.trim()
+      : [order.forename, order.surname].filter(Boolean).join(" ").trim() || null;
+
+  const updateParams = {};
+  if (name) updateParams.name = name;
+
+  // Billing address — only populate if line1 is present (required field for a valid address)
+  if (order.billingLine1) {
+    updateParams.address = {
+      line1: order.billingLine1,
+      ...(order.billingLine2 && { line2: order.billingLine2 }),
+      ...(order.billingCity && { city: order.billingCity }),
+      ...(order.billingPostcode && { postal_code: order.billingPostcode }),
+      ...(order.billingCountry && { country: order.billingCountry }),
+    };
   }
 
-  const amountCents = Math.round(Number(amount) * 100);
-  if (amountCents < 1) {
-    const err = toError(normalizeError(new Error("Amount must be greater than zero."), GATEWAY_NAME));
-    err.status = 400;
-    throw err;
+  if (Object.keys(updateParams).length > 0) {
+    await withTimeout(stripe.customers.update(customerId, updateParams));
   }
 
-  const currencyNorm = (currency || DEFAULT_CURRENCY).toString().toLowerCase();
-  const email = options.email != null ? options.email : null;
-  const paymentMethodId = options.paymentMethodId ? String(options.paymentMethodId).trim() : null;
-  const idempotencyKey = options.idempotencyKey ? String(options.idempotencyKey).trim() : null;
-  const useSavedCard = paymentMethodId && userId;
+  // OIB tax ID for B2B (Croatian hr_oib) — required for e-racuni.hr e-invoicing.
+  // Ensure exactly one hr_oib on the customer matching the current order's OIB.
+  // Removes stale entries (e.g. company changed OIB) before adding the correct one.
+  if (order.personType === "legal" && order.companyOib) {
+    try {
+      const correctOib = String(order.companyOib);
+      const taxIds = await withTimeout(stripe.customers.listTaxIds(customerId, { limit: 10 }));
+      const existing = (taxIds.data || []).filter((t) => t.type === "hr_oib");
 
-  try {
-    if (useSavedCard) {
-      const customer = await getOrCreateStripeCustomer(userId, email);
-      try {
-        const pm = await withTimeout(stripe.paymentMethods.retrieve(paymentMethodId));
-        const pmCustomerId = typeof pm.customer === "string" ? pm.customer : pm.customer?.id;
-        const ourCustomerId = String(customer.id || "").trim();
-        const theirCustomerId = pmCustomerId ? String(pmCustomerId).trim() : null;
-        if (theirCustomerId && theirCustomerId !== ourCustomerId) {
-          await withTimeout(stripe.paymentMethods.detach(paymentMethodId));
-          await withTimeout(stripe.paymentMethods.attach(paymentMethodId, { customer: ourCustomerId }));
-        } else if (!theirCustomerId) {
-          await withTimeout(stripe.paymentMethods.attach(paymentMethodId, { customer: ourCustomerId }));
+      for (const taxId of existing) {
+        if (taxId.value !== correctOib) {
+          await withTimeout(stripe.customers.deleteTaxId(customerId, taxId.id));
         }
-      } catch (attachErr) {
-        const norm = normalizeError(attachErr, GATEWAY_NAME);
-        logPaymentOp({
-          operation: "createPaymentIntent",
-          userId,
-          success: false,
-          durationMs: Date.now() - start,
-          errorCode: norm.code,
-        });
-        throw toError(norm);
       }
 
-      const params = {
-        amount: amountCents,
-        currency: currencyNorm,
-        customer: customer.id,
-        payment_method: paymentMethodId,
-        confirm: false,
-        payment_method_types: ["card"],
-        metadata: {
-          userId: userId ? String(userId) : "",
-          sessionId: sessionId ? String(sessionId) : "",
-        },
-        automatic_payment_methods: { enabled: false },
-      };
-      if (idempotencyKey) params.idempotency_key = idempotencyKey;
-
-      const paymentIntent = await withTimeout(stripe.paymentIntents.create(params));
-      logPaymentOp({
-        operation: "createPaymentIntent",
-        userId,
-        success: true,
-        durationMs: Date.now() - start,
+      const alreadyCorrect = existing.some((t) => t.value === correctOib);
+      if (!alreadyCorrect) {
+        await withTimeout(
+          stripe.customers.createTaxId(customerId, {
+            type: "hr_oib",
+            value: correctOib,
+          })
+        );
+        logger.info("Stripe: hr_oib tax ID set on customer", { customerId });
+      }
+    } catch (taxErr) {
+      logger.warn("Stripe: failed to update hr_oib tax ID on customer", {
+        customerId,
+        error: taxErr.message,
       });
-      return { success: true, clientSecret: paymentIntent.client_secret };
     }
-
-    const params = {
-      amount: amountCents,
-      currency: currencyNorm,
-      metadata: {
-        userId: userId ? String(userId) : "",
-        sessionId: sessionId ? String(sessionId) : "",
-      },
-      automatic_payment_methods: { enabled: true },
-    };
-    if (userId) {
-      const customer = await getOrCreateStripeCustomer(userId, email);
-      params.customer = customer.id;
-      params.setup_future_usage = "off_session";
-    } else if (email && typeof email === "string" && email.trim()) {
-      params.receipt_email = email.trim();
-    }
-    if (idempotencyKey) params.idempotency_key = idempotencyKey;
-
-    const paymentIntent = await withTimeout(stripe.paymentIntents.create(params));
-    logPaymentOp({
-      operation: "createPaymentIntent",
-      userId,
-      success: true,
-      durationMs: Date.now() - start,
-    });
-    return { success: true, clientSecret: paymentIntent.client_secret };
-  } catch (err) {
-    const norm = normalizeError(err, GATEWAY_NAME);
-    norm.status = norm.status || 500;
-    logPaymentOp({
-      operation: "createPaymentIntent",
-      userId,
-      success: false,
-      durationMs: Date.now() - start,
-      errorCode: norm.code,
-    });
-    const e = toError(norm);
-    e.status = norm.status;
-    throw e;
   }
 }
 
@@ -301,121 +248,6 @@ async function createSetupIntent(userId, options = {}) {
     logPaymentOp({
       operation: "createSetupIntent",
       userId,
-      success: false,
-      durationMs: Date.now() - start,
-      errorCode: norm.code,
-    });
-    const e = toError(norm);
-    e.status = norm.status || 500;
-    throw e;
-  }
-}
-
-async function createCheckoutSession(orderId, userId, sessionId) {
-  const start = Date.now();
-  if (!stripe) {
-    const err = toError(normalizeError(new Error("Stripe is not configured."), GATEWAY_NAME));
-    err.status = 500;
-    throw err;
-  }
-
-  const order = await orderRepo.findById(orderId);
-  if (!order) {
-    const err = toError(normalizeError(new Error("Order not found."), GATEWAY_NAME));
-    err.status = 404;
-    throw err;
-  }
-
-  if (order.userId && order.userId !== userId) {
-    const err = toError(normalizeError(new Error("Unauthorized."), GATEWAY_NAME));
-    err.status = 403;
-    throw err;
-  }
-  if (order.sessionId && order.sessionId !== sessionId) {
-    const err = toError(normalizeError(new Error("Unauthorized."), GATEWAY_NAME));
-    err.status = 403;
-    throw err;
-  }
-
-  if (order.paymentStatus !== "pending") {
-    const err = toError(normalizeError(new Error("Order is not pending payment."), GATEWAY_NAME));
-    err.status = 400;
-    throw err;
-  }
-
-  const lines = await orderRepo.getLines(order.id);
-  const lineItems = [];
-  for (const line of lines) {
-    const variant = line.ProductVariant;
-    const product = variant?.Product;
-    const title = (product && product.title) || (variant && variant.title) || "Item";
-    lineItems.push({
-      price_data: {
-        currency: order.currency.toLowerCase(),
-        product_data: {
-          name: title,
-          description: (product && product.description) || undefined,
-        },
-        unit_amount: Math.round(Number(line.price) * 100),
-      },
-      quantity: line.quantity || 1,
-    });
-  }
-
-  if (lineItems.length === 0) {
-    const err = toError(normalizeError(new Error("Order has no items."), GATEWAY_NAME));
-    err.status = 400;
-    throw err;
-  }
-
-  let customerId = null;
-  if (userId) {
-    const user = await userRepo.findById(userId);
-    if (user) {
-      const customer = await getOrCreateStripeCustomer(userId, user.email);
-      customerId = customer.id;
-    }
-  }
-
-  const sessionParams = {
-    payment_method_types: ["card"],
-    line_items: lineItems,
-    mode: "payment",
-    success_url: `${config.baseUrl}/orders/${order.id}?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${config.baseUrl}/orders/${order.id}`,
-    metadata: { orderId: String(order.id) },
-  };
-  if (customerId) {
-    sessionParams.customer = customerId;
-  } else {
-    sessionParams.customer_creation = "if_required";
-  }
-
-  try {
-    const session = await withTimeout(stripe.checkout.sessions.create(sessionParams));
-    await orderRepo.update(order.id, { stripePaymentIntentId: session.id });
-    await orderService.recordPaymentAttempt(
-      order.id,
-      Number(order.total),
-      order.currency,
-      GATEWAY_NAME,
-      session.id,
-      { sessionId: session.id, type: "checkout_session" }
-    );
-    logPaymentOp({
-      operation: "createCheckoutSession",
-      userId,
-      orderId,
-      success: true,
-      durationMs: Date.now() - start,
-    });
-    return { success: true, sessionId: session.id, url: session.url };
-  } catch (err) {
-    const norm = normalizeError(err, GATEWAY_NAME);
-    logPaymentOp({
-      operation: "createCheckoutSession",
-      userId,
-      orderId,
       success: false,
       durationMs: Date.now() - start,
       errorCode: norm.code,
@@ -492,7 +324,7 @@ async function savePaymentMethod(userId, gatewayPaymentMethodId) {
     }
 
     const existing = await paymentMethodService.listByUser(userId);
-    if (existing.some((p) => p.gatewayToken === id)) {
+    if (existing.some((p) => p.stripePaymentMethodId === id)) {
       logPaymentOp({ operation: "savePaymentMethod", userId, success: true, durationMs: Date.now() - start });
       return { saved: false };
     }
@@ -505,15 +337,14 @@ async function savePaymentMethod(userId, gatewayPaymentMethodId) {
         Number(p.expiryYear) === Number(details.expiryYear)
     );
     if (sameCard) {
-      await paymentMethodService.update(sameCard.id, userId, { gatewayToken: id });
+      await paymentMethodService.update(sameCard.id, userId, { stripePaymentMethodId: id });
       logPaymentOp({ operation: "savePaymentMethod", userId, success: true, durationMs: Date.now() - start });
       return { saved: false };
     }
 
     await paymentMethodService.create(userId, {
       type: "card",
-      gateway: GATEWAY_NAME,
-      gatewayToken: id,
+      stripePaymentMethodId: id,
       last4: details.last4,
       brand: details.brand,
       expiryMonth: details.expiryMonth,
@@ -617,7 +448,7 @@ async function getPaymentMethodDetails(gatewayPaymentMethodId) {
   }
 }
 
-async function createPaymentIntentForOrder(orderId, userId, sessionId, options = {}) {
+async function createInvoiceForOrder(orderId, userId, sessionId, options = {}) {
   const start = Date.now();
   if (!stripe) {
     const err = toError(normalizeError(new Error("Stripe is not configured."), GATEWAY_NAME));
@@ -647,27 +478,25 @@ async function createPaymentIntentForOrder(orderId, userId, sessionId, options =
     throw err;
   }
 
-  const amountCents = Math.round(Number(order.total) * 100);
-  if (amountCents < 1) {
-    const err = toError(normalizeError(new Error("Order total must be greater than zero."), GATEWAY_NAME));
+  const email = options.email != null ? options.email : order.email;
+  const paymentMethodId = options.paymentMethodId ? String(options.paymentMethodId).trim() : null;
+  const idempotencyKey = options.idempotencyKey ? String(options.idempotencyKey).trim() : null;
+  const saveCard = Boolean(options.saveCard) && Boolean(userId);
+  const useSavedCard = Boolean(paymentMethodId) && Boolean(userId);
+
+  const lines = await orderRepo.getLines(order.id);
+  if (!lines || lines.length === 0) {
+    const err = toError(normalizeError(new Error("Order has no items."), GATEWAY_NAME));
     err.status = 400;
     throw err;
   }
 
-  const email = options.email != null ? options.email : order.email;
-  const paymentMethodId = options.paymentMethodId ? String(options.paymentMethodId).trim() : null;
-  const idempotencyKey = options.idempotencyKey ? String(options.idempotencyKey).trim() : null;
-  const useSavedCard = paymentMethodId && userId;
-
-  const metadata = {
-    orderId: String(order.id),
-    userId: userId ? String(userId) : "",
-    sessionId: sessionId ? String(sessionId) : "",
-  };
-
   try {
+    const customer = await getOrCreateStripeCustomer(userId, email);
+    await syncStripeCustomerWithOrder(customer.id, order);
+
+    // Ensure saved payment method is attached to this customer before use.
     if (useSavedCard) {
-      const customer = await getOrCreateStripeCustomer(userId, email);
       try {
         const pm = await withTimeout(stripe.paymentMethods.retrieve(paymentMethodId));
         const pmCustomerId = typeof pm.customer === "string" ? pm.customer : pm.customer?.id;
@@ -682,7 +511,7 @@ async function createPaymentIntentForOrder(orderId, userId, sessionId, options =
       } catch (attachErr) {
         const norm = normalizeError(attachErr, GATEWAY_NAME);
         logPaymentOp({
-          operation: "createPaymentIntentForOrder",
+          operation: "createInvoiceForOrder",
           userId,
           orderId,
           success: false,
@@ -691,76 +520,135 @@ async function createPaymentIntentForOrder(orderId, userId, sessionId, options =
         });
         throw toError(norm);
       }
+    }
 
-      const params = {
-        amount: amountCents,
-        currency: order.currency.toLowerCase(),
+    // Create draft invoice first so InvoiceItems attach directly to it (no orphan risk).
+    const invoiceParams = {
+      customer: customer.id,
+      currency: order.currency.toLowerCase(),
+      auto_advance: false,
+      description: `Order #${order.id}`,
+      metadata: {
+        orderId: String(order.id),
+        userId: userId ? String(userId) : "",
+        sessionId: sessionId ? String(sessionId) : "",
+      },
+    };
+    if (useSavedCard) {
+      invoiceParams.default_payment_method = paymentMethodId;
+    }
+    const invoice = await withTimeout(
+      idempotencyKey
+        ? stripe.invoices.create(invoiceParams, { idempotencyKey: `inv_${idempotencyKey}` })
+        : stripe.invoices.create(invoiceParams)
+    );
+    const invoiceId = invoice.id;
+
+    // Create one InvoiceItem per order line, attached directly to the draft invoice.
+    // metadata.sku is the primary key e-racuni uses for product matching.
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const itemMeta = {};
+      if (line.sku) itemMeta.sku = String(line.sku);
+
+      const itemParams = {
         customer: customer.id,
-        payment_method: paymentMethodId,
-        confirm: false,
-        payment_method_types: ["card"],
-        metadata,
-        automatic_payment_methods: { enabled: false },
+        invoice: invoiceId,
+        unit_amount: Math.round(Number(line.price) * 100),
+        quantity: line.quantity || 1,
+        currency: order.currency.toLowerCase(),
+        description: line.title || "Item",
+        metadata: itemMeta,
       };
-      if (idempotencyKey) params.idempotency_key = idempotencyKey;
+      if (line.stripeTaxRateId) {
+        itemParams.tax_rates = [line.stripeTaxRateId];
+      }
+      await withTimeout(
+        idempotencyKey
+          ? stripe.invoiceItems.create(itemParams, { idempotencyKey: `${idempotencyKey}_item_${i}` })
+          : stripe.invoiceItems.create(itemParams)
+      );
+    }
 
-      const paymentIntent = await withTimeout(stripe.paymentIntents.create(params));
-      await orderRepo.update(order.id, { stripePaymentIntentId: paymentIntent.id });
-      await orderService.recordPaymentAttempt(
+    // Finalize: transitions draft → open. Stripe marks zero-amount invoices paid immediately.
+    await withTimeout(stripe.invoices.finalizeInvoice(invoiceId, { auto_advance: false }));
+
+    // Retrieve the finalized invoice with expanded payment_intent to get client_secret.
+    const finalized = await withTimeout(
+      stripe.invoices.retrieve(invoiceId, { expand: ["payment_intent"] })
+    );
+
+    // Zero-amount invoices: Stripe marks them paid instantly with no PaymentIntent.
+    // Record the transaction using the invoice ID as reference and signal alreadyPaid.
+    if (finalized.status === "paid" && !finalized.payment_intent) {
+      const tx = await orderService.recordPaymentAttempt(
         order.id,
-        Number(order.total),
+        0,
         order.currency,
         GATEWAY_NAME,
-        paymentIntent.id,
-        { type: "payment_intent" }
+        invoiceId,
+        { type: "invoice", invoiceId }
       );
+      await orderService.recordPaymentSuccess(tx.id, order.userId);
       logPaymentOp({
-        operation: "createPaymentIntentForOrder",
+        operation: "createInvoiceForOrder",
         userId,
         orderId,
         success: true,
         durationMs: Date.now() - start,
       });
-      return { success: true, clientSecret: paymentIntent.client_secret };
+      return { success: true, clientSecret: null, alreadyPaid: true };
     }
 
-    const params = {
-      amount: amountCents,
-      currency: order.currency.toLowerCase(),
-      metadata,
-      automatic_payment_methods: { enabled: true },
+    const paymentIntentObj = finalized.payment_intent;
+    const paymentIntentId =
+      typeof paymentIntentObj === "string" ? paymentIntentObj : paymentIntentObj?.id;
+
+    if (!paymentIntentId) {
+      throw new Error("Invoice finalization did not produce a PaymentIntent.");
+    }
+
+    // Stamp ownership metadata on the PaymentIntent so validatePaymentIntent keeps working.
+    // Also set setup_future_usage for new-card flows (not needed when reusing a saved card).
+    const piUpdateParams = {
+      metadata: {
+        orderId: String(order.id),
+        userId: userId ? String(userId) : "",
+        sessionId: sessionId ? String(sessionId) : "",
+      },
     };
-    if (userId) {
-      const customer = await getOrCreateStripeCustomer(userId, email);
-      params.customer = customer.id;
-      params.setup_future_usage = "off_session";
-    } else if (email && typeof email === "string" && email.trim()) {
-      params.receipt_email = email.trim();
+    if (saveCard && !useSavedCard) {
+      piUpdateParams.setup_future_usage = "off_session";
     }
-    if (idempotencyKey) params.idempotency_key = idempotencyKey;
+    await withTimeout(stripe.paymentIntents.update(paymentIntentId, piUpdateParams));
 
-    const paymentIntent = await withTimeout(stripe.paymentIntents.create(params));
-    await orderRepo.update(order.id, { stripePaymentIntentId: paymentIntent.id });
+    const clientSecret =
+      typeof paymentIntentObj === "string"
+        ? (await withTimeout(stripe.paymentIntents.retrieve(paymentIntentId))).client_secret
+        : paymentIntentObj.client_secret;
+
+    await orderRepo.update(order.id, { stripePaymentIntentId: paymentIntentId });
     await orderService.recordPaymentAttempt(
       order.id,
       Number(order.total),
       order.currency,
       GATEWAY_NAME,
-      paymentIntent.id,
-      { type: "payment_intent" }
+      paymentIntentId,
+      { type: "invoice", invoiceId }
     );
+
     logPaymentOp({
-      operation: "createPaymentIntentForOrder",
+      operation: "createInvoiceForOrder",
       userId,
       orderId,
       success: true,
       durationMs: Date.now() - start,
     });
-    return { success: true, clientSecret: paymentIntent.client_secret };
+    return { success: true, clientSecret };
   } catch (err) {
     const norm = normalizeError(err, GATEWAY_NAME);
     logPaymentOp({
-      operation: "createPaymentIntentForOrder",
+      operation: "createInvoiceForOrder",
       userId,
       orderId,
       success: false,
@@ -819,90 +707,6 @@ async function handleWebhook(event) {
 
   try {
     switch (event.type) {
-      case "checkout.session.completed": {
-        const session = event.data.object;
-        const orderId = session.metadata?.orderId;
-        if (!orderId) {
-          logger.warn("Checkout session completed but no orderId in metadata", {
-            sessionIdLast4: safeId(session.id),
-          });
-          return;
-        }
-        if (session.payment_status !== "paid") {
-          logger.info("Checkout session completed but payment not paid", {
-            sessionIdLast4: safeId(session.id),
-            paymentStatus: session.payment_status,
-          });
-          return;
-        }
-        const paymentIntentId = session.payment_intent;
-        if (paymentIntentId) {
-          const order = await orderRepo.findById(orderId);
-          if (order) {
-            if (order.paymentStatus === "paid") return;
-            const customerEmail =
-              session.customer_email ||
-              session.customer_details?.email ||
-              (session.customer_details && session.customer_details.email);
-            const updates = { stripePaymentIntentId: paymentIntentId };
-            if (customerEmail && order.sessionId && !order.userId) {
-              updates.email = customerEmail;
-            }
-            await orderRepo.update(orderId, updates);
-
-            const transactions = await transactionRepo.findByOrder(orderId);
-            const transaction = transactions.find((t) => t.gatewayReference === session.id);
-            if (transaction) {
-              await transactionRepo.update(transaction.id, {
-                gatewayReference: paymentIntentId,
-                status: "success",
-              });
-              await orderService.recordPaymentSuccess(transaction.id, order.userId);
-            } else {
-              await orderService.recordPaymentAttempt(
-                orderId,
-                Number(session.amount_total) / 100,
-                session.currency.toUpperCase(),
-                GATEWAY_NAME,
-                paymentIntentId,
-                { sessionId: session.id, type: "checkout_session" }
-              );
-              const newTransactions = await transactionRepo.findByOrder(orderId);
-              const newTransaction = newTransactions.find((t) => t.gatewayReference === paymentIntentId);
-              if (newTransaction) {
-                await orderService.recordPaymentSuccess(newTransaction.id, order.userId);
-              }
-            }
-
-            if (customerEmail && order.sessionId && !order.userId) {
-              const existingUser = await userRepo.findByEmail(customerEmail.trim().toLowerCase());
-              if (existingUser) {
-                await orderService.claimGuestOrdersByEmail(customerEmail, existingUser.id);
-              }
-            }
-          }
-        }
-        break;
-      }
-
-      case "payment_intent.succeeded": {
-        const paymentIntent = event.data.object;
-        const orders = await orderRepo.findAll({
-          where: { stripePaymentIntentId: paymentIntent.id },
-        });
-        if (orders.length > 0) {
-          const order = orders[0];
-          if (order.paymentStatus === "paid") break;
-          const transactions = await transactionRepo.findByOrder(order.id);
-          const transaction = transactions.find((t) => t.gatewayReference === paymentIntent.id);
-          if (transaction && transaction.status === "pending") {
-            await transactionRepo.update(transaction.id, { status: "success" });
-            await orderService.recordPaymentSuccess(transaction.id, order.userId);
-          }
-        }
-        break;
-      }
-
       case "payment_intent.payment_failed": {
         const paymentIntent = event.data.object;
         const orders = await orderRepo.findAll({
@@ -944,6 +748,56 @@ async function handleWebhook(event) {
         break;
       }
 
+      case "invoice.paid": {
+        const invoice = event.data.object;
+        const orderId = invoice.metadata?.orderId;
+        if (!orderId) {
+          logger.warn("invoice.paid: no orderId in invoice metadata", {
+            invoiceIdLast4: safeId(invoice.id),
+          });
+          break;
+        }
+        // Zero-amount invoices have no PaymentIntent; use invoice.id as the reference.
+        const paymentIntentId =
+          typeof invoice.payment_intent === "string"
+            ? invoice.payment_intent
+            : invoice.payment_intent?.id ?? null;
+        const gatewayRef = paymentIntentId || invoice.id;
+
+        const invoiceOrder = await orderRepo.findById(orderId);
+        if (!invoiceOrder) {
+          logger.warn("invoice.paid: order not found", { orderId });
+          break;
+        }
+        if (invoiceOrder.paymentStatus === PAYMENT_STATUS.PAID) break;
+
+        const invoiceTransactions = await transactionRepo.findByOrder(orderId);
+        const invoiceTx = invoiceTransactions.find((t) => t.gatewayReference === gatewayRef);
+
+        if (invoiceTx) {
+          if (invoiceTx.status === "pending") {
+            await transactionRepo.update(invoiceTx.id, { status: "success" });
+          }
+          await orderService.recordPaymentSuccess(invoiceTx.id, invoiceOrder.userId);
+        } else {
+          // Fallback: create the transaction record if not already present.
+          await orderService.recordPaymentAttempt(
+            orderId,
+            Number(invoice.amount_paid) / 100,
+            (invoice.currency || invoiceOrder.currency).toUpperCase(),
+            GATEWAY_NAME,
+            gatewayRef,
+            { type: "invoice", invoiceId: invoice.id }
+          );
+          const freshTxs = await transactionRepo.findByOrder(orderId);
+          const newTx = freshTxs.find((t) => t.gatewayReference === gatewayRef);
+          if (newTx) {
+            await orderService.recordPaymentSuccess(newTx.id, invoiceOrder.userId);
+          }
+        }
+        break;
+      }
+
       default:
         logger.info("Unhandled Stripe webhook event", { eventType: event.type });
     }
@@ -978,14 +832,12 @@ async function createRefund(paymentIntentId) {
 module.exports = {
   name: () => GATEWAY_NAME,
   isConfigured: () => stripe !== null,
-  createPaymentIntentForCart,
   createSetupIntent,
-  createCheckoutSession,
   savePaymentMethod,
   detachPaymentMethod,
   validatePaymentIntent,
   getPaymentMethodDetails,
-  createPaymentIntentForOrder,
+  createInvoiceForOrder,
   constructWebhookEvent,
   handleWebhook,
   createRefund,
