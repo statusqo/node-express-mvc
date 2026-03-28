@@ -8,17 +8,8 @@ block content
     .da-page
 
         //- ── Page header ─────────────────────────────────────────────
-        .da-page-header
-            .da-page-header-left
-                h1.da-page-title Collections
-                p.da-page-subtitle= (collections ? collections.length : 0) + ' collection' + ((collections && collections.length !== 1) ? 's' : '')
-
-            .da-page-header-right
-                a.da-btn.da-btn--primary(href=(adminPrefix || '') + '/collections/new')
-                    svg(xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
-                        line(x1='12' y1='5' x2='12' y2='19')
-                        line(x1='5' y1='12' x2='19' y2='12')
-                    | Add Collection
+        +pageHeader('Collections', (collections ? collections.length : 0) + ' collection' + ((collections && collections.length !== 1) ? 's' : ''))
+            +addBtn((adminPrefix || '') + '/collections/new', 'Add Collection')
 
         //- ── Collections table ───────────────────────────────────────
         .da-section
@@ -51,27 +42,5 @@ block content
                                         td
                                             .da-cell-actions
                                                 a.da-row-btn.da-row-btn--edit(href=(adminPrefix || '') + '/collections/' + c.id + '/edit' aria-label='Edit ' + c.title) Edit
-                                                .da-delete-wrap(aria-label='Delete collection actions')
-                                                    button.da-row-btn.da-row-btn--delete.da-delete-trigger(
-                                                        type='button'
-                                                        aria-label='Delete ' + c.title
-                                                        aria-expanded='false'
-                                                    ) Delete
-                                                    .da-confirm-group(role='group' aria-label='Confirm deletion')
-                                                        button.da-row-btn.da-row-btn--cancel.da-delete-cancel(
-                                                            type='button'
-                                                            aria-label='Cancel deletion'
-                                                        ) No
-                                                        span.da-confirm-sep(aria-hidden='true')
-                                                        form.da-form-inline.da-delete-form(
-                                                            method='post'
-                                                            action=(adminPrefix || '') + '/collections/' + c.id + '/delete'
-                                                        )
-                                                            button.da-row-btn.da-row-btn--confirm(
-                                                                type='submit'
-                                                                aria-label='Confirm delete ' + c.title
-                                                            ) Yes, delete
                             else
-                                tr
-                                    td(colspan='4')
-                                        .da-table-empty No collections yet.
+                                +tableEmpty('No collections yet.', 4)

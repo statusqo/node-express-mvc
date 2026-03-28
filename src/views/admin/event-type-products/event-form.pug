@@ -89,20 +89,11 @@ block content
     .da-page
 
         //- ── Page header ─────────────────────────────────────────────
-        .da-page-header
-            .da-page-header-left
-                h1.da-page-title= isEdit ? 'Event Details' : 'New Event'
-                p.da-page-subtitle= product ? product.title : ''
-                    if product && (product.priceAmount != null || product.currency)
-                        |  · Default: #{product.currency || 'USD'} #{product.priceAmount != null ? product.priceAmount : '—'}
-            .da-page-header-right
-                a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/' + sectionPath + '/' + product.slug + '/events')
-                    svg(xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
-                        polyline(points='15 18 9 12 15 6')
-                    | Back to Events
+        - var eventSubtitle = (product ? product.title : '') + (product && (product.priceAmount != null || product.currency) ? ' · Default: ' + (product.currency || 'USD') + ' ' + (product.priceAmount != null ? product.priceAmount : '—') : '')
+        +pageHeader(isEdit ? 'Event Details' : 'New Event', eventSubtitle)
+            +backBtn((adminPrefix || '') + '/' + sectionPath + '/' + product.slug + '/events', 'Back to Events')
 
-        if error
-            p.admin-flash.admin-flash-error= error
+        +formError(error)
 
         //- ── Read-only event details (edit mode) ─────────────────────
         if isEdit

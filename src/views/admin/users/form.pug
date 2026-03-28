@@ -8,18 +8,10 @@ block content
     .da-page
 
         //- ── Page header ─────────────────────────────────────────────
-        .da-page-header
-            .da-page-header-left
-                h1.da-page-title= isEdit ? 'Edit User' : 'Add User'
-                p.da-page-subtitle= isEdit ? (user && user.email ? user.email : 'Update user details') : 'Create a new account'
-            .da-page-header-right
-                a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/users')
-                    svg(xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
-                        polyline(points='15 18 9 12 15 6')
-                    | Back to Users
+        +pageHeader(isEdit ? 'Edit User' : 'Add User', isEdit ? (user && user.email ? user.email : 'Update user details') : 'Create a new account')
+            +backBtn((adminPrefix || '') + '/users', 'Back to Users')
 
-        if error
-            p.admin-flash.admin-flash-error= error
+        +formError(error)
 
         //- ── Form grid: main column + aside (edit only) ──────────────
         .da-form-grid(class=isEdit ? '' : 'da-form-grid--narrow')
@@ -40,6 +32,17 @@ block content
                                 span.da-form-section-label Identity
 
                                 .da-form-group
+                                    label.da-form-label(for='username') Username
+                                    input#username.da-form-input(
+                                        type='text'
+                                        name='username'
+                                        value=user ? user.username : ''
+                                        placeholder='3–30 characters, optional'
+                                        autocomplete='username'
+                                    )
+                                    p.da-form-hint Shown publicly where applicable.
+
+                                .da-form-group
                                     label.da-form-label(for='email')
                                         | Email
                                         span.req *
@@ -51,47 +54,6 @@ block content
                                         placeholder='user@example.com'
                                         autocomplete='email'
                                     )
-
-                                .da-form-row
-                                    .da-form-group
-                                        label.da-form-label(for='forename') Forename
-                                        input#forename.da-form-input(
-                                            type='text'
-                                            name='forename'
-                                            value=user ? (user.forename || '') : ''
-                                            placeholder='First name'
-                                            autocomplete='given-name'
-                                        )
-                                    .da-form-group
-                                        label.da-form-label(for='surname') Surname
-                                        input#surname.da-form-input(
-                                            type='text'
-                                            name='surname'
-                                            value=user ? (user.surname || '') : ''
-                                            placeholder='Last name'
-                                            autocomplete='family-name'
-                                        )
-
-                                .da-form-group
-                                    label.da-form-label(for='mobile') Mobile
-                                    input#mobile.da-form-input(
-                                        type='tel'
-                                        name='mobile'
-                                        value=user ? (user.mobile || '') : ''
-                                        placeholder='+385 91 234 5678'
-                                        autocomplete='tel'
-                                    )
-
-                                .da-form-group
-                                    label.da-form-label(for='username') Username
-                                    input#username.da-form-input(
-                                        type='text'
-                                        name='username'
-                                        value=user ? user.username : ''
-                                        placeholder='3–30 characters, optional'
-                                        autocomplete='username'
-                                    )
-                                    p.da-form-hint Shown publicly where applicable.
 
                                 if !isEdit
                                     .da-form-group
@@ -110,30 +72,60 @@ block content
                                 span.da-form-section-label Person Type
 
                                 .da-form-group
-                                    label.da-form-label Person Type
+                                    label.da-form-label(for='personType') Person Type
                                     select#personType.da-form-select(name='personType')
                                         option(value='private' selected=(!user || user.personType !== 'legal')) Private person
                                         option(value='legal' selected=(user && user.personType === 'legal')) Legal person (company)
 
-                                .da-form-group
-                                    label.da-form-label(for='companyName') Company Name
-                                    input#companyName.da-form-input(
-                                        type='text'
-                                        name='companyName'
-                                        value=user ? (user.companyName || '') : ''
-                                        placeholder='Required for legal persons'
-                                    )
+                                #privateFields
+                                    .da-form-row
+                                        .da-form-group
+                                            label.da-form-label(for='forename') Forename
+                                            input#forename.da-form-input(
+                                                type='text'
+                                                name='forename'
+                                                value=user ? (user.forename || '') : ''
+                                                placeholder='First name'
+                                                autocomplete='given-name'
+                                            )
+                                        .da-form-group
+                                            label.da-form-label(for='surname') Surname
+                                            input#surname.da-form-input(
+                                                type='text'
+                                                name='surname'
+                                                value=user ? (user.surname || '') : ''
+                                                placeholder='Last name'
+                                                autocomplete='family-name'
+                                            )
+                                    .da-form-group
+                                        label.da-form-label(for='mobile') Mobile
+                                        input#mobile.da-form-input(
+                                            type='tel'
+                                            name='mobile'
+                                            value=user ? (user.mobile || '') : ''
+                                            placeholder='+385 91 234 5678'
+                                            autocomplete='tel'
+                                        )
 
-                                .da-form-group
-                                    label.da-form-label(for='companyOib') OIB (Tax ID)
-                                    input#companyOib.da-form-input(
-                                        type='text'
-                                        name='companyOib'
-                                        value=user ? (user.companyOib || '') : ''
-                                        maxlength='11'
-                                        pattern='\\d{11}'
-                                        placeholder='11-digit Croatian tax ID'
-                                    )
+                                #legalFields
+                                    .da-form-group
+                                        label.da-form-label(for='companyName') Company Name
+                                        input#companyName.da-form-input(
+                                            type='text'
+                                            name='companyName'
+                                            value=user ? (user.companyName || '') : ''
+                                            placeholder='Required for legal persons'
+                                        )
+                                    .da-form-group
+                                        label.da-form-label(for='companyOib') OIB (Tax ID)
+                                        input#companyOib.da-form-input(
+                                            type='text'
+                                            name='companyOib'
+                                            value=user ? (user.companyOib || '') : ''
+                                            maxlength='11'
+                                            pattern='\\d{11}'
+                                            placeholder='11-digit Croatian tax ID'
+                                        )
 
                             .da-form-section
                                 span.da-form-section-label Permissions
@@ -151,39 +143,17 @@ block content
                         button.da-btn.da-btn--primary(type='submit' form='userEditForm')= isEdit ? 'Save Changes' : 'Create User'
                         a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/users') Cancel
 
-                //- Password reset card (edit only)
+                //- Danger zone (edit only)
                 if isEdit
-                    .da-card
-                        .da-card-header
-                            h2.da-card-title Password
-                        .da-card-body
-                            .da-reset-trigger-row
-                                p.da-reset-desc
-                                    | The user's current password is securely stored.
-                                    | Use this to assign a new one.
-                                button#showResetBtn.da-btn.da-btn--secondary(type='button') Reset Password
-
-                            .da-reset-fields#resetFields
-                                .da-reset-fields-inner
-                                    .da-form-group
-                                        label.da-form-label(for='newPassword') New password
-                                        input#newPassword.da-form-input(
-                                            type='password'
-                                            placeholder='Minimum 4 characters'
-                                            autocomplete='new-password'
-                                        )
-                                    .da-form-group
-                                        label.da-form-label(for='confirmPassword') Confirm new password
-                                        input#confirmPassword.da-form-input(
-                                            type='password'
-                                            placeholder='Repeat new password'
-                                            autocomplete='new-password'
-                                        )
-                                    p#resetError.da-reset-error
-
-                                    .da-reset-actions
-                                        button#setPasswordBtn.da-btn.da-btn--primary(type='button') Set Password &amp; Save
-                                        button#cancelResetBtn.da-btn.da-btn--secondary(type='button') Cancel
+                    form#delete-user-form(method='post' action=(adminPrefix || '') + '/users/' + user.id + '/delete')
+                        button.da-btn.da-btn--danger(
+                            type='button'
+                            data-confirm-modal
+                            data-confirm-title='Delete User'
+                            data-confirm-msg='This cannot be undone. The following will be removed:'
+                            data-confirm-bullets='["User account and login","All saved addresses","All saved payment methods"]'
+                            data-form-id='delete-user-form'
+                        ) Delete User
 
             //- ── Aside column (edit only) ────────────────────────────
             if isEdit
@@ -226,17 +196,37 @@ block content
                             else
                                 p.da-aside-empty No saved payment methods.
 
-        //- ── Danger zone (edit only) ─────────────────────────────────
-        if isEdit
-            form#delete-user-form(method='post' action=(adminPrefix || '') + '/users/' + user.id + '/delete' style='margin-top:1.5rem')
-                button.da-btn.da-btn--danger(
-                    type='button'
-                    data-confirm-modal
-                    data-confirm-title='Delete User'
-                    data-confirm-msg='This cannot be undone. The following will be removed:'
-                    data-confirm-bullets='["User account and login","All saved addresses","All saved payment methods"]'
-                    data-form-id='delete-user-form'
-                ) Delete User
+                    //- Password reset
+                    .da-card
+                        .da-card-header
+                            h2.da-card-title Password
+                        .da-card-body
+                            .da-reset-trigger-row
+                                p.da-reset-desc
+                                    | Securely update this user's password.
+                                button#showResetBtn.da-btn.da-btn--secondary(type='button') Reset Password
+
+                            .da-reset-fields#resetFields
+                                .da-reset-fields-inner
+                                    .da-form-group
+                                        label.da-form-label(for='newPassword') New password
+                                        input#newPassword.da-form-input(
+                                            type='password'
+                                            placeholder='Minimum 4 characters'
+                                            autocomplete='new-password'
+                                        )
+                                    .da-form-group
+                                        label.da-form-label(for='confirmPassword') Confirm new password
+                                        input#confirmPassword.da-form-input(
+                                            type='password'
+                                            placeholder='Repeat new password'
+                                            autocomplete='new-password'
+                                        )
+                                    p#resetError.da-reset-error
+
+                                    .da-reset-actions
+                                        button#setPasswordBtn.da-btn.da-btn--primary(type='button') Set Password &amp; Save
+                                        button#cancelResetBtn.da-btn.da-btn--secondary(type='button') Cancel
 
         //- ── Orders table (edit only) ────────────────────────────────
         if isEdit
@@ -260,7 +250,7 @@ block content
                                 if orders && orders.length
                                     each order in orders
                                         - var payClass = ({paid:'success',pending:'warning',failed:'danger',refunded:'info',cancelled:'neutral'})[order.paymentStatus] || 'neutral'
-                                        - var fulClass = ({fulfilled:'success',pending:'warning',partially_fulfilled:'info',unfulfilled:'neutral',cancelled:'neutral'})[order.fulfillmentStatus] || 'neutral'
+                                        - var fulClass = ({pending:'warning',processing:'info',shipped:'info',delivered:'success',refund_requested:'danger',refunded:'neutral',cancelled:'danger',returned:'neutral'})[order.fulfillmentStatus] || 'neutral'
                                         tr
                                             td
                                                 span.da-cell-mono= order.id ? order.id.slice(0, 8) + '…' : '—'
@@ -277,7 +267,7 @@ block content
                                             td.da-col-created
                                                 span.da-cell-secondary= order.total != null ? Number(order.total).toFixed(2) + ' ' + (order.currency || 'USD') : '—'
                                             td.da-col-created
-                                                span.da-cell-muted= order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '—'
+                                                span.da-cell-muted= order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'
                                 else
                                     tr
                                         td(colspan='5')

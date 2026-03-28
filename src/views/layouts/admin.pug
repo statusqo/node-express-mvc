@@ -16,6 +16,7 @@ html(lang='hr')
   body
     include ../fragments/flash
     include ../fragments/confirm-modal
+    include ../fragments/admin/components
     div(class="admin-layout")
       aside(class="admin-sidebar")
         include ../fragments/admin/dash-nav
@@ -30,12 +31,13 @@ html(lang='hr')
                 nav.admin-breadcrumb(aria-label="Breadcrumb")
                   - var parts = adminSlug.split('/')
                   each part, i in parts
+                    - var label = part.replace(/-/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); })
                     if i > 0
                       span.admin-breadcrumb-sep ›
                     if i === parts.length - 1
-                      span.admin-breadcrumb-current= part
+                      span.admin-breadcrumb-current= label
                     else
-                      span.admin-breadcrumb-ancestor= part
+                      span.admin-breadcrumb-ancestor= label
             if adminIsDashboard && user
               div(class="admin-header-welcome")
                 span.admin-header-greeting Welcome,&nbsp;

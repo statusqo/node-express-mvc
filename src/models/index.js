@@ -151,8 +151,8 @@ PaymentMethod.belongsTo(User, { foreignKey: "userId" });
 // --- AdminZoomAccount (Zoom OAuth for admins hosting online events) ---
 User.hasOne(AdminZoomAccount, { foreignKey: "userId" });
 AdminZoomAccount.belongsTo(User, { foreignKey: "userId" });
-AdminZoomAccount.hasMany(EventMeeting, { foreignKey: "hostAccountId" });
-EventMeeting.belongsTo(AdminZoomAccount, { foreignKey: "hostAccountId" });
+AdminZoomAccount.hasMany(EventMeeting, { foreignKey: "zoomHostAccountId" });
+EventMeeting.belongsTo(AdminZoomAccount, { foreignKey: "zoomHostAccountId" });
 
 module.exports = {
   User,

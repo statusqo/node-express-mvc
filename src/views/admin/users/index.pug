@@ -8,18 +8,8 @@ block content
     .da-page
 
         //- ── Page header ─────────────────────────────────────────────
-        .da-page-header
-            .da-page-header-left
-                h1.da-page-title Users
-                p.da-page-subtitle
-                    | #{(admins ? admins.length : 0) + (users ? users.length : 0)} total members
-
-            .da-page-header-right
-                a.da-btn.da-btn--primary(href=(adminPrefix || '') + '/users/new')
-                    svg(xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
-                        line(x1='12' y1='5' x2='12' y2='19')
-                        line(x1='5' y1='12' x2='19' y2='12')
-                    | Add User
+        +pageHeader('Users', ((admins ? admins.length : 0) + (users ? users.length : 0)) + ' total members')
+            +addBtn((adminPrefix || '') + '/users/new', 'Add User')
 
         //- ── Admins section ──────────────────────────────────────────
         .da-section
@@ -45,14 +35,12 @@ block content
                                         td.da-col-username
                                             span.da-cell-secondary= u.username || '—'
                                         td.da-col-created
-                                            span.da-cell-muted= u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '—'
+                                            span.da-cell-muted= u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'
                                         td
                                             .da-cell-actions
                                                 a.da-row-btn.da-row-btn--edit(href=(adminPrefix || '') + '/users/' + u.id + '/edit' aria-label='Edit ' + u.email) Edit
                             else
-                                tr
-                                    td(colspan='4')
-                                        .da-table-empty No admins yet.
+                                +tableEmpty('No admins yet.', 4)
 
         //- ── Regular users section ───────────────────────────────────
         .da-section
@@ -78,12 +66,10 @@ block content
                                         td.da-col-username
                                             span.da-cell-secondary= u.username || '—'
                                         td.da-col-created
-                                            span.da-cell-muted= u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '—'
+                                            span.da-cell-muted= u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'
                                         td
                                             .da-cell-actions
                                                 a.da-row-btn.da-row-btn--edit(href=(adminPrefix || '') + '/users/' + u.id + '/edit' aria-label='Edit ' + u.email) Edit
                             else
-                                tr
-                                    td(colspan='4')
-                                        .da-table-empty No users yet.
+                                +tableEmpty('No users yet.', 4)
 

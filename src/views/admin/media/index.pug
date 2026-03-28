@@ -8,10 +8,7 @@ block content
     .da-page
 
         //- ── Page header ─────────────────────────────────────────────
-        .da-page-header
-            .da-page-header-left
-                h1.da-page-title Media Library
-                p.da-page-subtitle= (media ? media.length : 0) + ' file' + ((media && media.length !== 1) ? 's' : '')
+        +pageHeader('Media Library', (media ? media.length : 0) + ' file' + ((media && media.length !== 1) ? 's' : ''))
 
         //- ── Upload ──────────────────────────────────────────────────
         .da-section
@@ -79,31 +76,9 @@ block content
                                             span.da-cell-muted= m.alt || '—'
                                         td
                                             .da-cell-actions
-                                                a.da-row-btn.da-row-btn--edit(href=m.urlPath target='_blank' rel='noopener noreferrer' aria-label='View ' + (m.filename || 'file')) View
-                                                .da-delete-wrap(aria-label='Delete media actions')
-                                                    button.da-row-btn.da-row-btn--delete.da-delete-trigger(
-                                                        type='button'
-                                                        aria-label='Delete ' + (m.filename || m.path)
-                                                        aria-expanded='false'
-                                                    ) Delete
-                                                    .da-confirm-group(role='group' aria-label='Confirm deletion')
-                                                        button.da-row-btn.da-row-btn--cancel.da-delete-cancel(
-                                                            type='button'
-                                                            aria-label='Cancel deletion'
-                                                        ) No
-                                                        span.da-confirm-sep(aria-hidden='true')
-                                                        form.da-form-inline.da-delete-form(
-                                                            method='post'
-                                                            action=(adminPrefix || '') + '/media/' + m.id + '/delete'
-                                                        )
-                                                            button.da-row-btn.da-row-btn--confirm(
-                                                                type='submit'
-                                                                aria-label='Confirm delete ' + (m.filename || 'file')
-                                                            ) Yes, delete
+                                                +inlineDelete((adminPrefix || '') + '/media/' + m.id + '/delete', m.filename || m.path)
                             else
-                                tr
-                                    td(colspan='6')
-                                        .da-table-empty No media yet. Upload a file above.
+                                +tableEmpty('No media yet. Upload a file above.', 6)
 
 block append scripts
     script(src='/public/js/admin-media-upload.js')

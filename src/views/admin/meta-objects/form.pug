@@ -8,15 +8,8 @@ block content
     .da-page
 
         //- ── Page header ─────────────────────────────────────────────
-        .da-page-header
-            .da-page-header-left
-                h1.da-page-title= isEdit ? 'Edit Meta Object' : 'New Meta Object'
-                p.da-page-subtitle= isEdit && metaObject && metaObject.name ? metaObject.name : 'Define a meta object and its attributes'
-            .da-page-header-right
-                a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/meta-objects')
-                    svg(xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
-                        polyline(points='15 18 9 12 15 6')
-                    | Back to Meta Objects
+        +pageHeader(isEdit ? 'Edit Meta Object' : 'New Meta Object', isEdit && metaObject && metaObject.name ? metaObject.name : 'Define a meta object and its attributes')
+            +backBtn((adminPrefix || '') + '/meta-objects', 'Back to Meta Objects')
 
         if errors && errors.length
             .admin-flash.admin-flash-error
@@ -104,6 +97,16 @@ block content
                 .da-card-footer
                     button.da-btn.da-btn--primary(type='submit')= isEdit ? 'Update' : 'Create'
                     a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/meta-objects') Cancel
+
+        if isEdit
+            form#delete-meta-object-form(method='post' action=(adminPrefix || '') + '/meta-objects/' + metaObject.id + '/delete' style='margin-top:1.25rem')
+                button.da-btn.da-btn--danger(
+                    type='button'
+                    data-confirm-modal
+                    data-confirm-title='Delete Meta Object'
+                    data-confirm-msg='Are you sure you want to delete this meta object? This cannot be undone.'
+                    data-form-id='delete-meta-object-form'
+                ) Delete Meta Object
 
 block append scripts
     script(src='/public/js/admin-meta-object-form.js')

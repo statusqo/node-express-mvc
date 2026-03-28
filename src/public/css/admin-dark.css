@@ -294,6 +294,32 @@ body:has(.admin-layout) .admin-header-username {
 .da-badge--neutral { background: var(--ds-surface-3);   color: var(--ds-text-3); }
 .da-badge--neutral::before { display: none; }
 
+/* ── Fulfillment status ───────────────────────────────────────────── */
+.da-fulfillment {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.da-fulfillment::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+}
+.da-fulfillment--success { background: var(--ds-success-dim); color: var(--ds-success); }
+.da-fulfillment--warning { background: var(--ds-warning-dim); color: var(--ds-warning); }
+.da-fulfillment--danger  { background: var(--ds-danger-dim);  color: var(--ds-danger);  }
+.da-fulfillment--info    { background: var(--ds-info-dim);    color: var(--ds-info);    }
+.da-fulfillment--neutral { background: var(--ds-surface-3);   color: var(--ds-text-3); }
+.da-fulfillment--neutral::before { display: none; }
+
 /* ── Panel (card surface) ─────────────────────────────────────────── */
 .da-panel {
     background: var(--ds-surface);
@@ -722,7 +748,7 @@ tr.da-row--entering {
 /* ── Form layout grid ─────────────────────────────────────────────── */
 .da-form-grid {
     display: grid;
-    grid-template-columns: 1fr 300px;
+    grid-template-columns: 1fr 360px;
     gap: 1.5rem;
     align-items: start;
 }
@@ -885,12 +911,12 @@ tr.da-row--entering {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
+    gap: 0.75rem;
     flex-wrap: wrap;
 }
 
 .da-reset-desc {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--ds-text-3);
     margin: 0;
     line-height: 1.5;
@@ -912,10 +938,10 @@ tr.da-row--entering {
 }
 
 .da-reset-fields-inner {
-    padding-top: 1.25rem;
+    padding-top: 1rem;
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.75rem;
 }
 
 .da-reset-error {
@@ -2246,12 +2272,25 @@ tr.da-row--entering {
     pointer-events: none;
 }
 .da-page .admin-media-preview {
-    border-color: var(--ds-border);
+    display: block;
+    width: 128px;
+    height: 128px;
+    object-fit: cover;
+    border-radius: var(--ds-radius-sm);
+    border: 1px solid var(--ds-border);
+    background: var(--ds-surface-2);
 }
 .da-page .admin-media-preview-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 128px;
+    height: 128px;
+    border-radius: var(--ds-radius-sm);
+    border: 1px solid var(--ds-border);
     background: var(--ds-surface-2);
-    border-color: var(--ds-border);
     color: var(--ds-text-3);
+    font-size: 11px;
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -2262,7 +2301,89 @@ tr.da-row--entering {
     background: var(--ds-surface-2);
     border: 1px solid var(--ds-border);
     border-radius: var(--ds-radius-lg);
+    overflow: hidden;
 }
+
+/* Header row */
+.da-page .admin-definition-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 1rem;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--ds-border);
+    background: var(--ds-surface-3);
+    color: var(--ds-text-3);
+}
+
+/* Column widths — shared between header and data rows */
+.da-page .admin-definition-cell-key   { flex: 1; min-width: 0; }
+.da-page .admin-definition-cell-type  { width: 160px; flex-shrink: 0; }
+.da-page .admin-definition-cell-actions { width: 130px; flex-shrink: 0; display: flex; justify-content: flex-end; }
+
+/* Data rows container */
+.da-page .admin-definition-pairs {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Each attribute row */
+.da-page .definition-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem 1rem;
+    border-bottom: 1px solid var(--ds-border);
+}
+.da-page .definition-row:last-child { border-bottom: none; }
+
+/* Row column sizing to match header */
+.da-page .definition-row > input.definition-key   { flex: 1; min-width: 0; }
+.da-page .definition-row > select.definition-type { width: 160px; flex-shrink: 0; }
+.da-page .definition-row > .admin-definition-cell-actions { width: 130px; flex-shrink: 0; display: flex; justify-content: flex-end; }
+
+/* Inputs inside rows — match da-form-input style */
+.da-page .definition-key,
+.da-page .definition-type {
+    display: block;
+    box-sizing: border-box;
+    background: var(--ds-surface);
+    border: 1px solid var(--ds-border);
+    color: var(--ds-text-1);
+    border-radius: var(--ds-radius-sm);
+    padding: 0.5rem 0.75rem;
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 180ms var(--ds-ease), box-shadow 180ms var(--ds-ease);
+}
+.da-page .definition-key:focus,
+.da-page .definition-type:focus {
+    border-color: var(--ds-border-accent);
+    box-shadow: 0 0 0 3px var(--ds-accent-dim);
+}
+.da-page .definition-type {
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2.25rem;
+    color-scheme: dark;
+    cursor: pointer;
+}
+
+/* Footer with Add attribute button */
+.da-page .admin-definition-footer {
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--ds-border);
+    background: var(--ds-surface);
+}
+
+/* ── admin-definition-header colour overrides (original) ─── */
 .da-page .admin-definition-header {
     background: var(--ds-surface-3);
     color: var(--ds-text-3);

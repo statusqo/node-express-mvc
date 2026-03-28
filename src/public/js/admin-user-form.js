@@ -1,6 +1,21 @@
 (function () {
   "use strict";
 
+  /* ── Person type field toggle ─────────────────────────── */
+  var personTypeSelect = document.getElementById("personType");
+  var privateFields    = document.getElementById("privateFields");
+  var legalFields      = document.getElementById("legalFields");
+
+  function togglePersonTypeFields() {
+    if (!privateFields || !legalFields) return;
+    var isLegal = personTypeSelect && personTypeSelect.value === "legal";
+    privateFields.style.display = isLegal ? "none" : "";
+    legalFields.style.display   = isLegal ? ""     : "none";
+  }
+
+  if (personTypeSelect) personTypeSelect.addEventListener("change", togglePersonTypeFields);
+  togglePersonTypeFields();
+
   /* ── Password reset panel ─────────────────────────────── */
   var showResetBtn    = document.getElementById("showResetBtn");
   var resetFields     = document.getElementById("resetFields");

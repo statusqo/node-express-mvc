@@ -8,18 +8,10 @@ block content
     .da-page
 
         //- ── Page header ─────────────────────────────────────────────
-        .da-page-header
-            .da-page-header-left
-                h1.da-page-title Edit Order
-                p.da-page-subtitle= order.id ? '#' + order.id.slice(0, 8) + '…' : 'Order details'
-            .da-page-header-right
-                a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/orders')
-                    svg(xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
-                        polyline(points='15 18 9 12 15 6')
-                    | Back to Orders
+        +pageHeader('Edit Order', order.id ? '#' + order.id.slice(0, 8) + '…' : 'Order details')
+            +backBtn((adminPrefix || '') + '/orders', 'Back to Orders')
 
-        if error
-            p.admin-flash.admin-flash-error= error
+        +formError(error)
 
         //- ── Two-column grid: form main + refund aside ───────────────
         .da-form-grid
@@ -39,53 +31,42 @@ block content
                                 span.da-form-section-label Identity
 
                                 //- Order ID (read-only)
-                                .da-readonly-group
-                                    span.da-readonly-label Order ID
-                                    .da-readonly-value
-                                        span.da-cell-mono= order.id || '—'
+                                +readonlyField('Order ID')
+                                    span.da-cell-mono= order.id || '—'
 
                                 //- Customer (read-only)
-                                .da-readonly-group
-                                    span.da-readonly-label Customer
-                                    .da-readonly-value= order.email || (order.forename || order.surname ? (order.forename || '') + ' ' + (order.surname || '') : order.userId ? 'User #' + order.userId : 'Guest') || '—'
+                                +readonlyField('Customer')
+                                    | #{order.email || (order.forename || order.surname ? (order.forename || '') + ' ' + (order.surname || '') : order.userId ? 'User #' + order.userId : 'Guest') || '—'}
 
                                 //- Person type
-                                .da-readonly-group
-                                    span.da-readonly-label Person Type
-                                    .da-readonly-value
-                                        if order.personType === 'legal'
-                                            span.da-badge.da-badge--info Legal person
-                                        else
-                                            span Private person
+                                +readonlyField('Person Type')
+                                    if order.personType === 'legal'
+                                        span.da-badge.da-badge--info Legal person
+                                    else
+                                        span Private person
 
                                 //- Company info (legal persons only)
                                 if order.personType === 'legal'
-                                    .da-readonly-group
-                                        span.da-readonly-label Company Name
-                                        .da-readonly-value= order.companyName || '—'
-                                    .da-readonly-group
-                                        span.da-readonly-label OIB
-                                        .da-readonly-value= order.companyOib || '—'
+                                    +readonlyField('Company Name')
+                                        | #{order.companyName || '—'}
+                                    +readonlyField('OIB')
+                                        | #{order.companyOib || '—'}
 
                                 //- Payment status (read-only with badge)
-                                .da-readonly-group
-                                    span.da-readonly-label Payment Status
-                                    .da-readonly-value
-                                        - var payClass = ({paid:'success',pending:'warning',failed:'danger',refunded:'info',cancelled:'neutral'})[order.paymentStatus] || 'neutral'
-                                        if order.paymentStatus
-                                            span.da-badge(class='da-badge--' + payClass)= order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)
-                                        else
-                                            span —
+                                +readonlyField('Payment Status')
+                                    - var payClass = ({paid:'success',pending:'warning',failed:'danger',refunded:'info',cancelled:'neutral'})[order.paymentStatus] || 'neutral'
+                                    if order.paymentStatus
+                                        span.da-badge(class='da-badge--' + payClass)= order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)
+                                    else
+                                        span —
 
                                 //- Total (read-only)
-                                .da-readonly-group
-                                    span.da-readonly-label Total
-                                    .da-readonly-value= order.total != null ? Number(order.total).toFixed(2) + ' ' + (order.currency || 'EUR') : '—'
+                                +readonlyField('Total')
+                                    | #{order.total != null ? Number(order.total).toFixed(2) + ' ' + (order.currency || 'EUR') : '—'}
 
                                 //- Date (read-only)
-                                .da-readonly-group
-                                    span.da-readonly-label Date
-                                    .da-readonly-value= order.createdAt ? new Date(order.createdAt).toLocaleString('en-US', {month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit'}) : '—'
+                                +readonlyField('Date')
+                                    | #{order.createdAt ? new Date(order.createdAt).toLocaleString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'}) : '—'}
 
                             .da-form-section
                                 span.da-form-section-label Fulfillment
@@ -103,18 +84,14 @@ block content
                                 span.da-form-section-label Addresses
 
                                 //- Delivery address (read-only)
-                                .da-readonly-group
-                                    span.da-readonly-label Delivery Address
-                                    .da-readonly-value
-                                        - var delivery = [order.deliveryLine1, order.deliveryLine2, [order.deliveryCity, order.deliveryState, order.deliveryPostcode].filter(Boolean).join(', '), order.deliveryCountry].filter(Boolean).join(' · ')
-                                        | #{delivery || '—'}
+                                +readonlyField('Delivery Address')
+                                    - var delivery = [order.deliveryLine1, order.deliveryLine2, [order.deliveryCity, order.deliveryState, order.deliveryPostcode].filter(Boolean).join(', '), order.deliveryCountry].filter(Boolean).join(' · ')
+                                    | #{delivery || '—'}
 
                                 //- Billing address (read-only)
-                                .da-readonly-group
-                                    span.da-readonly-label Billing Address
-                                    .da-readonly-value
-                                        - var billing = [order.billingLine1, order.billingLine2, [order.billingCity, order.billingState, order.billingPostcode].filter(Boolean).join(', '), order.billingCountry].filter(Boolean).join(' · ')
-                                        | #{billing || '—'}
+                                +readonlyField('Billing Address')
+                                    - var billing = [order.billingLine1, order.billingLine2, [order.billingCity, order.billingState, order.billingPostcode].filter(Boolean).join(', '), order.billingCountry].filter(Boolean).join(' · ')
+                                    | #{billing || '—'}
 
                     .da-card-footer
                         button.da-btn.da-btn--primary(type='submit' form='orderEditForm') Save Changes
@@ -142,11 +119,11 @@ block content
                                             | #{r.reason}
                                     p.da-refund-meta
                                         strong Requested:&nbsp;
-                                        | #{r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '—'}
+                                        | #{r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'}
                                     if r.processedAt
                                         p.da-refund-meta
                                             strong Processed:&nbsp;
-                                            | #{new Date(r.processedAt).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})}
+                                            | #{new Date(r.processedAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'})}
                                     if r.status === 'approved'
                                         p.da-refund-meta
                                             strong Amount:&nbsp;

@@ -8,17 +8,8 @@ block content
     .da-page
 
         //- ── Page header ─────────────────────────────────────────────
-        .da-page-header
-            .da-page-header-left
-                h1.da-page-title Meta Objects
-                p.da-page-subtitle= (metaObjects ? metaObjects.length : 0) + ' object' + ((metaObjects && metaObjects.length !== 1) ? 's' : '')
-
-            .da-page-header-right
-                a.da-btn.da-btn--primary(href=(adminPrefix || '') + '/meta-objects/new')
-                    svg(xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
-                        line(x1='12' y1='5' x2='12' y2='19')
-                        line(x1='5' y1='12' x2='19' y2='12')
-                    | Add Meta Object
+        +pageHeader('Meta Objects', (metaObjects ? metaObjects.length : 0) + ' object' + ((metaObjects && metaObjects.length !== 1) ? 's' : ''))
+            +addBtn((adminPrefix || '') + '/meta-objects/new', 'Add Meta Object')
 
         //- ── Meta Objects table ───────────────────────────────────────
         .da-section
@@ -54,27 +45,5 @@ block content
                                         td
                                             .da-cell-actions
                                                 a.da-row-btn.da-row-btn--edit(href=(adminPrefix || '') + '/meta-objects/' + mo.id + '/edit' aria-label='Edit ' + mo.name) Edit
-                                                .da-delete-wrap(aria-label='Delete meta object actions')
-                                                    button.da-row-btn.da-row-btn--delete.da-delete-trigger(
-                                                        type='button'
-                                                        aria-label='Delete ' + mo.name
-                                                        aria-expanded='false'
-                                                    ) Delete
-                                                    .da-confirm-group(role='group' aria-label='Confirm deletion')
-                                                        button.da-row-btn.da-row-btn--cancel.da-delete-cancel(
-                                                            type='button'
-                                                            aria-label='Cancel deletion'
-                                                        ) No
-                                                        span.da-confirm-sep(aria-hidden='true')
-                                                        form.da-form-inline.da-delete-form(
-                                                            method='post'
-                                                            action=(adminPrefix || '') + '/meta-objects/' + mo.id + '/delete'
-                                                        )
-                                                            button.da-row-btn.da-row-btn--confirm(
-                                                                type='submit'
-                                                                aria-label='Confirm delete ' + mo.name
-                                                            ) Yes, delete
                             else
-                                tr
-                                    td(colspan='5')
-                                        .da-table-empty No meta objects yet.
+                                +tableEmpty('No meta objects yet.', 5)

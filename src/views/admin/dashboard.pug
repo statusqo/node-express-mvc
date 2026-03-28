@@ -71,7 +71,7 @@ block content
                                         td
                                             +statusBadge(order.status || 'Pending')
                                         td
-                                            span.dash-table-muted= order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '—'
+                                            span.dash-table-muted= order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'
                             else
                                 tr
                                     td.dash-table-empty(colspan='5')

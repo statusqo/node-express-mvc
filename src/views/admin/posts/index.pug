@@ -8,17 +8,8 @@ block content
     .da-page
 
         //- ── Page header ─────────────────────────────────────────────
-        .da-page-header
-            .da-page-header-left
-                h1.da-page-title Posts
-                p.da-page-subtitle= (posts ? posts.length : 0) + ' post' + ((posts && posts.length !== 1) ? 's' : '')
-
-            .da-page-header-right
-                a.da-btn.da-btn--primary(href=(adminPrefix || '') + '/blog/new')
-                    svg(xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
-                        line(x1='12' y1='5' x2='12' y2='19')
-                        line(x1='5' y1='12' x2='19' y2='12')
-                    | Add Post
+        +pageHeader('Posts', (posts ? posts.length : 0) + ' post' + ((posts && posts.length !== 1) ? 's' : ''))
+            +addBtn((adminPrefix || '') + '/blog/new', 'Add Post')
 
         //- ── Posts table ─────────────────────────────────────────────
         .da-section
@@ -50,31 +41,9 @@ block content
                                             else
                                                 span.da-badge.da-badge--neutral Draft
                                         td
-                                            span.da-cell-muted= p.publishedAt ? new Date(p.publishedAt).toLocaleDateString() : '—'
+                                            span.da-cell-muted= p.publishedAt ? new Date(p.publishedAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'
                                         td
                                             .da-cell-actions
                                                 a.da-row-btn.da-row-btn--edit(href=(adminPrefix || '') + '/blog/' + p.id + '/edit' aria-label='Edit ' + p.title) Edit
-                                                .da-delete-wrap(aria-label='Delete post actions')
-                                                    button.da-row-btn.da-row-btn--delete.da-delete-trigger(
-                                                        type='button'
-                                                        aria-label='Delete ' + p.title
-                                                        aria-expanded='false'
-                                                    ) Delete
-                                                    .da-confirm-group(role='group' aria-label='Confirm deletion')
-                                                        button.da-row-btn.da-row-btn--cancel.da-delete-cancel(
-                                                            type='button'
-                                                            aria-label='Cancel deletion'
-                                                        ) No
-                                                        span.da-confirm-sep(aria-hidden='true')
-                                                        form.da-form-inline.da-delete-form(
-                                                            method='post'
-                                                            action=(adminPrefix || '') + '/blog/' + p.id + '/delete'
-                                                        )
-                                                            button.da-row-btn.da-row-btn--confirm(
-                                                                type='submit'
-                                                                aria-label='Confirm delete ' + p.title
-                                                            ) Yes, delete
                             else
-                                tr
-                                    td(colspan='5')
-                                        .da-table-empty No posts yet.
+                                +tableEmpty('No posts yet.', 5)

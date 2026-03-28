@@ -3,15 +3,10 @@ extends ../../layouts/admin
 block content
     .da-page
 
-        .da-page-header
-            .da-page-header-left
-                h1.da-page-title= isEdit ? 'Edit Tax Rate' : 'New Tax Rate'
-                p.da-page-subtitle= isEdit ? (taxRate && taxRate.name) : 'Add a Stripe Tax Rate ID for e-racuni.hr VAT compliance'
-            .da-page-header-right
-                a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/tax-rates') Back to Tax Rates
+        +pageHeader(isEdit ? 'Edit Tax Rate' : 'New Tax Rate', isEdit ? (taxRate && taxRate.name) : 'Add a Stripe Tax Rate ID for e-racuni.hr VAT compliance')
+            +backBtn((adminPrefix || '') + '/tax-rates', 'Back to Tax Rates')
 
-        if error
-            p.admin-flash.admin-flash-error= error
+        +formError(error)
 
         form(method='post' action=isEdit ? (adminPrefix || '') + '/tax-rates/' + taxRate.id + '/edit' : (adminPrefix || '') + '/tax-rates/new')
             .da-card
@@ -53,7 +48,16 @@ block content
                             option(value='13' selected=(currentPct === 13)) 13%
                             option(value='25' selected=(currentPct === 25)) 25%
                         p.da-form-hint Must match the percentage configured on the Stripe Tax Rate object.
+                .da-card-footer
+                    button.da-btn.da-btn--primary(type='submit')= isEdit ? 'Update Tax Rate' : 'Create Tax Rate'
+                    a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/tax-rates') Cancel
 
-            .da-product-form-actions(style='margin-top:1.5rem')
-                button.da-btn.da-btn--primary(type='submit')= isEdit ? 'Update Tax Rate' : 'Create Tax Rate'
-                a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/tax-rates') Cancel
+        if isEdit
+            form#delete-tax-rate-form(method='post' action=(adminPrefix || '') + '/tax-rates/' + taxRate.id + '/delete' style='margin-top:1.25rem')
+                button.da-btn.da-btn--danger(
+                    type='button'
+                    data-confirm-modal
+                    data-confirm-title='Delete Tax Rate'
+                    data-confirm-msg='Are you sure you want to delete this tax rate? Products using it will lose their VAT assignment.'
+                    data-form-id='delete-tax-rate-form'
+                ) Delete Tax Rate
