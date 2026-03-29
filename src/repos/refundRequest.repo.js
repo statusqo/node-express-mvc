@@ -1,5 +1,5 @@
 const { Op } = require("sequelize");
-const { RefundRequest } = require("../models");
+const { RefundRequest, Order } = require("../models");
 
 const PENDING = "pending";
 
@@ -47,6 +47,39 @@ module.exports = {
     }
     return await RefundRequest.findAll({
       where: Object.keys(where).length ? where : undefined,
+      order: [["createdAt", "DESC"]],
+      ...options,
+    });
+  },
+
+  /**
+   * Find all refund requests for a batch of order IDs (used for status display on order lists).
+   */
+  async findByOrderIds(orderIds, options = {}) {
+    if (!orderIds || orderIds.length === 0) return [];
+    return await RefundRequest.findAll({
+      where: { orderId: { [Op.in]: orderIds } },
+      attributes: ["orderId", "status"],
+      ...options,
+    });
+  },
+
+  /**
+   * Find all refund requests for admin with optional status filter,
+   * including the associated Order for display.
+   */
+  async countPending() {
+    return await RefundRequest.count({ where: { status: PENDING } });
+  },
+
+  async findAllWithOrder(filters = {}, options = {}) {
+    const where = {};
+    if (filters.status && ["pending", "approved", "rejected"].includes(filters.status)) {
+      where.status = filters.status;
+    }
+    return await RefundRequest.findAll({
+      where: Object.keys(where).length ? where : undefined,
+      include: [{ model: Order, as: "Order", attributes: ["id", "total", "currency", "email", "paymentStatus"] }],
       order: [["createdAt", "DESC"]],
       ...options,
     });

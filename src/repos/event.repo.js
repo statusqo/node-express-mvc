@@ -1,4 +1,4 @@
-const { Event } = require("../models");
+const { Event, EventMeeting, Registration, ProductVariant } = require("../models");
 const { EVENT_STATUS } = require("../constants/event");
 
 module.exports = {
@@ -55,5 +55,100 @@ module.exports = {
     if (!row) return false;
     await row.destroy(options);
     return true;
+  },
+
+  /**
+   * All active online events with their EventMeeting included.
+   * Used by syncAllEvents to find events that need a Zoom meeting.
+   */
+  async findActiveOnlineWithMeetings(options = {}) {
+    return await Event.findAll({
+      where: { eventStatus: EVENT_STATUS.ACTIVE, isOnline: true },
+      include: [{ model: EventMeeting, as: "EventMeeting", required: false }],
+      ...options,
+    });
+  },
+
+  /**
+   * Active online events for a single product with their EventMeeting included.
+   * Used by syncProductEvents.
+   */
+  async findActiveOnlineByProductIdWithMeeting(productId, options = {}) {
+    return await Event.findAll({
+      where: { productId, eventStatus: EVENT_STATUS.ACTIVE, isOnline: true },
+      include: [{ model: EventMeeting, as: "EventMeeting", required: false }],
+      order: [["startDate", "ASC"], ["startTime", "ASC"]],
+      ...options,
+    });
+  },
+
+  /**
+   * Single event with EventMeeting and Registrations included.
+   * Used by cancelEvent, processEventRefundsAndCleanup, and resyncOrphanedEvent.
+   */
+  async findByIdWithRegistrationsAndMeeting(eventId, options = {}) {
+    return await Event.findByPk(eventId, {
+      include: [
+        { model: EventMeeting, as: "EventMeeting", required: false },
+        { model: Registration, as: "Registrations", required: false },
+      ],
+      ...options,
+    });
+  },
+
+  /**
+   * Single event with its ProductVariant included.
+   * Used by registerForm (seat + price check).
+   */
+  async findByIdWithVariant(eventId, options = {}) {
+    return await Event.findByPk(eventId, {
+      include: [{ model: ProductVariant, as: "ProductVariant" }],
+      ...options,
+    });
+  },
+
+  /**
+   * All events for a product with ProductVariant, EventMeeting, and Registration count included.
+   * Used by the admin events page.
+   */
+  async findByProductIdWithDetails(productId, options = {}) {
+    return await Event.findAll({
+      where: { productId },
+      include: [
+        { model: ProductVariant, as: "ProductVariant" },
+        { model: EventMeeting, as: "EventMeeting", required: false },
+        { model: Registration, as: "Registrations", required: false, attributes: ["id"] },
+      ],
+      order: [["startDate", "ASC"], ["startTime", "ASC"]],
+      ...options,
+    });
+  },
+
+  /**
+   * Single event with ProductVariant, EventMeeting, and Registration count included.
+   * Used by the admin edit event form.
+   */
+  async findByIdWithDetails(eventId, options = {}) {
+    return await Event.findByPk(eventId, {
+      include: [
+        { model: ProductVariant, as: "ProductVariant" },
+        { model: EventMeeting, as: "EventMeeting", required: false },
+        { model: Registration, as: "Registrations", required: false, attributes: ["id"] },
+      ],
+      ...options,
+    });
+  },
+
+  /**
+   * Active events for a product with ProductVariant included.
+   * Used by the public show page to list sessions with seat counts.
+   */
+  async findActiveByProductIdWithVariant(productId, options = {}) {
+    return await Event.findAll({
+      where: { productId, eventStatus: EVENT_STATUS.ACTIVE },
+      include: [{ model: ProductVariant, as: "ProductVariant" }],
+      order: [["startDate", "ASC"], ["startTime", "ASC"]],
+      ...options,
+    });
   },
 };

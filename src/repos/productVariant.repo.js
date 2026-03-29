@@ -30,6 +30,56 @@ module.exports = {
     return price ? Number(price.amount) : 0;
   },
 
+  async update(id, data, options = {}) {
+    const row = await ProductVariant.findByPk(id, options);
+    if (!row) return null;
+    return await row.update(data, options);
+  },
+
+  /**
+   * Update the default price row for a variant.
+   */
+  async updateDefaultPrice(variantId, data, options = {}) {
+    const price = await ProductPrice.findOne({ where: { productVariantId: variantId, isDefault: true }, ...options });
+    if (!price) return null;
+    return await price.update(data, options);
+  },
+
+  /**
+   * Hard-delete the variant record.
+   */
+  async destroy(variantId, options = {}) {
+    await ProductVariant.destroy({ where: { id: variantId }, ...options });
+  },
+
+  /**
+   * Hard-delete all ProductPrice rows for a variant.
+   */
+  async destroyPrices(variantId, options = {}) {
+    await ProductPrice.destroy({ where: { productVariantId: variantId }, ...options });
+  },
+
+  /**
+   * Decrement quantity by `by` and clamp to zero if it goes negative.
+   * Used when recording a payment — seats sold.
+   */
+  async decrementQuantityAndClamp(variantId, by, options = {}) {
+    const variant = await ProductVariant.findByPk(variantId, options);
+    if (!variant) return;
+    await variant.decrement("quantity", { by, ...options });
+    await variant.reload(options);
+    if (variant.quantity < 0) await variant.update({ quantity: 0 }, options);
+  },
+
+  /**
+   * Increment quantity by `by`. Used when restoring seats after a refund.
+   */
+  async incrementQuantity(variantId, by, options = {}) {
+    const variant = await ProductVariant.findByPk(variantId, options);
+    if (!variant) return;
+    await variant.increment("quantity", { by, ...options });
+  },
+
   async getOrderLineSnapshot(variantId, options = {}) {
     const variant = await ProductVariant.findByPk(variantId, {
       include: [

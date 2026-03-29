@@ -2,7 +2,6 @@
  * Public controller for event-type product sections (Webinars, Seminars, Classrooms).
  * Expects req.typeSlug and req.sectionPath set by route middleware (e.g. typeSlug: 'webinar', sectionPath: 'webinars').
  */
-const { ProductVariant, ProductPrice } = require("../../models");
 const productService = require("../../services/product.service");
 const eventService = require("../../services/event.service");
 const orderService = require("../../services/order.service");
@@ -59,9 +58,7 @@ module.exports = {
       res.setFlash("error", "Product not found.");
       return res.redirect("/" + sectionPath);
     }
-    const events = await eventService.findActiveByProductId(product.id, {
-      include: [ProductVariant],
-    });
+    const events = await eventService.findActiveByProductIdWithVariant(product.id);
     const eventsPlain = (events || []).map(toPlain);
     res.render("web/event-type-products/show", {
       title: plain.title,
@@ -93,7 +90,7 @@ module.exports = {
       res.setFlash("error", "Product not found.");
       return res.redirect("/" + sectionPath);
     }
-    const event = await eventService.findById(eventId, { include: [ProductVariant] });
+    const event = await eventService.findByIdWithVariant(eventId);
     if (!event || String(event.productId) !== String(product.id)) {
       res.setFlash("error", "Invalid session.");
       return res.redirect("/" + sectionPath + "/" + plain.slug);
@@ -116,9 +113,7 @@ module.exports = {
     }
     // Use the event's own variant price — this is what will actually be charged and is the
     // authoritative value for determining whether the session is free (priceAmount === 0).
-    const eventPriceRow = await ProductPrice.findOne({
-      where: { productVariantId: eventPlain.productVariantId, isDefault: true },
-    });
+    const eventPriceRow = await eventService.getPriceForEvent(eventPlain);
     const priceAmount = eventPriceRow ? Number(eventPriceRow.amount) : null;
     const currency = DEFAULT_CURRENCY;
     let paymentMethods = [];
@@ -175,8 +170,11 @@ module.exports = {
     if (!event.productVariantId) {
       return res.status(400).json({ error: "This session cannot be booked." });
     }
-    const variant = await ProductVariant.findByPk(event.productVariantId);
-    if (!variant || (variant.quantity != null && Number(variant.quantity) < 1)) {
+    const variant = await eventService.getVariantForEvent(event);
+    if (!variant || !variant.active) {
+      return res.status(400).json({ error: "This session is no longer available." });
+    }
+    if (variant.quantity != null && Number(variant.quantity) < 1) {
       return res.status(400).json({ error: "This session is sold out." });
     }
     const userId = req.user?.id || null;
@@ -185,8 +183,7 @@ module.exports = {
       return res.status(400).json({ error: "Email is required for guest checkout." });
     }
     // Require billing address for paid sessions (check variant price).
-    const { ProductPrice } = require("../../models");
-    const eventPriceRow = await ProductPrice.findOne({ where: { productVariantId: event.productVariantId, isDefault: true } });
+    const eventPriceRow = await eventService.getPriceForEvent(event);
     const isPaid = eventPriceRow && Number(eventPriceRow.amount) > 0;
     if (isPaid && (!billingLine1 || !billingCity || !billingPostcode || !billingCountry)) {
       return res.status(400).json({ error: "Billing address is required." });

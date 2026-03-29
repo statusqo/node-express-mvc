@@ -104,6 +104,10 @@ module.exports = {
     return await CartLine.destroy({ where: { cartId }, ...options });
   },
 
+  async removeLinesByVariantId(productVariantId, options = {}) {
+    return await CartLine.destroy({ where: { productVariantId }, ...options });
+  },
+
   async delete(cartId, options = {}) {
     const cart = await Cart.findByPk(cartId, options);
     if (!cart) return false;

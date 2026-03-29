@@ -6,8 +6,9 @@ const productVariantRepo = require("../repos/productVariant.repo");
 const eventRepo = require("../repos/event.repo");
 const userRepo = require("../repos/user.repo");
 const transactionRepo = require("../repos/transaction.repo");
+const registrationRepo = require("../repos/registration.repo");
+const eventMeetingRepo = require("../repos/eventMeeting.repo");
 const { PAYMENT_STATUS, FULFILLMENT_STATUS, FULFILLMENT_STATUS_LIST, TRANSACTION_STATUS, REGISTRATION_STATUS, ORDER_SOURCE } = require("../constants");
-const { Registration, Event, EventMeeting } = require("../models");
 const { getMeetingProvider } = require("../gateways/meeting.interface");
 const emailService = require("./email.service");
 // stripeGateway is required lazily to avoid circular dependency with stripe.gateway
@@ -142,6 +143,13 @@ async function createOrderFromCart(userId, sessionId, opts = {}) {
 
     let total = 0;
     for (const line of lines) {
+      const variant = await productVariantRepo.findById(line.productVariantId, { transaction: t });
+      if (!variant || !variant.active) {
+        throw new Error("One or more items in your cart are no longer available.");
+      }
+      if (variant.quantity != null && variant.quantity < 1) {
+        throw new Error("One or more items in your cart are sold out.");
+      }
       const snapshot = await productVariantRepo.getOrderLineSnapshot(line.productVariantId, { transaction: t });
       if (!snapshot) {
         throw new Error(`Product variant ${line.productVariantId} not found.`);
@@ -214,17 +222,9 @@ async function recordPaymentSuccess(transactionId, userIdFromOrder = null) {
 
     const orderAfter = await orderRepo.findById(transaction.orderId);
     const lines = await orderRepo.getLines(orderAfter.id);
-    const { ProductVariant } = require("../models");
     for (const line of lines || []) {
       if (!line.productVariantId || !(line.quantity > 0)) continue;
-      const variant = await ProductVariant.findByPk(line.productVariantId);
-      if (variant) {
-        await variant.decrement("quantity", { by: line.quantity });
-        await variant.reload();
-        if (variant.quantity < 0) {
-          await variant.update({ quantity: 0 });
-        }
-      }
+      await productVariantRepo.decrementQuantityAndClamp(line.productVariantId, line.quantity);
     }
 
     if (orderAfter.source === ORDER_SOURCE.CART) {
@@ -238,9 +238,9 @@ async function recordPaymentSuccess(transactionId, userIdFromOrder = null) {
     const provider = getMeetingProvider();
     for (const line of lines || []) {
       if (!line.eventId) continue;
-      const [reg, created] = await Registration.findOrCreate({
-        where: { eventId: line.eventId, orderLineId: line.id },
-        defaults: {
+      const [reg, created] = await registrationRepo.findOrCreate(
+        { eventId: line.eventId, orderLineId: line.id },
+        {
           eventId: line.eventId,
           orderId: orderAfter.id,
           orderLineId: line.id,
@@ -249,8 +249,8 @@ async function recordPaymentSuccess(transactionId, userIdFromOrder = null) {
           forename: orderAfter.forename || null,
           surname: orderAfter.surname || null,
           status: REGISTRATION_STATUS.REGISTERED,
-        },
-      });
+        }
+      );
       logger.info("recordPaymentSuccess: registration", {
         registrationId: reg.id,
         eventId: line.eventId,
@@ -258,14 +258,15 @@ async function recordPaymentSuccess(transactionId, userIdFromOrder = null) {
         created,
       });
       if (provider && reg) {
-        const event = await Event.findByPk(line.eventId, { include: [{ model: EventMeeting, as: "EventMeeting" }] });
-        const meeting = event && event.EventMeeting ? event.EventMeeting.get({ plain: true }) : null;
+        const event = await eventRepo.findById(line.eventId);
+        const meeting = event && event.isOnline ? await eventMeetingRepo.findByEventId(line.eventId) : null;
         if (event && event.isOnline && meeting) {
           try {
             const regPlain = reg.get ? reg.get({ plain: true }) : reg;
-            const { zoomRegistrantId } = await provider.addRegistrant(meeting, regPlain);
+            const meetingPlain = meeting.get ? meeting.get({ plain: true }) : meeting;
+            const { zoomRegistrantId } = await provider.addRegistrant(meetingPlain, regPlain);
             if (zoomRegistrantId) {
-              await reg.update({ zoomRegistrantId });
+              await registrationRepo.update(reg.id, { zoomRegistrantId });
               logger.info("recordPaymentSuccess: Zoom registrant added", { registrationId: reg.id, eventId: line.eventId });
             }
           } catch (zoomErr) {
@@ -338,16 +339,10 @@ async function fulfillFreeOrder(orderId) {
 
     const orderAfter = await orderRepo.findById(orderId);
     const lines = await orderRepo.getLines(orderAfter.id);
-    const { ProductVariant } = require("../models");
 
     for (const line of lines || []) {
       if (!line.productVariantId || !(line.quantity > 0)) continue;
-      const variant = await ProductVariant.findByPk(line.productVariantId);
-      if (variant) {
-        await variant.decrement("quantity", { by: line.quantity });
-        await variant.reload();
-        if (variant.quantity < 0) await variant.update({ quantity: 0 });
-      }
+      await productVariantRepo.decrementQuantityAndClamp(line.productVariantId, line.quantity);
     }
 
     const cart = orderAfter.userId
@@ -358,9 +353,9 @@ async function fulfillFreeOrder(orderId) {
     const provider = getMeetingProvider();
     for (const line of lines || []) {
       if (!line.eventId) continue;
-      const [reg] = await Registration.findOrCreate({
-        where: { eventId: line.eventId, orderLineId: line.id },
-        defaults: {
+      const [reg] = await registrationRepo.findOrCreate(
+        { eventId: line.eventId, orderLineId: line.id },
+        {
           eventId: line.eventId,
           orderId: orderAfter.id,
           orderLineId: line.id,
@@ -369,16 +364,17 @@ async function fulfillFreeOrder(orderId) {
           forename: orderAfter.forename || null,
           surname: orderAfter.surname || null,
           status: REGISTRATION_STATUS.REGISTERED,
-        },
-      });
+        }
+      );
       if (provider && reg) {
-        const event = await Event.findByPk(line.eventId, { include: [{ model: EventMeeting, as: "EventMeeting" }] });
-        const meeting = event && event.EventMeeting ? event.EventMeeting.get({ plain: true }) : null;
+        const event = await eventRepo.findById(line.eventId);
+        const meeting = event && event.isOnline ? await eventMeetingRepo.findByEventId(line.eventId) : null;
         if (event && event.isOnline && meeting) {
           try {
             const regPlain = reg.get ? reg.get({ plain: true }) : reg;
-            const { zoomRegistrantId } = await provider.addRegistrant(meeting, regPlain);
-            if (zoomRegistrantId) await reg.update({ zoomRegistrantId });
+            const meetingPlain = meeting.get ? meeting.get({ plain: true }) : meeting;
+            const { zoomRegistrantId } = await provider.addRegistrant(meetingPlain, regPlain);
+            if (zoomRegistrantId) await registrationRepo.update(reg.id, { zoomRegistrantId });
           } catch (_) {}
         }
       }
@@ -429,13 +425,9 @@ async function restoreVariantQuantitiesForOrder(orderId) {
   const order = await orderRepo.findById(orderId);
   if (!order) return;
   const lines = await orderRepo.getLines(order.id);
-  const { ProductVariant } = require("../models");
   for (const line of lines || []) {
     if (!line.productVariantId || !(line.quantity > 0)) continue;
-    const variant = await ProductVariant.findByPk(line.productVariantId);
-    if (variant) {
-      await variant.increment("quantity", { by: line.quantity });
-    }
+    await productVariantRepo.incrementQuantity(line.productVariantId, line.quantity);
   }
 }
 
@@ -708,6 +700,14 @@ async function claimGuestOrdersByEmail(email, userId) {
   return claimed;
 }
 
+/**
+ * Get all transactions for an order. Used by checkout controller to find the transaction
+ * matching a PaymentIntent after payment confirmation.
+ */
+async function getTransactionsForOrder(orderId) {
+  return await transactionRepo.findByOrder(orderId);
+}
+
 module.exports = {
   getCartTotalForPayment,
   createOrderFromCart,
@@ -728,4 +728,5 @@ module.exports = {
   listOrdersForAdmin,
   updateOrderForAdmin,
   claimGuestOrdersByEmail,
+  getTransactionsForOrder,
 };

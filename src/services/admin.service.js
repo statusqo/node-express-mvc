@@ -4,7 +4,8 @@ const collectionRepo = require("../repos/collection.repo");
 const metaObjectRepo = require("../repos/metaObject.repo");
 const postRepo = require("../repos/post.repo");
 const orderRepo = require("../repos/order.repo");
-const { Product, ProductType, RefundRequest, AdminZoomAccount } = require("../models");
+const refundRequestRepo = require("../repos/refundRequest.repo");
+const adminZoomAccountRepo = require("../repos/adminZoomAccount.repo");
 const config = require("../config");
 
 module.exports = {
@@ -19,14 +20,14 @@ module.exports = {
       metaObjectRepo.count(),
       postRepo.count(),
       orderRepo.count(),
-      Product.count({ include: [{ model: ProductType, as: "ProductType", where: { slug: "webinar" }, required: true }], distinct: true }),
-      Product.count({ include: [{ model: ProductType, as: "ProductType", where: { slug: "seminar" }, required: true }], distinct: true }),
-      Product.count({ include: [{ model: ProductType, as: "ProductType", where: { slug: "classroom" }, required: true }], distinct: true }),
-      RefundRequest.count({ where: { status: "pending" } }),
+      productRepo.countByTypeSlug("webinar"),
+      productRepo.countByTypeSlug("seminar"),
+      productRepo.countByTypeSlug("classroom"),
+      refundRequestRepo.countPending(),
     ]);
 
     const zoomAccount = userId
-      ? await AdminZoomAccount.findOne({ where: { userId } })
+      ? await adminZoomAccountRepo.findByUserId(userId)
       : null;
     const zoomConnected = (() => {
       if (!zoomAccount) return false;

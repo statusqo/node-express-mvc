@@ -6,7 +6,7 @@
 const crypto = require("crypto");
 const config = require("../../config");
 const logger = require("../../config/logger");
-const { EventMeeting, Event } = require("../../models");
+const eventService = require("../../services/event.service");
 
 /**
  * Verify the Zoom webhook signature.
@@ -122,14 +122,10 @@ async function webhook(req, res) {
     }
 
     try {
-      const row = await EventMeeting.findOne({ where: { zoomMeetingId: meetingId } });
-      if (row) {
-        const eventId = row.eventId;
-        await Event.update({ eventStatus: "orphaned" }, { where: { id: eventId } });
-        // Remove the stale meeting record so the dead join URL is no longer served.
+      const result = await eventService.handleZoomMeetingDeleted(meetingId);
+      if (result.handled) {
         // resyncOrphanedEvent will create a fresh EventMeeting when the admin re-syncs.
-        await row.destroy();
-        logger.info("Event marked orphaned and stale meeting record removed (Zoom meeting deleted)", { eventId, meetingId });
+        logger.info("Event marked orphaned and stale meeting record removed (Zoom meeting deleted)", { eventId: result.eventId, meetingId });
       } else {
         logger.info(
           "Zoom meeting.deleted: no linked event (meeting may have been deleted from app)",

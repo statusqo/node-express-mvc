@@ -32,6 +32,11 @@ async function addToCart(userId, sessionId, productVariantId, quantity = 1) {
     err.status = 404;
     throw err;
   }
+  if (variant.quantity != null && variant.quantity < 1) {
+    const err = new Error("This item is sold out.");
+    err.status = 400;
+    throw err;
+  }
   const price = await productVariantRepo.getDefaultPrice(productVariantId);
   if (!price) {
     const err = new Error("Product variant has no price configured.");

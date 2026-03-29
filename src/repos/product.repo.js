@@ -460,4 +460,11 @@ module.exports = {
   async count(options = {}) {
     return await Product.count(options);
   },
+
+  async countByTypeSlug(typeSlug) {
+    return await Product.count({
+      include: [{ model: ProductType, as: "ProductType", where: { slug: typeSlug }, required: true }],
+      distinct: true,
+    });
+  },
 };

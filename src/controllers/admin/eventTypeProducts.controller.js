@@ -5,8 +5,8 @@
  */
 const productService = require("../../services/product.service");
 const eventService = require("../../services/event.service");
+const zoomService = require("../../services/zoom.service");
 const { validateEventForm } = require("../../validators/event.schema");
-const { ProductPrice, ProductVariant, EventMeeting, AdminZoomAccount, Registration } = require("../../models");
 const config = require("../../config");
 const { DEFAULT_CURRENCY } = require("../../config/constants");
 
@@ -66,37 +66,28 @@ module.exports = {
       res.setFlash("error", "Product does not belong to this section.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
     }
-    const events = await eventService.findByProductId(product.id, {
-      include: [ProductVariant, { model: EventMeeting, as: "EventMeeting", required: false }, { model: Registration, as: "Registrations", required: false, attributes: ["id"] }],
+    const eventsWithDetails = await eventService.findByProductIdForAdmin(product.id);
+    const eventsWithPrice = (eventsWithDetails || []).map((ev) => {
+      const seatsRemaining =
+        ev.ProductVariant && ev.ProductVariant.quantity != null ? Number(ev.ProductVariant.quantity) : null;
+      const hasMeeting = ev.isOnline && ev.EventMeeting && ev.EventMeeting.zoomMeetingId;
+      const meetingLinkStatus = !ev.isOnline ? null : ev.eventStatus === "active" && hasMeeting ? "synced" : "not_synced";
+      const registrationCount = ev.Registrations ? ev.Registrations.length : 0;
+      return {
+        ...ev,
+        priceAmount: ev.priceRow ? Number(ev.priceRow.amount) : null,
+        currency: DEFAULT_CURRENCY,
+        seatsRemaining,
+        meetingLinkStatus,
+        registrationCount,
+      };
     });
-    const eventsPlain = (events || []).map(toPlain);
-    const eventsWithPrice = await Promise.all(
-      eventsPlain.map(async (ev) => {
-        const priceRow =
-          ev.productVariantId
-            ? await ProductPrice.findOne({ where: { productVariantId: ev.productVariantId, isDefault: true } })
-            : null;
-        const seatsRemaining =
-          ev.ProductVariant && ev.ProductVariant.quantity != null ? Number(ev.ProductVariant.quantity) : null;
-        const hasMeeting = ev.isOnline && ev.EventMeeting && ev.EventMeeting.zoomMeetingId;
-        const meetingLinkStatus = !ev.isOnline ? null : ev.eventStatus === "active" && hasMeeting ? "synced" : "not_synced";
-        const registrationCount = ev.Registrations ? ev.Registrations.length : 0;
-        return {
-          ...ev,
-          priceAmount: priceRow ? Number(priceRow.amount) : null,
-          currency: DEFAULT_CURRENCY,
-          seatsRemaining,
-          meetingLinkStatus,
-          registrationCount,
-        };
-      })
-    );
     // Mirror the token-validity logic from admin.service.js: presence alone is not
     // enough — an expired token with no refresh token cannot be used.
     const zoomConnected = await (async () => {
       if (!req.user || !req.user.id) return false;
       if (!config.zoom || !config.zoom.clientId || !config.zoom.clientSecret) return false;
-      const account = await AdminZoomAccount.findOne({ where: { userId: req.user.id } });
+      const account = await zoomService.findAccountByUserId(req.user.id);
       if (!account) return false;
       const expiresAt = account.tokenExpiresAt ? new Date(account.tokenExpiresAt).getTime() : null;
       const tokenExpired = expiresAt !== null && expiresAt <= Date.now();
@@ -224,21 +215,11 @@ module.exports = {
       res.setFlash("error", "Product does not belong to this section.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
     }
-    const eventRaw = await eventService.findById(eventId, {
-      include: [
-        ProductVariant,
-        { model: EventMeeting, as: "EventMeeting", required: false },
-        { model: Registration, as: "Registrations", required: false, attributes: ["id"] },
-      ],
-    });
-    if (!eventRaw || String(eventRaw.productId) !== String(plain.id)) {
+    const ev = await eventService.findByIdForAdmin(eventId);
+    if (!ev || String(ev.productId) !== String(plain.id)) {
       res.setFlash("error", "Event not found.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events");
     }
-    const ev = toPlain(eventRaw);
-    const priceRow = ev.productVariantId
-      ? await ProductPrice.findOne({ where: { productVariantId: ev.productVariantId, isDefault: true } })
-      : null;
     const hasMeeting = ev.isOnline && ev.EventMeeting && ev.EventMeeting.zoomMeetingId;
     const meetingLinkStatus = !ev.isOnline ? null : ev.eventStatus === "active" && hasMeeting ? "synced" : "not_synced";
     const registrationCount = ev.Registrations ? ev.Registrations.length : 0;
@@ -253,7 +234,7 @@ module.exports = {
       },
       event: {
         ...ev,
-        priceAmount: priceRow ? Number(priceRow.amount) : null,
+        priceAmount: ev.priceRow ? Number(ev.priceRow.amount) : null,
         currency: DEFAULT_CURRENCY,
         meetingLinkStatus,
         registrationCount,

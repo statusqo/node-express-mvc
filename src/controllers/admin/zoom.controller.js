@@ -2,7 +2,7 @@
  * Admin Zoom OAuth: connect Zoom account for hosting online events.
  */
 const config = require("../../config");
-const { AdminZoomAccount } = require("../../models");
+const zoomService = require("../../services/zoom.service");
 const crypto = require("crypto");
 
 const ZOOM_AUTH_URL = "https://zoom.us/oauth/authorize";
@@ -83,19 +83,13 @@ async function callback(req, res) {
     return res.redirect((req.adminPrefix || "") + "/");
   }
 
-  const existing = await AdminZoomAccount.findOne({ where: { userId: req.user.id } });
-  const payload = {
+  await zoomService.saveAccount({
     userId: req.user.id,
     zoomUserId,
     accessToken: data.access_token,
     refreshToken: data.refresh_token || null,
     tokenExpiresAt: data.expires_in ? new Date(Date.now() + data.expires_in * 1000) : null,
-  };
-  if (existing) {
-    await existing.update(payload);
-  } else {
-    await AdminZoomAccount.create(payload);
-  }
+  });
 
   const eventService = require("../../services/event.service");
   try {

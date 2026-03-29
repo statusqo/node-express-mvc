@@ -4,10 +4,11 @@ const transactionRepo = require("../repos/transaction.repo");
 const orderService = require("./order.service");
 const stripeGateway = require("../gateways/stripe.gateway");
 const logger = require("../config/logger");
+const registrationRepo = require("../repos/registration.repo");
+const eventMeetingRepo = require("../repos/eventMeeting.repo");
 const { PAYMENT_STATUS } = require("../constants/order");
 const { TRANSACTION_STATUS } = require("../constants/transaction");
 const { REFUND_REQUEST_STATUS } = require("../constants/refundRequest");
-const { Registration, EventMeeting } = require("../models");
 const { getMeetingProvider } = require("../gateways/meeting.interface");
 
 const PENDING = REFUND_REQUEST_STATUS.PENDING;
@@ -74,11 +75,7 @@ async function findPendingRefundRequests(options = {}) {
  * List refund requests for admin with optional status filter. Includes Order for display.
  */
 async function findRefundRequestsForAdmin(filters = {}, options = {}) {
-  const { Order } = require("../models");
-  return await refundRequestRepo.findAll(filters, {
-    include: [{ model: Order, as: "Order", attributes: ["id", "total", "currency", "email", "paymentStatus"] }],
-    ...options,
-  });
+  return await refundRequestRepo.findAllWithOrder(filters, options);
 }
 
 /**
@@ -96,13 +93,7 @@ async function findByOrder(orderId, options = {}) {
  */
 async function getRefundRequestStatusByOrderIds(orderIds) {
   if (!orderIds || orderIds.length === 0) return {};
-  const RefundRequest = require("../models").RefundRequest;
-  const { Op } = require("sequelize");
-  const list = await RefundRequest.findAll({
-    where: { orderId: { [Op.in]: orderIds } },
-    attributes: ["orderId", "status"],
-    raw: true,
-  });
+  const list = await refundRequestRepo.findByOrderIds(orderIds, { raw: true });
   const map = {};
   for (const r of list) {
     if (!r.orderId) continue;
@@ -156,7 +147,7 @@ async function approveRefundRequest(requestId, processedByUserId) {
   // Step 1: Remove registrants from Zoom before charging Stripe.
   // Non-404 errors abort the entire approval — customer must not be refunded while still having Zoom access.
   // 404 is swallowed (registrant already gone — desired state, safe to proceed).
-  const registrations = await Registration.findAll({ where: { orderId: order.id } });
+  const registrations = await registrationRepo.findAllByOrderId(order.id);
   logger.info("Registrations found for refund approval", { orderId: order.id, count: registrations.length });
 
   for (const reg of registrations) {
@@ -164,12 +155,12 @@ async function approveRefundRequest(requestId, processedByUserId) {
       logger.info("Registration has no Zoom registrant — skipping Zoom removal", { registrationId: reg.id });
       continue;
     }
-    const meeting = await EventMeeting.findOne({ where: { eventId: reg.eventId } });
+    const meeting = await eventMeetingRepo.findByEventId(reg.eventId);
     if (!meeting) {
       logger.info("No EventMeeting found for registration — skipping Zoom removal", { registrationId: reg.id, eventId: reg.eventId });
       continue;
     }
-    const provider = getMeetingProvider(meeting);
+    const provider = getMeetingProvider();
     if (!provider) {
       logger.info("No meeting provider configured — skipping Zoom removal", { registrationId: reg.id });
       continue;
@@ -217,7 +208,7 @@ async function approveRefundRequest(requestId, processedByUserId) {
 
   // Step 4: Soft-delete registrations.
   for (const reg of registrations) {
-    await reg.destroy();
+    await registrationRepo.destroy(reg.id);
     logger.info("Registration soft-deleted", { registrationId: reg.id, orderId: order.id });
   }
 

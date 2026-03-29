@@ -3,7 +3,6 @@ const cartService = require("../../services/cart.service");
 const addressService = require("../../services/address.service");
 const { getDefaultGateway } = require("../../gateways");
 const paymentMethodService = require("../../services/paymentMethod.service");
-const transactionRepo = require("../../repos/transaction.repo");
 const { validateCheckout } = require("../../validators/checkout.schema");
 const logger = require("../../config/logger");
 
@@ -128,7 +127,8 @@ module.exports = {
     try {
       const { cart, lines } = await cartService.getCartWithLines(userId, sessionId);
       if (!lines || lines.length === 0) {
-        return res.status(400).json({ error: "Your cart is empty." });
+        res.setFlash("error", "Your cart is empty or items are no longer available.");
+        return res.redirect("/cart");
       }
 
       order = await orderService.createOrderFromCart(userId, sessionId, opts);
@@ -173,6 +173,11 @@ module.exports = {
           });
         });
       }
+      // Cart-level errors (unavailable/sold-out items) — redirect to cart with flash
+      if (!order && (err.message === "One or more items in your cart are no longer available." || err.message === "One or more items in your cart are sold out.")) {
+        res.setFlash("error", err.message);
+        return res.redirect("/cart");
+      }
       const status = err.status ?? err.statusCode ?? 500;
       logger.error("Checkout place-order failed", {
         error: err.message,
@@ -212,7 +217,7 @@ module.exports = {
         return res.json({ orderId: order.id });
       }
 
-      const transactions = await transactionRepo.findByOrder(order.id);
+      const transactions = await orderService.getTransactionsForOrder(order.id);
       const transaction = transactions.find((t) => t.gatewayReference === paymentIntentId);
       if (!transaction) {
         return res.status(400).json({ error: "Transaction not found for this payment." });
