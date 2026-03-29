@@ -133,11 +133,25 @@ block content
                                         .da-refund-actions
 
                                             //- Approve
-                                            form(method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/refund-request/' + r.id + '/approve')
-                                                button.da-btn.da-btn--primary(type='submit') Approve
+                                            - var approveFormId = 'approve-refund-form-' + r.id
+                                            form(id=approveFormId method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/refund-request/' + r.id + '/approve')
+                                                button.da-btn.da-btn--primary(
+                                                    type='button'
+                                                    data-confirm-modal
+                                                    data-confirm-title='Approve Refund'
+                                                    data-confirm-msg='This will issue a full Stripe refund, remove the customer from Zoom, and mark the order as refunded. This cannot be undone.'
+                                                    data-form-id=approveFormId
+                                                ) Approve
 
                                             //- Reject
-                                            form(method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/refund-request/' + r.id + '/reject')
-                                                button.da-btn.da-btn--danger(type='submit') Reject
+                                            - var rejectFormId = 'reject-refund-form-' + r.id
+                                            form(id=rejectFormId method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/refund-request/' + r.id + '/reject')
+                                                button.da-btn.da-btn--danger(
+                                                    type='button'
+                                                    data-confirm-modal
+                                                    data-confirm-title='Reject Refund Request'
+                                                    data-confirm-msg='This will reject the refund request and return the order to delivered status.'
+                                                    data-form-id=rejectFormId
+                                                ) Reject
                         else
                             p.da-refund-empty No refund requests for this order.

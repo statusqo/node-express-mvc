@@ -137,6 +137,8 @@
             var el = form.querySelector('input[name="' + name + '"]');
             if (el && el.value) params.append(name, el.value);
           });
+          var wantToSaveCard = saveCardCheckbox && saveCardCheckbox.checked;
+          params.append("saveCard", wantToSaveCard ? "1" : "0");
         }
         return params.toString();
       }

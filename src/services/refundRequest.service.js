@@ -7,6 +7,8 @@ const logger = require("../config/logger");
 const { PAYMENT_STATUS } = require("../constants/order");
 const { TRANSACTION_STATUS } = require("../constants/transaction");
 const { REFUND_REQUEST_STATUS } = require("../constants/refundRequest");
+const { Registration, EventMeeting } = require("../models");
+const { getMeetingProvider } = require("../gateways/meeting.interface");
 
 const PENDING = REFUND_REQUEST_STATUS.PENDING;
 const APPROVED = REFUND_REQUEST_STATUS.APPROVED;
@@ -28,11 +30,6 @@ async function createRefundRequest(orderId, requestedByUserId, reason = null) {
   }
   if (order.paymentStatus !== PAYMENT_STATUS.PAID) {
     const err = new Error("Only paid orders can request a refund.");
-    err.status = 400;
-    throw err;
-  }
-  if (order.paymentStatus === "refunded") {
-    const err = new Error("This order has already been refunded.");
     err.status = 400;
     throw err;
   }
@@ -61,6 +58,7 @@ async function createRefundRequest(orderId, requestedByUserId, reason = null) {
     requestedByUserId: requestedByUserId || null,
   });
   await orderRepo.update(orderId, { fulfillmentStatus: "refund_requested" });
+  logger.info("Refund request created", { requestId: request.id, orderId, requestedByUserId });
   return request;
 }
 
@@ -153,9 +151,50 @@ async function approveRefundRequest(requestId, processedByUserId) {
     throw err;
   }
 
+  logger.info("Refund approval started", { requestId, orderId: order.id, paymentIntentId });
+
+  // Step 1: Remove registrants from Zoom before charging Stripe.
+  // Non-404 errors abort the entire approval — customer must not be refunded while still having Zoom access.
+  // 404 is swallowed (registrant already gone — desired state, safe to proceed).
+  const registrations = await Registration.findAll({ where: { orderId: order.id } });
+  logger.info("Registrations found for refund approval", { orderId: order.id, count: registrations.length });
+
+  for (const reg of registrations) {
+    if (!reg.zoomRegistrantId) {
+      logger.info("Registration has no Zoom registrant — skipping Zoom removal", { registrationId: reg.id });
+      continue;
+    }
+    const meeting = await EventMeeting.findOne({ where: { eventId: reg.eventId } });
+    if (!meeting) {
+      logger.info("No EventMeeting found for registration — skipping Zoom removal", { registrationId: reg.id, eventId: reg.eventId });
+      continue;
+    }
+    const provider = getMeetingProvider(meeting);
+    if (!provider) {
+      logger.info("No meeting provider configured — skipping Zoom removal", { registrationId: reg.id });
+      continue;
+    }
+    try {
+      await provider.removeRegistrant(meeting, reg.zoomRegistrantId);
+      logger.info("Zoom registrant removed for refund approval", { orderId: order.id, registrantId: reg.zoomRegistrantId });
+    } catch (e) {
+      if (e.status === 404) {
+        // Already removed — idempotent, safe to continue
+        logger.info("Zoom registrant already removed (404) for refund approval", { orderId: order.id, registrantId: reg.zoomRegistrantId });
+      } else {
+        logger.warn("Zoom remove registrant failed during refund approval — aborting", { err: e.message, orderId: order.id, registrantId: reg.zoomRegistrantId });
+        throw new Error(`Zoom error: ${e.message}. Refund has not been issued — please retry.`);
+      }
+    }
+  }
+
+  // Step 2: Issue Stripe refund. Throws on failure — Zoom removal already done but idempotent on retry (404).
+  logger.info("Issuing Stripe refund for refund approval", { orderId: order.id, paymentIntentId });
   const refund = await stripeGateway.createRefund(paymentIntentId);
+  logger.info("Stripe refund issued", { orderId: order.id, refundId: refund.id, status: refund.status });
   const now = new Date();
 
+  // Step 3: Commit all DB updates.
   await refundRequestRepo.update(requestId, {
     status: APPROVED,
     processedAt: now,
@@ -169,11 +208,20 @@ async function approveRefundRequest(requestId, processedByUserId) {
   );
   if (successTransaction) {
     await transactionRepo.update(successTransaction.id, { status: TRANSACTION_STATUS.REFUNDED });
+    logger.info("Transaction marked refunded", { transactionId: successTransaction.id });
   }
 
   await orderRepo.update(order.id, { paymentStatus: "refunded", fulfillmentStatus: "refunded" });
   await orderService.restoreVariantQuantitiesForOrder(order.id);
+  logger.info("Order marked refunded, variant quantities restored", { orderId: order.id });
 
+  // Step 4: Soft-delete registrations.
+  for (const reg of registrations) {
+    await reg.destroy();
+    logger.info("Registration soft-deleted", { registrationId: reg.id, orderId: order.id });
+  }
+
+  logger.info("Refund approval complete", { requestId, orderId: order.id });
   return await refundRequestRepo.findById(requestId);
 }
 
@@ -199,6 +247,7 @@ async function rejectRefundRequest(requestId, processedByUserId) {
     processedByUserId,
   });
   await orderRepo.update(request.orderId, { fulfillmentStatus: "delivered" });
+  logger.info("Refund request rejected", { requestId, orderId: request.orderId, processedByUserId });
   return await refundRequestRepo.findById(requestId);
 }
 

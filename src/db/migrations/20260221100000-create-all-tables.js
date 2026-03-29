@@ -274,8 +274,9 @@ module.exports = {
       personType: { type: Sequelize.ENUM("private", "legal"), allowNull: false, defaultValue: "private" },
       companyName: { type: Sequelize.STRING, allowNull: true },
       companyOib: { type: Sequelize.STRING(11), allowNull: true },
-      paymentStatus: { type: Sequelize.ENUM("pending", "paid", "failed", "refunded"), allowNull: false, defaultValue: "paid" },
+      paymentStatus: { type: Sequelize.ENUM("pending", "paid", "failed", "refunded", "voided"), allowNull: false, defaultValue: "paid" },
       fulfillmentStatus: { type: Sequelize.ENUM("pending", "processing", "shipped", "delivered", "refund_requested", "refunded", "cancelled", "returned"), allowNull: false, defaultValue: "pending" },
+      source: { type: Sequelize.ENUM("cart", "event"), allowNull: false, defaultValue: "cart" },
       total: { type: Sequelize.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
       currency: { type: Sequelize.STRING, allowNull: false, defaultValue: "EUR" },
       stripePaymentIntentId: { type: Sequelize.STRING, allowNull: true },
@@ -368,6 +369,7 @@ module.exports = {
       surname: { type: Sequelize.STRING, allowNull: true },
       status: { type: Sequelize.ENUM("registered", "cancelled"), allowNull: false, defaultValue: "registered" },
       zoomRegistrantId: { type: Sequelize.STRING, allowNull: true },
+      deletedAt: { type: Sequelize.DATE, allowNull: true },
       ...ts,
     });
     await queryInterface.addIndex("registrations", ["eventId"]);

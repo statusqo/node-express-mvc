@@ -47,6 +47,7 @@ const Registration = sequelize.define("Registration", {
   },
 }, {
   timestamps: true,
+  paranoid: true,
   tableName: "registrations",
   indexes: [
     { fields: ["eventId"] },

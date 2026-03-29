@@ -19,6 +19,7 @@ router.post("/:productSlug/events/sync-zoom", asyncHandler(eventTypeProductsCont
 router.get("/:productSlug/events/:eventId/edit", asyncHandler(eventTypeProductsController.editEventForm));
 router.post("/:productSlug/events/remove-event", asyncHandler(eventTypeProductsController.removeEvent));
 router.post("/:productSlug/events/cancel-event", asyncHandler(eventTypeProductsController.cancelEvent));
+router.post("/:productSlug/events/process-refunds", asyncHandler(eventTypeProductsController.processEventCleanup));
 router.post("/:productSlug/events/resync-event", asyncHandler(eventTypeProductsController.resyncEvent));
 
 module.exports = router;

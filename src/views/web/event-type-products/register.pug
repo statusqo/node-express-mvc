@@ -98,7 +98,7 @@ block content
               div#savedCardSelect(style="margin-top:0.5rem; margin-left:1.5rem")
                 select#savedPaymentMethod(name="savedPaymentMethod" style="min-width:12rem; padding:0.35rem")
                   each pm in paymentMethods
-                    option(value=pm.gatewayToken)= (pm.brand || 'Card') + ' ****' + (pm.last4 || '????') + (pm.isDefault ? ' (Default)' : '')
+                    option(value=pm.stripePaymentMethodId)= (pm.brand || 'Card') + ' ****' + (pm.last4 || '????') + (pm.isDefault ? ' (Default)' : '')
           div#cardElementWrap(style="margin-top:0.75rem; padding:0.75rem; border:1px solid #ccc; border-radius:6px; margin-bottom:0.5rem; background:#fff")
             div#card-element
           input#saveCardHidden(type="hidden" name="saveCard" value="0")

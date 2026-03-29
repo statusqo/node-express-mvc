@@ -1,6 +1,6 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../db/client");
-const { PAYMENT_STATUS_LIST, FULFILLMENT_STATUS_LIST, PAYMENT_STATUS, FULFILLMENT_STATUS } = require("../constants/order");
+const { PAYMENT_STATUS_LIST, FULFILLMENT_STATUS_LIST, ORDER_SOURCE_LIST, PAYMENT_STATUS, FULFILLMENT_STATUS, ORDER_SOURCE } = require("../constants/order");
 const { DEFAULT_CURRENCY } = require("../config/constants");
 const Order = sequelize.define("Order", {
   id: {
@@ -118,6 +118,11 @@ const Order = sequelize.define("Order", {
   stripePaymentIntentId: {
     type: DataTypes.STRING,
     allowNull: true,
+  },
+  source: {
+    type: DataTypes.ENUM(...ORDER_SOURCE_LIST),
+    allowNull: false,
+    defaultValue: ORDER_SOURCE.CART,
   },
 }, {
   timestamps: true,

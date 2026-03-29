@@ -3,9 +3,10 @@ const logger = require("../config/logger");
 const orderRepo = require("../repos/order.repo");
 const cartRepo = require("../repos/cart.repo");
 const productVariantRepo = require("../repos/productVariant.repo");
+const eventRepo = require("../repos/event.repo");
 const userRepo = require("../repos/user.repo");
 const transactionRepo = require("../repos/transaction.repo");
-const { PAYMENT_STATUS, FULFILLMENT_STATUS, FULFILLMENT_STATUS_LIST, TRANSACTION_STATUS, REGISTRATION_STATUS } = require("../constants");
+const { PAYMENT_STATUS, FULFILLMENT_STATUS, FULFILLMENT_STATUS_LIST, TRANSACTION_STATUS, REGISTRATION_STATUS, ORDER_SOURCE } = require("../constants");
 const { Registration, Event, EventMeeting } = require("../models");
 const { getMeetingProvider } = require("../gateways/meeting.interface");
 const emailService = require("./email.service");
@@ -102,6 +103,7 @@ async function createOrderFromCart(userId, sessionId, opts = {}) {
     sessionId: sessionId || null,
     paymentStatus,
     fulfillmentStatus: FULFILLMENT_STATUS.PENDING,
+    source: ORDER_SOURCE.CART,
     personType,
     companyName,
     companyOib,
@@ -146,7 +148,9 @@ async function createOrderFromCart(userId, sessionId, opts = {}) {
       }
       const qty = line.quantity || 1;
       total += snapshot.price * qty;
-      await orderRepo.createLineFromVariant(order.id, snapshot, qty, { transaction: t });
+      const eventForVariant = await eventRepo.findByProductVariantId(line.productVariantId, { transaction: t });
+      const lineEventId = eventForVariant ? eventForVariant.id : undefined;
+      await orderRepo.createLineFromVariant(order.id, snapshot, qty, { transaction: t, eventId: lineEventId });
     }
 
     await order.update({ total }, { transaction: t });
@@ -206,6 +210,7 @@ async function recordPaymentSuccess(transactionId, userIdFromOrder = null) {
     const orderInTx = await orderRepo.findById(transaction.orderId, { transaction: t });
     await orderInTx.update({ paymentStatus: PAYMENT_STATUS.PAID }, { transaction: t });
     await t.commit();
+    logger.info("recordPaymentSuccess: order marked paid", { orderId: transaction.orderId, transactionId });
 
     const orderAfter = await orderRepo.findById(transaction.orderId);
     const lines = await orderRepo.getLines(orderAfter.id);
@@ -222,16 +227,18 @@ async function recordPaymentSuccess(transactionId, userIdFromOrder = null) {
       }
     }
 
-    const cart = orderAfter.userId
-      ? await cartRepo.findByUser(orderAfter.userId)
-      : await cartRepo.findBySessionId(orderAfter.sessionId);
-    if (cart) await cartRepo.clearLines(cart.id);
+    if (orderAfter.source === ORDER_SOURCE.CART) {
+      const cart = orderAfter.userId
+        ? await cartRepo.findByUser(orderAfter.userId)
+        : await cartRepo.findBySessionId(orderAfter.sessionId);
+      if (cart) await cartRepo.clearLines(cart.id);
+    }
 
     // Create registrations for event order lines (one per eventId + orderLineId)
     const provider = getMeetingProvider();
     for (const line of lines || []) {
       if (!line.eventId) continue;
-      const [reg] = await Registration.findOrCreate({
+      const [reg, created] = await Registration.findOrCreate({
         where: { eventId: line.eventId, orderLineId: line.id },
         defaults: {
           eventId: line.eventId,
@@ -244,6 +251,12 @@ async function recordPaymentSuccess(transactionId, userIdFromOrder = null) {
           status: REGISTRATION_STATUS.REGISTERED,
         },
       });
+      logger.info("recordPaymentSuccess: registration", {
+        registrationId: reg.id,
+        eventId: line.eventId,
+        orderId: orderAfter.id,
+        created,
+      });
       if (provider && reg) {
         const event = await Event.findByPk(line.eventId, { include: [{ model: EventMeeting, as: "EventMeeting" }] });
         const meeting = event && event.EventMeeting ? event.EventMeeting.get({ plain: true }) : null;
@@ -251,9 +264,16 @@ async function recordPaymentSuccess(transactionId, userIdFromOrder = null) {
           try {
             const regPlain = reg.get ? reg.get({ plain: true }) : reg;
             const { zoomRegistrantId } = await provider.addRegistrant(meeting, regPlain);
-            if (zoomRegistrantId) await reg.update({ zoomRegistrantId });
-          } catch (_) {
-            // Do not fail order flow
+            if (zoomRegistrantId) {
+              await reg.update({ zoomRegistrantId });
+              logger.info("recordPaymentSuccess: Zoom registrant added", { registrationId: reg.id, eventId: line.eventId });
+            }
+          } catch (zoomErr) {
+            logger.warn("recordPaymentSuccess: Zoom registration failed (non-fatal)", {
+              registrationId: reg.id,
+              eventId: line.eventId,
+              error: zoomErr.message,
+            });
           }
         }
       }
@@ -433,6 +453,8 @@ async function refundOrderForEventCancellation(orderId) {
     return { refunded: false, error: "Order is not paid." };
   }
 
+  logger.info("refundOrderForEventCancellation: starting", { orderId, paymentStatus: order.paymentStatus });
+
   // Always restore seats for any paid order — the event is cancelled regardless of Stripe outcome.
   await restoreVariantQuantitiesForOrder(order.id);
 
@@ -440,16 +462,18 @@ async function refundOrderForEventCancellation(orderId) {
   if (!paymentIntentId) {
     // Paid without Stripe (cash, manual, legacy) — mark refunded so admin knows, no Stripe call needed.
     await orderRepo.update(order.id, { paymentStatus: "refunded", fulfillmentStatus: "refunded" });
+    logger.info("refundOrderForEventCancellation: marked refunded (no Stripe PI)", { orderId });
     return { refunded: true };
   }
 
   try {
     // require stripe gateway here to break circular dependency
     const stripeGateway = require("../gateways/stripe.gateway");
-    await stripeGateway.createRefund(paymentIntentId, null);
+    await stripeGateway.createRefund(paymentIntentId);
   } catch (e) {
     // Stripe refund failed — seats are already freed but the financial refund is pending.
     // Admin must process the refund manually via Stripe dashboard.
+    logger.error("refundOrderForEventCancellation: Stripe refund failed", { orderId, error: e.message });
     return { refunded: false, error: e.message || "Stripe refund failed." };
   }
   const transactions = await transactionRepo.findByOrder(order.id);
@@ -458,6 +482,7 @@ async function refundOrderForEventCancellation(orderId) {
     await transactionRepo.update(successTx.id, { status: TRANSACTION_STATUS.REFUNDED });
   }
   await orderRepo.update(order.id, { paymentStatus: "refunded", fulfillmentStatus: "refunded" });
+  logger.info("refundOrderForEventCancellation: refund complete", { orderId });
   return { refunded: true };
 }
 
@@ -535,6 +560,7 @@ async function createOrderFromEvent(eventId, userId, sessionId, opts = {}) {
     sessionId: sessionId || null,
     paymentStatus: PAYMENT_STATUS.PENDING,
     fulfillmentStatus: FULFILLMENT_STATUS.PENDING,
+    source: ORDER_SOURCE.EVENT,
     personType,
     companyName,
     companyOib,

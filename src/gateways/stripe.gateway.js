@@ -778,9 +778,11 @@ async function handleWebhook(event) {
           if (invoiceTx.status === "pending") {
             await transactionRepo.update(invoiceTx.id, { status: "success" });
           }
+          logger.info("invoice.paid: recording payment success", { orderId, gatewayRef: safeId(gatewayRef) });
           await orderService.recordPaymentSuccess(invoiceTx.id, invoiceOrder.userId);
         } else {
           // Fallback: create the transaction record if not already present.
+          logger.info("invoice.paid: no transaction found, creating fallback record", { orderId, gatewayRef: safeId(gatewayRef) });
           await orderService.recordPaymentAttempt(
             orderId,
             Number(invoice.amount_paid) / 100,
@@ -792,6 +794,7 @@ async function handleWebhook(event) {
           const freshTxs = await transactionRepo.findByOrder(orderId);
           const newTx = freshTxs.find((t) => t.gatewayReference === gatewayRef);
           if (newTx) {
+            logger.info("invoice.paid: recording payment success via fallback", { orderId, gatewayRef: safeId(gatewayRef) });
             await orderService.recordPaymentSuccess(newTx.id, invoiceOrder.userId);
           }
         }
@@ -826,7 +829,25 @@ async function createRefund(paymentIntentId) {
     err.status = 500;
     throw err;
   }
-  return await withTimeout(stripe.refunds.create({ payment_intent: paymentIntentId }));
+  const start = Date.now();
+  logger.info("Stripe: initiating refund", { paymentIntentIdLast4: safeId(paymentIntentId) });
+  try {
+    const refund = await withTimeout(stripe.refunds.create({ payment_intent: paymentIntentId }));
+    logger.info("Stripe: refund created", {
+      paymentIntentIdLast4: safeId(paymentIntentId),
+      refundId: refund.id,
+      refundStatus: refund.status,
+      durationMs: Date.now() - start,
+    });
+    return refund;
+  } catch (e) {
+    logger.error("Stripe: refund failed", {
+      paymentIntentIdLast4: safeId(paymentIntentId),
+      error: e.message,
+      durationMs: Date.now() - start,
+    });
+    throw e;
+  }
 }
 
 module.exports = {

@@ -236,7 +236,7 @@ async function addRegistrant(meeting, registration) {
   //   data.registrant_id → the unique registrant UUID — this is what we store
   const zoomRegistrantId = data.registrant_id ? String(data.registrant_id) : undefined;
   if (zoomRegistrantId) {
-    logger.info({ meetingId: meeting.zoomMeetingId, registrantId: zoomRegistrantId }, "Zoom registrant added");
+    logger.info("Zoom registrant added", { meetingId: meeting.zoomMeetingId, registrantId: zoomRegistrantId });
   }
   return { zoomRegistrantId };
 }
@@ -244,6 +244,8 @@ async function addRegistrant(meeting, registration) {
 /**
  * Remove a registrant from a Zoom meeting.
  * Zoom API: DELETE /meetings/{meetingId}/registrants   body: { registrants: [{ id }] }
+ * Treats 404 (registrant not found) as success for idempotent retries.
+ * Throws on all other errors so callers can surface failures to the admin.
  * @param {Object} meeting - EventMeeting-like: { zoomMeetingId, zoomHostAccountId }
  * @param {string} zoomRegistrantId - Zoom registrant id
  * @returns {Promise<void>}
@@ -253,15 +255,9 @@ async function removeRegistrant(meeting, zoomRegistrantId) {
   const account = meeting.zoomHostAccountId
     ? await AdminZoomAccount.findByPk(meeting.zoomHostAccountId)
     : null;
-  if (!account || !account.accessToken) return;
+  if (!account || !account.accessToken) throw new Error("No Zoom account configured for this meeting.");
 
-  let accessToken;
-  try {
-    accessToken = await getValidToken(account);
-  } catch (e) {
-    logger.warn({ err: e.message, meetingId: meeting.zoomMeetingId }, "Zoom remove registrant: could not get valid token");
-    return;
-  }
+  const accessToken = await getValidToken(account);
 
   try {
     await zoomRequest(
@@ -272,14 +268,18 @@ async function removeRegistrant(meeting, zoomRegistrantId) {
         body: { registrants: [{ id: String(zoomRegistrantId) }] },
       }
     );
-    logger.info({ meetingId: meeting.zoomMeetingId, registrantId: zoomRegistrantId }, "Zoom registrant removed");
+    logger.info("Zoom registrant removed", { meetingId: meeting.zoomMeetingId, registrantId: zoomRegistrantId });
   } catch (e) {
-    logger.warn({ err: e.message, meetingId: meeting.zoomMeetingId }, "Zoom remove registrant failed");
+    if (e.status === 404) return; // Already removed — idempotent
+    logger.warn("Zoom remove registrant failed", { err: e.message, meetingId: meeting.zoomMeetingId });
+    throw e;
   }
 }
 
 /**
  * Delete a Zoom meeting.
+ * Treats 404 (meeting not found) as success for idempotent retries.
+ * Throws on all other errors so callers can surface failures to the admin.
  * @param {Object} meeting - EventMeeting-like: { zoomMeetingId, zoomHostAccountId }
  * @returns {Promise<void>}
  */
@@ -288,21 +288,17 @@ async function deleteMeeting(meeting) {
   const account = meeting.zoomHostAccountId
     ? await AdminZoomAccount.findByPk(meeting.zoomHostAccountId)
     : null;
-  if (!account || !account.accessToken) return;
+  if (!account || !account.accessToken) throw new Error("No Zoom account configured for this meeting.");
 
-  let accessToken;
-  try {
-    accessToken = await getValidToken(account);
-  } catch (e) {
-    logger.warn({ err: e.message, meetingId: meeting.zoomMeetingId }, "Zoom delete meeting: could not get valid token");
-    return;
-  }
+  const accessToken = await getValidToken(account);
 
   try {
     await zoomRequest(accessToken, `/meetings/${meeting.zoomMeetingId}`, { method: "DELETE" });
-    logger.info({ meetingId: meeting.zoomMeetingId }, "Zoom meeting deleted");
+    logger.info("Zoom meeting deleted", { meetingId: meeting.zoomMeetingId });
   } catch (e) {
-    logger.warn({ err: e.message, meetingId: meeting.zoomMeetingId }, "Zoom delete meeting failed");
+    if (e.status === 404) return; // Already deleted — idempotent
+    logger.warn("Zoom delete meeting failed", { err: e.message, meetingId: meeting.zoomMeetingId });
+    throw e;
   }
 }
 

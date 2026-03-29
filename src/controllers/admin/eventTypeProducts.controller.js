@@ -292,10 +292,10 @@ module.exports = {
     const { deleted, error } = await eventService.delete(eventId);
     if (deleted) {
       res.setFlash("success", "Event removed.");
-    } else {
-      res.setFlash("error", error || "Could not remove event.");
+      return res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events");
     }
-    res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events");
+    res.setFlash("error", error || "Could not remove event.");
+    res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events/" + eventId + "/edit");
   },
 
   /**
@@ -375,7 +375,8 @@ module.exports = {
   },
 
   /**
-   * POST .../events/cancel-event — Cancel an event (refund, delete registrations, etc.). Body: eventId, confirm=1.
+   * POST .../events/cancel-event — Flow 1: Remove from Zoom and mark event as cancelled. Body: eventId, confirm=1.
+   * Works for active and orphaned events. No registration or refund changes.
    */
   async cancelEvent(req, res) {
     const { productSlug } = req.params;
@@ -391,25 +392,57 @@ module.exports = {
       res.setFlash("error", "Product not found.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
     }
-    // Verify the event belongs to this product before acting on it
     const targetEvent = await eventService.findById(eventId);
     if (!targetEvent || String(targetEvent.productId) !== String(toPlain(product).id)) {
       res.setFlash("error", "Event not found or does not belong to this product.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events");
     }
     try {
-      const result = await eventService.cancelEventAndCleanup(eventId);
+      const result = await eventService.cancelEvent(eventId);
       if (result.cancelled) {
-        if (result.refundErrors && result.refundErrors.length) {
-          res.setFlash("success", `Event cancelled. Warning: ${result.refundErrors.length} refund(s) failed – process manually in your payment gateway. ${result.refundErrors[0]}`);
-        } else {
-          res.setFlash("success", "Event cancelled. Registrations removed, orders refunded, and attendees notified.");
-        }
+        res.setFlash("success", "Event cancelled.");
       } else {
         res.setFlash("error", result.error || "Cancel failed.");
       }
     } catch (e) {
       res.setFlash("error", e.message || "Cancel failed.");
+    }
+    res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events/" + eventId + "/edit");
+  },
+
+  /**
+   * POST .../events/process-refunds — Flow 2: Process refunds and soft-delete registrations for a cancelled event. Body: eventId, confirm=1.
+   * Idempotent: only processes registrations not yet soft-deleted. Bails on first Stripe failure.
+   */
+  async processEventCleanup(req, res) {
+    const { productSlug } = req.params;
+    const sectionPath = req.sectionPath;
+    const eventId = req.body.eventId ? String(req.body.eventId).trim() : null;
+    const confirm = req.body.confirm === "1" || req.body.confirm === true;
+    if (!eventId || !confirm) {
+      res.setFlash("error", "Invalid request.");
+      return res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events");
+    }
+    const product = await productService.findBySlugWithTypeAndDefaultVariant(productSlug);
+    if (!product) {
+      res.setFlash("error", "Product not found.");
+      return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
+    }
+    const targetEvent = await eventService.findById(eventId);
+    if (!targetEvent || String(targetEvent.productId) !== String(toPlain(product).id)) {
+      res.setFlash("error", "Event not found or does not belong to this product.");
+      return res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events");
+    }
+    try {
+      const result = await eventService.processEventRefundsAndCleanup(eventId);
+      if (result.ok) {
+        res.setFlash("success", `Processed ${result.processed} of ${result.total} registration(s).`);
+      } else {
+        const progress = result.total > 0 ? ` (${result.processed} of ${result.total} processed — retry to continue)` : "";
+        res.setFlash("error", (result.error || "Processing failed.") + progress);
+      }
+    } catch (e) {
+      res.setFlash("error", e.message || "Processing failed.");
     }
     res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events/" + eventId + "/edit");
   },

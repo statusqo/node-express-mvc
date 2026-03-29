@@ -123,10 +123,10 @@ block content
                     if !event.isOnline
                         p.da-aside-empty This is an in-person event — no Zoom meeting.
                     else if event.meetingLinkStatus === 'synced'
-                        span.da-badge.da-badge--success ✓ Active Zoom meeting
+                        span.da-badge.da-badge--success Active Zoom meeting
                     else
                         .da-cell-actions(style='display:flex; justify-content: flex-start; align-items:center; gap:0.75rem; flex-wrap:wrap;')
-                            span.da-badge.da-badge--warning — No Zoom meeting
+                            span.da-badge.da-badge--warning No Zoom meeting
                             if event.eventStatus === 'orphaned'
                                 form#resync-zoom-form(method='post' action=baseEventsUrl + '/resync-event')
                                     input(type='hidden' name='eventId' value=event.id)
@@ -135,11 +135,10 @@ block content
         //- ── Actions (edit only) ─────────────────────────────────────
         if isEdit
             - var regCount = event.registrationCount || 0
-            - var cancelBullets = regCount > 0 ? (event.isOnline ? ['Zoom meeting will be cancelled', regCount + ' active registration(s) will be cleared', 'Associated orders will be refunded', 'Event will be marked as cancelled', 'Attendees will be notified via email'] : [regCount + ' active registration(s) will be cleared', 'Associated orders will be refunded', 'Event will be marked as cancelled', 'Attendees will be notified via email']) : (event.isOnline ? ['Zoom meeting will be cancelled', 'Event will be marked as cancelled'] : ['Event will be marked as cancelled'])
-            - var orphanBullets = regCount > 0 ? [regCount + ' active registration(s) will be cleared', 'Associated orders will be refunded', 'Event will be marked as cancelled', 'Attendees will be notified via email'] : ['Event will be marked as cancelled']
-            - var cancelIntro = regCount > 0 ? 'This event has ' + regCount + ' active registration(s). The following will happen immediately:' : 'The following will happen immediately:'
+            - var cancelBullets = event.isOnline ? ['Zoom meeting will be deleted', 'Event will be marked as cancelled'] : ['Event will be marked as cancelled']
+            - var cleanupBullets = ['Paid orders will be refunded via Stripe', 'Unpaid orders will be voided', 'Registration records will be cleared']
 
-            if event.eventStatus === 'active'
+            if event.eventStatus === 'active' || event.eventStatus === 'orphaned'
                 form#cancel-event-form(method='post' action=baseEventsUrl + '/cancel-event' style='margin-top:1.5rem;')
                     input(type='hidden' name='eventId' value=event.id)
                     input(type='hidden' name='confirm' value='1')
@@ -147,25 +146,25 @@ block content
                         type='button'
                         data-confirm-modal
                         data-confirm-title='Cancel Event'
-                        data-confirm-msg=cancelIntro
+                        data-confirm-msg='The following will happen immediately:'
                         data-confirm-bullets=JSON.stringify(cancelBullets)
                         data-form-id='cancel-event-form'
                     ) Cancel Event
 
-            else if event.eventStatus === 'orphaned'
-                form#orphan-cancel-form(method='post' action=baseEventsUrl + '/cancel-event' style='margin-top:1.5rem;')
+            if event.eventStatus === 'cancelled' && regCount > 0
+                form#process-refunds-form(method='post' action=baseEventsUrl + '/process-refunds' style='margin-top:1.5rem;')
                     input(type='hidden' name='eventId' value=event.id)
                     input(type='hidden' name='confirm' value='1')
                     button.da-btn.da-btn--danger(
                         type='button'
                         data-confirm-modal
-                        data-confirm-title='Cancel Event'
-                        data-confirm-msg=cancelIntro
-                        data-confirm-bullets=JSON.stringify(orphanBullets)
-                        data-form-id='orphan-cancel-form'
-                    ) Cancel Event
+                        data-confirm-title='Process Refunds & Clean Up'
+                        data-confirm-msg='This event has ' + regCount + ' unprocessed registration(s). The following will happen:'
+                        data-confirm-bullets=JSON.stringify(cleanupBullets)
+                        data-form-id='process-refunds-form'
+                    ) Process Refunds & Clean Up
 
-            else if event.eventStatus === 'cancelled'
+            if event.eventStatus === 'cancelled'
                 form#remove-event-form(method='post' action=baseEventsUrl + '/remove-event' style='margin-top:1.5rem')
                     input(type='hidden' name='eventId' value=event.id)
                     button.da-btn.da-btn--danger(

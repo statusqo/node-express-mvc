@@ -219,14 +219,21 @@ module.exports = {
     }
     const gatewayEmail = (req.user && req.user.email) || (email && String(email).trim()) || null;
     const paymentMethodId = req.body && req.body.paymentMethodId ? String(req.body.paymentMethodId).trim() : null;
-    const gatewayOptions = { email: gatewayEmail };
+    const saveCardRaw = req.body && req.body.saveCard;
+    const saveCard =
+      saveCardRaw === "1" ||
+      saveCardRaw === true ||
+      saveCardRaw === "on" ||
+      saveCardRaw === "true" ||
+      (Array.isArray(saveCardRaw) && (saveCardRaw.includes("1") || saveCardRaw.includes(true)));
+    const gatewayOptions = { email: gatewayEmail, saveCard };
     if (paymentMethodId && userId) {
       const list = await paymentMethodService.listByUser(userId);
       const owned = list.find((p) => p.stripePaymentMethodId === paymentMethodId);
       if (owned) gatewayOptions.paymentMethodId = paymentMethodId;
     }
     try {
-      const result = await gateway.createPaymentIntentForOrder(order.id, userId, sessionId, gatewayOptions);
+      const result = await gateway.createInvoiceForOrder(order.id, userId, sessionId, gatewayOptions);
       if (!result || !result.clientSecret) {
         return res.status(500).json({ error: "Could not create payment." });
       }

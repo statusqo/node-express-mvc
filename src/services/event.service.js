@@ -241,12 +241,14 @@ module.exports = {
   },
 
   /**
-   * Cancel event: remove registrants from Zoom, delete the Zoom meeting, refund orders, notify users, destroy registrations, then set eventStatus to "cancelled".
-   * The event record is always preserved so order history remains intact. Admins can hard-delete cancelled events (with no orders) via the Remove action.
+   * Flow 1 — Cancel event: remove Zoom registrants, delete the Zoom meeting, then mark as cancelled.
+   * Works for both active and orphaned events. No registration, order, or refund changes.
+   * Zoom errors are propagated to the caller — event is only marked cancelled after full Zoom success.
+   * 404 responses from Zoom are treated as success (idempotent retries).
    * @param {string} eventId
    * @returns {Promise<{ cancelled: boolean, error?: string }>}
    */
-  async cancelEventAndCleanup(eventId) {
+  async cancelEvent(eventId) {
     const event = await eventRepo.findById(eventId, {
       include: [
         { model: EventMeeting, as: "EventMeeting", required: false },
@@ -254,70 +256,74 @@ module.exports = {
       ],
     });
     if (!event) return { cancelled: false, error: "Event not found." };
+    if (event.eventStatus !== "active" && event.eventStatus !== "orphaned") {
+      return { cancelled: false, error: "Only active or orphaned events can be cancelled." };
+    }
+
     const registrations = event.Registrations || [];
     const meeting = event.EventMeeting;
     const provider = getMeetingProvider();
 
     if (provider && meeting && meeting.zoomMeetingId) {
+      const meetingPlain = meeting.get ? meeting.get({ plain: true }) : meeting;
       for (const reg of registrations) {
         if (reg.zoomRegistrantId) {
-          try {
-            await provider.removeRegistrant(meeting.get ? meeting.get({ plain: true }) : meeting, reg.zoomRegistrantId);
-          } catch (_) {}
+          await provider.removeRegistrant(meetingPlain, reg.zoomRegistrantId);
         }
       }
-      try {
-        await provider.deleteMeeting(meeting.get ? meeting.get({ plain: true }) : meeting);
-      } catch (_) {}
-    }
-
-    const orderIds = [...new Set(registrations.map((r) => r.orderId).filter(Boolean))];
-    const eventPlain = event.get ? event.get({ plain: true }) : event;
-    const eventTitle = eventPlain.title || `Event ${eventPlain.startDate || ""} ${eventPlain.startTime != null ? String(eventPlain.startTime).substring(0, 5) : ""}`.trim() || "Event";
-
-    const refundErrors = [];
-    for (const orderId of orderIds) {
-      const result = await orderService.refundOrderForEventCancellation(orderId);
-      if (result.refunded) {
-        const order = await orderRepo.findById(orderId);
-        if (order && order.email && emailService.sendEventCancellationEmail) {
-          try {
-            await emailService.sendEventCancellationEmail({
-              to: order.email,
-              eventTitle,
-              startDate: eventPlain.startDate,
-              startTime: eventPlain.startTime,
-            });
-          } catch (_) {}
-        }
-      } else if (result.error === "Order is not paid.") {
-        // Void unpaid/pending orders so they cannot be completed after cancellation.
-        const order = await orderRepo.findById(orderId);
-        await orderRepo.update(orderId, { paymentStatus: "cancelled", fulfillmentStatus: "cancelled" });
-        if (order && order.email && emailService.sendEventCancellationEmail) {
-          try {
-            await emailService.sendEventCancellationEmail({
-              to: order.email,
-              eventTitle,
-              startDate: eventPlain.startDate,
-              startTime: eventPlain.startTime,
-              wasRefunded: false,
-            });
-          } catch (_) {}
-        }
-      } else if (result.error) {
-        refundErrors.push(result.error);
-      }
-    }
-
-    await Registration.destroy({ where: { eventId } });
-
-    if (meeting) {
+      await provider.deleteMeeting(meetingPlain);
       await EventMeeting.destroy({ where: { id: meeting.id } });
     }
 
     await eventRepo.update(eventId, { eventStatus: "cancelled" });
-    return { cancelled: true, refundErrors };
+    return { cancelled: true };
+  },
+
+  /**
+   * Flow 2 — Process refunds and clean up registrations for a cancelled event.
+   * Only runs when event is cancelled. Processes remaining (non-soft-deleted) registrations.
+   * Per-registration: refund paid orders via Stripe (bails on failure), void pending orders.
+   * Soft-deletes each registration only after its order is successfully handled.
+   * Idempotent: re-running picks up only unprocessed registrations.
+   * @param {string} eventId
+   * @returns {Promise<{ ok: boolean, processed: number, total: number, error?: string }>}
+   */
+  async processEventRefundsAndCleanup(eventId) {
+    const { PAYMENT_STATUS, FULFILLMENT_STATUS } = require("../constants/order");
+    const event = await eventRepo.findById(eventId, {
+      include: [{ model: Registration, as: "Registrations", required: false }],
+    });
+    if (!event) return { ok: false, processed: 0, total: 0, error: "Event not found." };
+    if (event.eventStatus !== "cancelled") {
+      return { ok: false, processed: 0, total: 0, error: "Event is not cancelled." };
+    }
+
+    const registrations = event.Registrations || [];
+    const total = registrations.length;
+    if (total === 0) return { ok: true, processed: 0, total: 0 };
+
+    let processed = 0;
+    for (const reg of registrations) {
+      const order = reg.orderId ? await orderRepo.findById(reg.orderId) : null;
+
+      if (order && order.paymentStatus === PAYMENT_STATUS.PAID) {
+        const result = await orderService.refundOrderForEventCancellation(order.id);
+        if (!result.refunded) {
+          return { ok: false, processed, total, error: result.error || "Stripe refund failed." };
+        }
+      } else if (order && order.paymentStatus === PAYMENT_STATUS.PENDING) {
+        await orderRepo.update(order.id, {
+          paymentStatus: PAYMENT_STATUS.VOIDED,
+          fulfillmentStatus: FULFILLMENT_STATUS.CANCELLED,
+        });
+      }
+      // Already refunded/voided or no order — proceed to soft-delete
+
+      await reg.destroy();
+      processed++;
+    }
+
+    return { ok: true, processed, total };
   },
 
   /**
@@ -390,7 +396,11 @@ module.exports = {
       if (!meeting.zoomMeetingId) return;
       const provider = getMeetingProvider();
       if (provider && typeof provider.deleteMeeting === "function") {
-        await provider.deleteMeeting(meeting);
+        try {
+          await provider.deleteMeeting(meeting);
+        } catch (_) {
+          // Best-effort during hard delete — do not block event removal
+        }
       }
     };
 
@@ -405,7 +415,7 @@ module.exports = {
       try {
         await deleteZoomMeetingIfPresent(opts);
         await EventMeeting.destroy({ where: { eventId: id }, ...opts });
-        await Registration.destroy({ where: { eventId: id }, ...opts });
+        await Registration.destroy({ where: { eventId: id }, force: true, ...opts });
         await eventRepo.delete(id, opts);
         if (ownTransaction) await t.commit();
         return { deleted: true };
@@ -427,7 +437,7 @@ module.exports = {
     try {
       await deleteZoomMeetingIfPresent(opts);
       await EventMeeting.destroy({ where: { eventId: id }, ...opts });
-      await Registration.destroy({ where: { eventId: id }, ...opts });
+      await Registration.destroy({ where: { eventId: id }, force: true, ...opts });
       await ProductPrice.destroy({ where: { productVariantId: variantId }, ...opts });
       await eventRepo.delete(id, opts);
       await ProductVariant.destroy({ where: { id: variantId }, ...opts });
