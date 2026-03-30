@@ -1,0 +1,82 @@
+extends ../../layouts/admin
+
+block content
+    - var fmtDate = function(d) { return d ? new Date(d).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'; }
+    - var fmtTime = function(d) { return d ? new Date(d).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}) : ''; }
+    - var dateParts = event.startDate ? String(event.startDate).substring(0, 10).split('-') : null
+    - var dateFormatted = dateParts && dateParts.length === 3 ? dateParts[2] + '/' + dateParts[1] + '/' + dateParts[0] : '—'
+    - var timeFormatted = event.startTime ? String(event.startTime).substring(0, 5) : '—'
+    - var productTitle = event.Product ? event.Product.title : 'Event'
+
+    .da-page
+
+        //- ── Page header ─────────────────────────────────────────────
+        - var subtitle = dateFormatted + (timeFormatted !== '—' ? ' · ' + timeFormatted : '') + ' · ' + productTitle
+        +pageHeader('Registrants', subtitle)
+            +backBtn((adminPrefix || '') + '/events', 'Back to Events')
+
+        //- ── Event summary card ───────────────────────────────────────
+        .da-panel(style='margin-bottom: 1.5rem')
+            +eventSummaryCard(event, registrants ? registrants.length : 0)
+
+        //- ── Registrants table ───────────────────────────────────────
+        .da-panel
+            .da-table-scroll
+                table.da-table(role='table' aria-label='Registrants list')
+                    thead
+                        tr
+                            th(scope='col') Name
+                            th(scope='col') Email
+                            th(scope='col') Order
+                            th(scope='col') Payment
+                            th.da-col-created(scope='col') Registered On
+                            th(scope='col' style='text-align: right') Actions
+                    tbody
+                        if registrants && registrants.length
+                            each r in registrants
+                                - var fullName = [r.forename, r.surname].filter(Boolean).join(' ') || '—'
+                                - var email = r.email || (r.User && r.User.email) || '—'
+                                - var payClass = ({paid:'success', pending:'warning', failed:'danger', refunded:'info', cancelled:'neutral'})[r.Order && r.Order.paymentStatus] || 'neutral'
+                                - var cancelFormId = 'cancel-reg-form-' + r.id
+                                - var cancelUrl = (adminPrefix || '') + '/events/' + event.id + '/registrants/' + r.id + '/cancel'
+                                - var cancelMsg = fullName !== '—' ? 'Remove ' + fullName + ' from this event?' : 'Remove this registrant from this event?'
+                                - var cancelBullets = ['The registration will be permanently removed']
+                                - if (r.Order && r.Order.paymentStatus === 'paid') cancelBullets.push('A full refund will be issued via Stripe')
+                                - if (event.isOnline) cancelBullets.push('The attendee will be removed from the Zoom meeting')
+                                tr
+                                    td
+                                        span.da-cell-secondary= fullName
+                                    td
+                                        span.da-cell-muted= email
+                                    td
+                                        if r.Order
+                                            a.da-order-link(
+                                                href=(adminPrefix || '') + '/orders/' + r.Order.id + '/edit'
+                                                aria-label='View order ' + r.Order.id.slice(0, 8)
+                                            )
+                                                span.da-cell-mono= r.Order.id.slice(0, 8) + '…'
+                                        else
+                                            span.da-cell-muted —
+                                    td
+                                        if r.Order && r.Order.paymentStatus
+                                            span.da-badge(class='da-badge--' + payClass)= r.Order.paymentStatus.charAt(0).toUpperCase() + r.Order.paymentStatus.slice(1)
+                                        else
+                                            span.da-cell-muted —
+                                    td.da-col-created
+                                        .da-date-cell
+                                            span.da-cell-muted= fmtDate(r.createdAt)
+                                            if r.createdAt
+                                                span.da-date-time= fmtTime(r.createdAt)
+                                    td
+                                        form(id=cancelFormId method='post' action=cancelUrl style='display:none')
+                                        .da-cell-actions
+                                            button.da-row-btn.da-row-btn--danger(
+                                                type='button'
+                                                data-confirm-modal
+                                                data-confirm-title='Cancel Registration'
+                                                data-confirm-msg=cancelMsg
+                                                data-confirm-bullets=JSON.stringify(cancelBullets)
+                                                data-form-id=cancelFormId
+                                            ) Cancel
+                        else
+                            +tableEmpty('No registrants for this event.', 6)

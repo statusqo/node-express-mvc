@@ -680,6 +680,17 @@ tr.da-row--entering {
     color: var(--ds-text-2);
 }
 
+.da-page .da-row-btn--danger {
+    background: var(--ds-danger-dim);
+    color: var(--ds-danger);
+    border-color: rgba(239, 68, 68, 0.2);
+}
+.da-page .da-row-btn--danger:hover {
+    background: var(--ds-danger);
+    color: #fff;
+    border-color: var(--ds-danger);
+}
+
 .da-page .da-row-btn--confirm {
     background: var(--ds-danger-dim);
     color: var(--ds-danger);
@@ -973,6 +984,23 @@ tr.da-row--entering {
 }
 
 .da-detail-item:last-child { border-bottom: none; }
+
+.da-detail-list--horizontal {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0;
+}
+.da-detail-list--horizontal .da-detail-item {
+    padding: 0.75rem 1.5rem 0.75rem 0;
+    border-bottom: none;
+    border-right: 1px solid var(--ds-border);
+    margin-right: 1.5rem;
+    min-width: 80px;
+}
+.da-detail-list--horizontal .da-detail-item:last-child {
+    border-right: none;
+    margin-right: 0;
+}
 
 .da-detail-label {
     font-size: 11px;
@@ -2668,7 +2696,7 @@ tr.da-row--entering {
     padding: 1rem 1.5rem;
     border-top: 1px solid var(--ds-border);
     background: var(--ds-surface-2);
-    justify-content: flex-end;
+    justify-content: center;
 }
 /* Button styles scoped to the modal (mirrors .da-page .da-btn) */
 #da-confirm-modal .da-btn {
@@ -2686,24 +2714,24 @@ tr.da-row--entering {
     font-family: inherit;
 }
 #da-confirm-modal .da-btn--danger {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--ds-success);
+    border-color: rgba(34, 197, 94, 0.25);
+}
+#da-confirm-modal .da-btn--danger:hover {
+    background: var(--ds-success);
+    color: #fff;
+    border-color: var(--ds-success);
+}
+#da-confirm-modal .da-btn--secondary {
     background: var(--ds-danger-dim);
     color: var(--ds-danger);
     border-color: rgba(239, 68, 68, 0.2);
 }
-#da-confirm-modal .da-btn--danger:hover {
+#da-confirm-modal .da-btn--secondary:hover {
     background: var(--ds-danger);
     color: #fff;
     border-color: var(--ds-danger);
-}
-#da-confirm-modal .da-btn--secondary {
-    background: var(--ds-surface-3);
-    color: var(--ds-text-2);
-    border-color: var(--ds-border);
-}
-#da-confirm-modal .da-btn--secondary:hover {
-    background: var(--ds-surface-3);
-    color: var(--ds-text-1);
-    border-color: var(--ds-border-accent);
 }
 
 /* ── Pending row accent ───────────────────────────────────────────────── */
@@ -2715,4 +2743,85 @@ tr.da-row--pending {
 .da-form-grid--narrow {
     grid-template-columns: 1fr;
     max-width: 640px;
+}
+
+/* ── Event summary card (horizontal label/value strip) ───────────────── */
+.da-event-summary-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.da-event-summary {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    min-width: max-content;
+    width: 100%;
+}
+.da-event-summary__item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    padding: 0.875rem 1.5rem;
+    border-right: 1px solid var(--ds-border);
+    flex: 1;
+    min-width: 80px;
+}
+.da-event-summary__item:first-child {
+    padding-left: 1.5rem;
+}
+.da-event-summary__item:last-child {
+    border-right: none;
+}
+.da-event-summary__label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--ds-text-3);
+    white-space: nowrap;
+}
+.da-event-summary__value {
+    font-size: 13px;
+    color: var(--ds-text-1);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+/* ── View toggle (Upcoming / Past tab switcher) ───────────────────────── */
+.da-view-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    background: var(--ds-surface-2);
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius-sm);
+    padding: 3px;
+    margin-bottom: 1.25rem;
+}
+.da-view-toggle__btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.35rem 1rem;
+    border-radius: calc(var(--ds-radius-sm) - 2px);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ds-text-2);
+    text-decoration: none;
+    transition: background 150ms var(--ds-ease), color 150ms var(--ds-ease);
+    white-space: nowrap;
+}
+.da-view-toggle__btn:hover {
+    color: var(--ds-text-1);
+    background: var(--ds-surface-3);
+}
+.da-view-toggle__btn--active {
+    background: var(--ds-accent);
+    color: #fff;
+    font-weight: 600;
+}
+.da-view-toggle__btn--active:hover {
+    background: var(--ds-accent);
+    color: #fff;
 }

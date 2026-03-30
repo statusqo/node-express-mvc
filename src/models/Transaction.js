@@ -28,11 +28,6 @@ const Transaction = sequelize.define("Transaction", {
     allowNull: false,
     defaultValue: TRANSACTION_STATUS.PENDING,
   },
-  // e.g. "stripe"
-  gateway: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
   // e.g. Stripe PaymentIntent id (pi_...) — used for webhook idempotency and refunds
   gatewayReference: {
     type: DataTypes.STRING,

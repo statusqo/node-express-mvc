@@ -16,6 +16,8 @@ const orderRepo = require("../repos/order.repo");
 const { getMeetingProvider } = require("../gateways/meeting.interface");
 const orderService = require("./order.service");
 const emailService = require("./email.service");
+const refundRequestRepo = require("../repos/refundRequest.repo");
+const { REFUND_REQUEST_STATUS } = require("../constants/refundRequest");
 
 function formatEventVariantTitle(startDate, startTime) {
   const d = startDate ? String(startDate).substring(0, 10) : "";
@@ -104,6 +106,32 @@ module.exports = {
     await eventRepo.update(eventId, { eventStatus: "orphaned" });
     await eventMeetingRepo.destroyByEventId(eventId);
     return { handled: true, eventId };
+  },
+
+  /**
+   * All upcoming events (startDate >= today) across all products, for the admin events overview.
+   * Returns plain objects with registrationCount attached.
+   */
+  async findUpcomingForAdmin() {
+    const rows = await eventRepo.findUpcomingWithDetails();
+    return (rows || []).map((row) => {
+      const ev = row.get ? row.get({ plain: true }) : row;
+      ev.registrationCount = Array.isArray(ev.Registrations) ? ev.Registrations.length : 0;
+      return ev;
+    });
+  },
+
+  /**
+   * All past events (startDate < today) across all products, for the admin events overview.
+   * Returns plain objects with registrationCount attached.
+   */
+  async findPastForAdmin() {
+    const rows = await eventRepo.findPastWithDetails();
+    return (rows || []).map((row) => {
+      const ev = row.get ? row.get({ plain: true }) : row;
+      ev.registrationCount = Array.isArray(ev.Registrations) ? ev.Registrations.length : 0;
+      return ev;
+    });
   },
 
   async findByProductId(productId, options = {}) {
@@ -377,6 +405,19 @@ module.exports = {
         const result = await orderService.refundOrderForEventCancellation(order.id);
         if (!result.refunded) {
           return { ok: false, processed, total, error: result.error || "Stripe refund failed." };
+        }
+        // Auto-close any pending RefundRequest for this order — refund was already issued via event cancellation.
+        const pendingRefundRequest = await refundRequestRepo.findPendingByOrder(order.id);
+        if (pendingRefundRequest) {
+          await refundRequestRepo.update(pendingRefundRequest.id, {
+            status: REFUND_REQUEST_STATUS.APPROVED,
+            processedAt: new Date(),
+            processedByUserId: null,
+          });
+          logger.info("processEventRefundsAndCleanup: auto-approved orphaned refund request", {
+            orderId: order.id,
+            refundRequestId: pendingRefundRequest.id,
+          });
         }
       } else if (order && order.paymentStatus === PAYMENT_STATUS.PENDING) {
         await orderRepo.update(order.id, {

@@ -18,6 +18,7 @@ const refundRequestsController = require("../../controllers/admin/refundRequests
 const webinarsRoutes = require("./webinars.routes");
 const seminarsRoutes = require("./seminars.routes");
 const classroomsRoutes = require("./classrooms.routes");
+const eventsRoutes = require("./events.routes");
 const zoomController = require("../../controllers/admin/zoom.controller");
 const { requireAuth } = require("../../middlewares/auth.middleware");
 const { uploadMedia } = require("../../middlewares/uploadMedia.middleware");
@@ -40,7 +41,8 @@ router.use((req, res, next) => {
   const isEditPath = lastSegment === "edit" && segments.length >= 3;
   const isNewPath = lastSegment === "new" || lastSegment === "new-admin";
   const isEventsPath = lastSegment === "events" && segments.length >= 3;
-  const dropCount = isEditPath ? 2 : isEventsPath ? 2 : isNewPath || segments.length > 1 ? 1 : 0;
+  const isRegistrantsPath = lastSegment === "registrants" && segments.length >= 3;
+  const dropCount = isEditPath ? 2 : isEventsPath ? 2 : isRegistrantsPath ? 2 : isNewPath || segments.length > 1 ? 1 : 0;
   res.locals.adminBackUrl = segments.length > 0 && dropCount > 0
     ? prefix + "/" + segments.slice(0, -dropCount).join("/")
     : segments.length === 1
@@ -83,6 +85,9 @@ router.post("/products/new", asyncHandler(productsController.create));
 router.get("/products/:id/edit", asyncHandler(productsController.editForm));
 router.post("/products/:id/edit", asyncHandler(productsController.update));
 router.post("/products/:id/delete", asyncHandler(productsController.delete));
+
+// Events overview — all events across all types, with registrant lists
+router.use("/events", eventsRoutes);
 
 // Event-type product sections (Webinars, Seminars, Classrooms) — list products, manage events per product
 router.use("/webinars", webinarsRoutes);

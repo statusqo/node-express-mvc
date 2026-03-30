@@ -19,7 +19,8 @@ block content
           - const seatsRemaining = ev.ProductVariant && ev.ProductVariant.quantity != null ? Number(ev.ProductVariant.quantity) : 0
           - const hasStock = ev.productVariantId && seatsRemaining > 0
           li(style="border:1px solid #eee; padding:0.75rem; margin-bottom:0.5rem; display:flex; flex-wrap:wrap; align-items:center; gap:0.5rem")
-            span= ev.startDate ? ev.startDate : '—'
+            - var _ep = ev.startDate ? String(ev.startDate).substring(0,10).split('-') : null
+            span= _ep && _ep.length === 3 ? _ep[2] + '/' + _ep[1] + '/' + _ep[0] : '—'
             if ev.startTime
               span(style="margin-left:0.5rem")= String(ev.startTime).substring(0, 5)
             if ev.location

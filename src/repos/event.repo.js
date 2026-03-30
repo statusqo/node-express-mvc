@@ -1,4 +1,5 @@
-const { Event, EventMeeting, Registration, ProductVariant } = require("../models");
+const { Op } = require("sequelize");
+const { Event, EventMeeting, Registration, ProductVariant, Product, ProductType } = require("../models");
 const { EVENT_STATUS } = require("../constants/event");
 
 module.exports = {
@@ -134,7 +135,61 @@ module.exports = {
         { model: ProductVariant, as: "ProductVariant" },
         { model: EventMeeting, as: "EventMeeting", required: false },
         { model: Registration, as: "Registrations", required: false, attributes: ["id"] },
+        {
+          model: Product,
+          as: "Product",
+          attributes: ["id", "title", "slug"],
+          include: [{ model: ProductType, as: "ProductType", attributes: ["id", "name", "slug"], required: false }],
+        },
       ],
+      ...options,
+    });
+  },
+
+  /**
+   * All events with startDate >= today across all products.
+   * Includes Product (with ProductType for type label), Registrations (id only for count), EventMeeting.
+   * Ordered soonest first.
+   */
+  async findUpcomingWithDetails(options = {}) {
+    const today = new Date().toISOString().substring(0, 10);
+    return await Event.findAll({
+      where: { startDate: { [Op.gte]: today } },
+      include: [
+        {
+          model: Product,
+          as: "Product",
+          attributes: ["id", "title", "slug"],
+          include: [{ model: ProductType, as: "ProductType", attributes: ["id", "name", "slug"], required: false }],
+        },
+        { model: EventMeeting, as: "EventMeeting", required: false, attributes: ["id", "zoomMeetingId"] },
+        { model: Registration, as: "Registrations", required: false, attributes: ["id"] },
+      ],
+      order: [["startDate", "ASC"], ["startTime", "ASC"]],
+      ...options,
+    });
+  },
+
+  /**
+   * All events with startDate < today across all products.
+   * Includes same associations as findUpcomingWithDetails.
+   * Ordered most recent first.
+   */
+  async findPastWithDetails(options = {}) {
+    const today = new Date().toISOString().substring(0, 10);
+    return await Event.findAll({
+      where: { startDate: { [Op.lt]: today } },
+      include: [
+        {
+          model: Product,
+          as: "Product",
+          attributes: ["id", "title", "slug"],
+          include: [{ model: ProductType, as: "ProductType", attributes: ["id", "name", "slug"], required: false }],
+        },
+        { model: EventMeeting, as: "EventMeeting", required: false, attributes: ["id", "zoomMeetingId"] },
+        { model: Registration, as: "Registrations", required: false, attributes: ["id"] },
+      ],
+      order: [["startDate", "DESC"], ["startTime", "DESC"]],
       ...options,
     });
   },

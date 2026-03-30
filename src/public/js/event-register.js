@@ -155,8 +155,8 @@
           return res.json();
         })
         .then(function (data) {
-          // Free session — server fulfilled the order without any payment gateway interaction.
-          if (data.free && data.orderId) {
+          // Free session (Stripe Invoice auto-paid) or legacy free flow — no card confirmation needed.
+          if ((data.alreadyPaid || data.free) && data.orderId) {
             if (payBtn) payBtn.textContent = "Confirmed!";
             window.location.href = "/orders/" + data.orderId;
             return new Promise(function () {});

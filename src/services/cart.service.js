@@ -64,6 +64,33 @@ async function setQuantity(userId, sessionId, productVariantId, quantity) {
 }
 
 /**
+ * Validate cart lines on render: remove any lines whose variant is inactive or sold out.
+ * Returns the count and titles of removed items so the caller can flash a message.
+ */
+async function validateAndCleanCart(userId, sessionId) {
+  const cart = userId
+    ? await cartRepo.findByUser(userId)
+    : await cartRepo.findBySessionId(sessionId);
+  if (!cart) return { removedCount: 0, removedTitles: [] };
+
+  const lines = await cartRepo.getLines(cart.id);
+  if (!lines || lines.length === 0) return { removedCount: 0, removedTitles: [] };
+
+  const removedTitles = [];
+  for (const line of lines) {
+    const variant = line.ProductVariant;
+    const unavailable = !variant || variant.active === false;
+    const soldOut = variant && variant.quantity != null && Number(variant.quantity) < 1;
+    if (unavailable || soldOut) {
+      await cartRepo.removeLine(cart.id, line.productVariantId);
+      const title = variant?.title || line.productVariantId;
+      removedTitles.push(title);
+    }
+  }
+  return { removedCount: removedTitles.length, removedTitles };
+}
+
+/**
  * Clear cart for user or session. Used after successful payment when order was created with clearCart: false.
  */
 async function clearCart(userId, sessionId) {
@@ -81,4 +108,5 @@ module.exports = {
   removeFromCart,
   setQuantity,
   clearCart,
+  validateAndCleanCart,
 };

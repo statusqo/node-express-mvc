@@ -173,7 +173,7 @@ async function createOrderFromCart(userId, sessionId, opts = {}) {
   }
 }
 
-async function recordPaymentAttempt(orderId, amount, currency, gateway, gatewayReference, metadata = null) {
+async function recordPaymentAttempt(orderId, amount, currency, gatewayReference, metadata = null) {
   const order = await orderRepo.findById(orderId);
   if (!order) {
     const err = new Error("Order not found.");
@@ -185,7 +185,6 @@ async function recordPaymentAttempt(orderId, amount, currency, gateway, gatewayR
     amount,
     currency: currency || order.currency,
     status: TRANSACTION_STATUS.PENDING,
-    gateway,
     gatewayReference,
     metadata: metadata ? JSON.stringify(metadata) : null,
   });
@@ -335,6 +334,14 @@ async function fulfillFreeOrder(orderId) {
   try {
     const orderInTx = await orderRepo.findById(orderId, { transaction: t });
     await orderInTx.update({ paymentStatus: PAYMENT_STATUS.PAID }, { transaction: t });
+    await transactionRepo.create({
+      orderId,
+      amount: 0,
+      currency: order.currency,
+      status: TRANSACTION_STATUS.SUCCESS,
+      gatewayReference: null,
+      metadata: null,
+    }, { transaction: t });
     await t.commit();
 
     const orderAfter = await orderRepo.findById(orderId);

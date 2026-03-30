@@ -585,7 +585,6 @@ async function createInvoiceForOrder(orderId, userId, sessionId, options = {}) {
         order.id,
         0,
         order.currency,
-        GATEWAY_NAME,
         invoiceId,
         { type: "invoice", invoiceId }
       );
@@ -632,7 +631,6 @@ async function createInvoiceForOrder(orderId, userId, sessionId, options = {}) {
       order.id,
       Number(order.total),
       order.currency,
-      GATEWAY_NAME,
       paymentIntentId,
       { type: "invoice", invoiceId }
     );
@@ -787,7 +785,6 @@ async function handleWebhook(event) {
             orderId,
             Number(invoice.amount_paid) / 100,
             (invoice.currency || invoiceOrder.currency).toUpperCase(),
-            GATEWAY_NAME,
             gatewayRef,
             { type: "invoice", invoiceId: invoice.id }
           );

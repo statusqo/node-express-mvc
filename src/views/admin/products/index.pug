@@ -19,6 +19,7 @@ block content
                         tr
                             th(scope='col') Title
                             th.da-col-slug(scope='col') Slug
+                            th(scope='col') Type
                             th.da-col-price(scope='col') Price
                             th(scope='col') Status
                             th(scope='col' style='text-align:right') Actions
@@ -30,6 +31,8 @@ block content
                                         span.da-cell-primary= p.title
                                     td.da-col-slug
                                         span.da-cell-mono= p.slug || '—'
+                                    td
+                                        span.da-cell-secondary= p.ProductType ? p.ProductType.name : '—'
                                     td.da-col-price
                                         span.da-cell-secondary= p.price != null ? Number(p.price).toFixed(2) + ' ' + (p.currency || 'USD') : '—'
                                     td
@@ -41,4 +44,4 @@ block content
                                         .da-cell-actions
                                             a.da-row-btn.da-row-btn--edit(href=(adminPrefix || '') + '/products/' + p.id + '/edit' aria-label='Edit ' + p.title) Edit
                         else
-                            +tableEmpty('No products yet.', 5)
+                            +tableEmpty('No products yet.', 6)

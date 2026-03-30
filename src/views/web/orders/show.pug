@@ -5,7 +5,7 @@ block content
   p Order ID: #{order.id}
   p Payment: #{order.paymentStatus} · Fulfillment: #{order.fulfillmentStatus}
   p Total: #{Number(order.total).toFixed(2)} #{order.currency}
-  p Date: #{new Date(order.createdAt).toLocaleString()}
+  p Date: #{order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'}
 
   h2 Items
   ul(style="list-style:none; padding:0")
@@ -55,7 +55,7 @@ block content
     ul(style="list-style:none;padding:0")
       each r in refundRequests
         li(style="padding:0.5rem 0;border-bottom:1px solid #eee")
-          | #{r.status} — #{r.createdAt ? new Date(r.createdAt).toLocaleString() : ''}
+          | #{r.status} — #{r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'}
           if r.reason
             |  — #{r.reason}
           if r.status === 'approved'

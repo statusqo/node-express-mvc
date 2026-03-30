@@ -133,6 +133,17 @@ module.exports = {
 
       order = await orderService.createOrderFromCart(userId, sessionId, opts);
 
+      if (Number(order.total) === 0) {
+        try {
+          await orderService.fulfillFreeOrder(order.id);
+          return res.json({ free: true, orderId: order.id });
+        } catch (freeErr) {
+          const status = freeErr.status ?? freeErr.statusCode ?? 500;
+          logger.error("Checkout: free order fulfillment failed", { orderId: order.id, error: freeErr.message, stack: freeErr.stack });
+          return res.status(status).json({ error: freeErr.message || "Could not complete order." });
+        }
+      }
+
       const gateway = getDefaultGateway();
       if (!gateway) {
         return res.status(503).json({ error: "Payment system is not configured." });

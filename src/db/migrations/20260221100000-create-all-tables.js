@@ -384,7 +384,6 @@ module.exports = {
       amount: { type: Sequelize.DECIMAL(10, 2), allowNull: false },
       currency: { type: Sequelize.STRING, allowNull: false, defaultValue: "EUR" },
       status: { type: Sequelize.ENUM("pending", "success", "failed", "refunded"), allowNull: false, defaultValue: "pending" },
-      gateway: { type: Sequelize.STRING, allowNull: true },
       gatewayReference: { type: Sequelize.STRING, allowNull: true },
       metadata: { type: Sequelize.TEXT, allowNull: true },
       ...ts,

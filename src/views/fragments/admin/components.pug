@@ -70,3 +70,49 @@ mixin readonlyField(label)
 mixin formError(error)
     if error
         p.admin-flash.admin-flash-error= error
+
+//- ── +eventSummaryCard(event, registrantCount) ───────────────────────────────
+//- Horizontal summary strip for an event. Displays date, time, product, type,
+//- status, location, capacity and registrant count in a single card row.
+//- @param {object} event           - Plain event object (startDate, startTime, isOnline, etc.)
+//- @param {number} registrantCount - Number of registrants to display
+mixin eventSummaryCard(event, registrantCount)
+    - var _dp = event.startDate ? String(event.startDate).substring(0,10).split('-') : null
+    - var _date = _dp && _dp.length === 3 ? _dp[2] + '/' + _dp[1] + '/' + _dp[0] : '—'
+    - var _time = event.startTime ? String(event.startTime).substring(0,5) : '—'
+    - var _product = event.Product ? event.Product.title : '—'
+    - var _type = event.Product && event.Product.ProductType ? event.Product.ProductType.name : '—'
+    - var _statusClass = ({active:'success', cancelled:'danger', orphaned:'warning'})[event.eventStatus] || 'neutral'
+    - var _statusLabel = event.eventStatus ? event.eventStatus.charAt(0).toUpperCase() + event.eventStatus.slice(1) : '—'
+    .da-event-summary-scroll
+      .da-event-summary
+        .da-event-summary__item
+            span.da-event-summary__label Date
+            span.da-event-summary__value= _date
+        .da-event-summary__item
+            span.da-event-summary__label Time
+            span.da-event-summary__value= _time
+        .da-event-summary__item
+            span.da-event-summary__label Product
+            span.da-event-summary__value= _product
+        .da-event-summary__item
+            span.da-event-summary__label Type
+            span.da-event-summary__value= _type
+        .da-event-summary__item
+            span.da-event-summary__label Status
+            span.da-event-summary__value
+                span.da-badge(class='da-badge--' + _statusClass)= _statusLabel
+        .da-event-summary__item
+            span.da-event-summary__label Location
+            span.da-event-summary__value
+                if event.isOnline
+                    span.da-badge.da-badge--info Online
+                else
+                    = event.location || '—'
+        if event.capacity != null
+            .da-event-summary__item
+                span.da-event-summary__label Capacity
+                span.da-event-summary__value= event.capacity
+        .da-event-summary__item
+            span.da-event-summary__label Registrants
+            span.da-event-summary__value= registrantCount != null ? registrantCount : 0

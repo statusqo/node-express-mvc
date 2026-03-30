@@ -200,13 +200,13 @@ module.exports = {
       return res.status(400).json({ error: e.message || "Could not create order." });
     }
 
-    // Free session — fulfill immediately without going through the payment gateway.
     if (Number(order.total) === 0) {
       try {
         await orderService.fulfillFreeOrder(order.id);
-        return res.json({ free: true, orderId: order.id });
+        return res.json({ alreadyPaid: true, orderId: order.id });
       } catch (e) {
-        return res.status(500).json({ error: e.message || "Could not complete free registration." });
+        const status = e.status ?? e.statusCode ?? 500;
+        return res.status(status).json({ error: e.message || "Could not complete registration." });
       }
     }
 
@@ -231,7 +231,13 @@ module.exports = {
     }
     try {
       const result = await gateway.createInvoiceForOrder(order.id, userId, sessionId, gatewayOptions);
-      if (!result || !result.clientSecret) {
+      if (!result) {
+        return res.status(500).json({ error: "Could not create payment." });
+      }
+      if (result.alreadyPaid) {
+        return res.json({ alreadyPaid: true, orderId: order.id });
+      }
+      if (!result.clientSecret) {
         return res.status(500).json({ error: "Could not create payment." });
       }
       return res.json({ clientSecret: result.clientSecret, orderId: order.id });

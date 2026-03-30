@@ -28,6 +28,10 @@ function getRedirectUrl(req, defaultPath = "/cart") {
 module.exports = {
   async show(req, res) {
     const { userId, sessionId } = getUserIdAndSession(req);
+    const { removedCount } = await cartService.validateAndCleanCart(userId, sessionId);
+    if (removedCount > 0) {
+      res.setFlash("error", "Some items in your cart are no longer available and have been removed.");
+    }
     const { cart, lines } = await cartService.getCartWithLines(userId, sessionId);
     res.render("web/cart", {
       title: "Cart",

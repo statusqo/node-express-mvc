@@ -31,7 +31,8 @@ block content
       section(style="margin-bottom:1rem; padding:0.75rem; border:1px solid #e0e0e0; border-radius:6px; background:#fafafa")
         h2(style="font-size:1.1rem; margin:0 0 0.5rem 0") You're registering for
         p(style="margin:0; font-size:1rem")
-          span= event.startDate ? event.startDate : '—'
+          - var _rp = event.startDate ? String(event.startDate).substring(0,10).split('-') : null
+          span= _rp && _rp.length === 3 ? _rp[2] + '/' + _rp[1] + '/' + _rp[0] : '—'
           if event.startTime
             span(style="margin-left:0.5rem")= String(event.startTime).substring(0, 5)
           if event.location

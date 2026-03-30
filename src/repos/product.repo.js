@@ -17,6 +17,7 @@ const META_OBJECTS_THROUGH_ATTRIBUTES = ["id", "productId", "metaObjectId", "sor
 /** Include for list views: default variant with price, media (for customer-facing thumbnails). */
 const DEFAULT_VARIANT_INCLUDE = [
   { model: ProductVariant, as: "ProductVariants", where: { isDefault: true }, required: false, limit: 1, include: [{ model: ProductPrice, as: "ProductPrices", where: { isDefault: true }, required: false, limit: 1 }] },
+  { model: ProductType, as: "ProductType", attributes: ["id", "name", "slug"], required: false },
   { model: Media, as: "media", through: { attributes: ["sortOrder"] }, required: false },
 ];
 

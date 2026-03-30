@@ -24,6 +24,7 @@ module.exports = {
 
     const adminSidebarItems = [
       { label: "Dashboard", url: "/", order: 0 },
+      { label: "Events", url: "/events", order: 1 },
       { label: "Users", url: "/users", order: 10 },
       { label: "Orders", url: "/orders", order: 15 },
       { label: "Refund Requests", url: "/refund-requests", order: 17 },
