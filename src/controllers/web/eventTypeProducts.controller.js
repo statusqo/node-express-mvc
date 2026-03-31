@@ -10,6 +10,7 @@ const { validateEventRegister } = require("../../validators/eventRegister.schema
 const { getDefaultGateway } = require("../../gateways");
 const config = require("../../config");
 const { DEFAULT_CURRENCY } = require("../../config/constants");
+const logger = require("../../config/logger");
 
 function toPlain(obj) {
   return obj && typeof obj.get === "function" ? obj.get({ plain: true }) : obj;
@@ -212,6 +213,9 @@ module.exports = {
 
     const gateway = getDefaultGateway();
     if (!gateway) {
+      await orderService.cancelOrder(order.id).catch((e) =>
+        logger.error("Event placeOrder: failed to cancel order (no gateway configured)", { orderId: order.id, error: e.message })
+      );
       return res.status(503).json({ error: "Payment system is not configured." });
     }
     const gatewayEmail = (req.user && req.user.email) || (email && String(email).trim()) || null;
@@ -232,16 +236,20 @@ module.exports = {
     try {
       const result = await gateway.createInvoiceForOrder(order.id, userId, sessionId, gatewayOptions);
       if (!result) {
-        return res.status(500).json({ error: "Could not create payment." });
+        // Treat a missing result the same as a thrown error so the catch handles cleanup.
+        throw new Error("Could not create payment.");
       }
       if (result.alreadyPaid) {
         return res.json({ alreadyPaid: true, orderId: order.id });
       }
       if (!result.clientSecret) {
-        return res.status(500).json({ error: "Could not create payment." });
+        throw new Error("Could not create payment.");
       }
       return res.json({ clientSecret: result.clientSecret, orderId: order.id });
     } catch (err) {
+      await orderService.cancelOrder(order.id).catch((cancelErr) =>
+        logger.error("Event placeOrder: failed to cancel order after payment failure", { orderId: order.id, error: cancelErr.message })
+      );
       const status = err.status ?? err.statusCode ?? 500;
       return res.status(status).json({ error: err.message || "Could not create payment." });
     }

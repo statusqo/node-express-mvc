@@ -24,6 +24,9 @@ const logger = require("../config/logger");
 
 const { normalizeError, toError } = require("./errors");
 const { PAYMENT_STATUS } = require("../constants/order");
+const registrationRepo = require("../repos/registration.repo");
+const eventMeetingRepo = require("../repos/eventMeeting.repo");
+const { getMeetingProvider } = require("./meeting.interface");
 
 const GATEWAY_NAME = "stripe";
 const TIMEOUT_MS = 30000;
@@ -397,7 +400,17 @@ async function validatePaymentIntent(paymentIntentId, userId, sessionId) {
     const meta = paymentIntent.metadata || {};
     const metaUserId = meta.userId != null ? String(meta.userId) : "";
     const metaSessionId = meta.sessionId != null ? String(meta.sessionId) : "";
-    if ((userId && metaUserId !== String(userId)) || (sessionId && metaSessionId !== String(sessionId))) {
+    // When the PI was created by a logged-in user, verify userId match.
+    // When the PI was created by a guest (empty metaUserId), verify by sessionId only.
+    // This allows a guest who logs in mid-checkout to confirm their own payment.
+    const piHasUser = Boolean(metaUserId);
+    if (piHasUser) {
+      if (!userId || metaUserId !== String(userId)) {
+        const err = toError(normalizeError(new Error("Payment does not belong to this session."), GATEWAY_NAME));
+        err.status = 403;
+        throw err;
+      }
+    } else if (sessionId && metaSessionId !== String(sessionId)) {
       const err = toError(normalizeError(new Error("Payment does not belong to this session."), GATEWAY_NAME));
       err.status = 403;
       throw err;
@@ -727,22 +740,65 @@ async function handleWebhook(event) {
       case "charge.refunded": {
         const charge = event.data.object;
         const paymentIntentId = charge.payment_intent;
-        if (paymentIntentId) {
-          const orders = await orderRepo.findAll({
-            where: { stripePaymentIntentId: paymentIntentId },
-          });
-          if (orders.length > 0) {
-            const order = orders[0];
-            const transactions = await transactionRepo.findByOrder(order.id);
-            const transaction = transactions.find(
-              (t) => t.gatewayReference === paymentIntentId && t.status === "success"
-            );
-            if (transaction) {
-              await transactionRepo.update(transaction.id, { status: "refunded" });
-              await orderService.restoreVariantQuantitiesForOrder(order.id);
+        if (!paymentIntentId) {
+          logger.info("charge.refunded: no paymentIntentId on charge, skipping", { chargeIdLast4: safeId(charge.id) });
+          break;
+        }
+        const orders = await orderRepo.findAll({
+          where: { stripePaymentIntentId: paymentIntentId },
+        });
+        if (orders.length === 0) {
+          logger.warn("charge.refunded: no order found for paymentIntent", { paymentIntentIdLast4: safeId(paymentIntentId) });
+          break;
+        }
+        const order = orders[0];
+
+        // Idempotency: already fully processed (e.g. webhook delivered twice).
+        if (order.paymentStatus === PAYMENT_STATUS.REFUNDED) {
+          logger.info("charge.refunded: order already marked refunded, skipping", { orderId: order.id });
+          break;
+        }
+
+        // Update the matching transaction to refunded.
+        const transactions = await transactionRepo.findByOrder(order.id);
+        const successTx = transactions.find(
+          (t) => t.gatewayReference === paymentIntentId && t.status === "success"
+        );
+        if (successTx) {
+          await transactionRepo.update(successTx.id, { status: "refunded" });
+        }
+
+        // Mark the order as refunded — this is the single place that performs this transition.
+        await orderRepo.update(order.id, { paymentStatus: "refunded", fulfillmentStatus: "refunded" });
+
+        // Restore variant quantities.
+        await orderService.restoreVariantQuantitiesForOrder(order.id);
+
+        // Remove Zoom registrants (idempotent — 404 means already removed) and soft-delete registrations.
+        const registrations = await registrationRepo.findAllByOrderId(order.id);
+        const provider = getMeetingProvider();
+        for (const reg of registrations) {
+          if (provider && reg.zoomRegistrantId) {
+            const meeting = await eventMeetingRepo.findByEventId(reg.eventId);
+            if (meeting) {
+              try {
+                const meetingPlain = meeting.get ? meeting.get({ plain: true }) : meeting;
+                await provider.removeRegistrant(meetingPlain, reg.zoomRegistrantId);
+                logger.info("charge.refunded: Zoom registrant removed", { registrationId: reg.id, orderId: order.id });
+              } catch (zoomErr) {
+                logger.warn("charge.refunded: Zoom removal failed (non-fatal)", {
+                  registrationId: reg.id,
+                  orderId: order.id,
+                  error: zoomErr.message,
+                });
+              }
             }
           }
+          await registrationRepo.destroy(reg.id);
+          logger.info("charge.refunded: registration soft-deleted", { registrationId: reg.id, orderId: order.id });
         }
+
+        logger.info("charge.refunded: refund finalized", { orderId: order.id });
         break;
       }
 

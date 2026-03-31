@@ -1,13 +1,10 @@
 const refundRequestRepo = require("../repos/refundRequest.repo");
 const orderRepo = require("../repos/order.repo");
-const transactionRepo = require("../repos/transaction.repo");
-const orderService = require("./order.service");
 const stripeGateway = require("../gateways/stripe.gateway");
 const logger = require("../config/logger");
 const registrationRepo = require("../repos/registration.repo");
 const eventMeetingRepo = require("../repos/eventMeeting.repo");
 const { PAYMENT_STATUS } = require("../constants/order");
-const { TRANSACTION_STATUS } = require("../constants/transaction");
 const { REFUND_REQUEST_STATUS } = require("../constants/refundRequest");
 const { getMeetingProvider } = require("../gateways/meeting.interface");
 
@@ -183,36 +180,19 @@ async function approveRefundRequest(requestId, processedByUserId) {
   logger.info("Issuing Stripe refund for refund approval", { orderId: order.id, paymentIntentId });
   const refund = await stripeGateway.createRefund(paymentIntentId);
   logger.info("Stripe refund issued", { orderId: order.id, refundId: refund.id, status: refund.status });
-  const now = new Date();
 
-  // Step 3: Commit all DB updates.
+  // Step 3: Mark RefundRequest as approved.
+  // Order/Transaction state, quantity restoration, and registration soft-deletes are intentionally
+  // deferred to the `charge.refunded` Stripe webhook, which fires only after money is actually
+  // returned to the customer. This prevents marking an order refunded if Stripe later reports failure.
   await refundRequestRepo.update(requestId, {
     status: APPROVED,
-    processedAt: now,
+    processedAt: new Date(),
     processedByUserId,
     stripeRefundId: refund.id,
   });
 
-  const transactions = await transactionRepo.findByOrder(order.id);
-  const successTransaction = transactions.find(
-    (t) => t.gatewayReference === paymentIntentId && t.status === TRANSACTION_STATUS.SUCCESS
-  );
-  if (successTransaction) {
-    await transactionRepo.update(successTransaction.id, { status: TRANSACTION_STATUS.REFUNDED });
-    logger.info("Transaction marked refunded", { transactionId: successTransaction.id });
-  }
-
-  await orderRepo.update(order.id, { paymentStatus: "refunded", fulfillmentStatus: "refunded" });
-  await orderService.restoreVariantQuantitiesForOrder(order.id);
-  logger.info("Order marked refunded, variant quantities restored", { orderId: order.id });
-
-  // Step 4: Soft-delete registrations.
-  for (const reg of registrations) {
-    await registrationRepo.destroy(reg.id);
-    logger.info("Registration soft-deleted", { registrationId: reg.id, orderId: order.id });
-  }
-
-  logger.info("Refund approval complete", { requestId, orderId: order.id });
+  logger.info("Refund approval complete — awaiting charge.refunded webhook for DB finalisation", { requestId, orderId: order.id });
   return await refundRequestRepo.findById(requestId);
 }
 

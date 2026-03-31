@@ -211,6 +211,7 @@ async function recordPaymentSuccess(transactionId, userIdFromOrder = null) {
     return order;
   }
 
+  // Block 1: commit the payment status change atomically.
   const t = await sequelize.transaction();
   try {
     await transactionRepo.update(transactionId, { status: TRANSACTION_STATUS.SUCCESS }, { transaction: t });
@@ -218,7 +219,15 @@ async function recordPaymentSuccess(transactionId, userIdFromOrder = null) {
     await orderInTx.update({ paymentStatus: PAYMENT_STATUS.PAID }, { transaction: t });
     await t.commit();
     logger.info("recordPaymentSuccess: order marked paid", { orderId: transaction.orderId, transactionId });
+  } catch (e) {
+    await t.rollback();
+    throw e;
+  }
 
+  // Block 2: post-commit fulfillment — runs outside the transaction so a failure here
+  // cannot attempt to roll back an already-committed transaction.
+  // Errors are logged and the caller receives a resolved order rather than a misleading error.
+  try {
     const orderAfter = await orderRepo.findById(transaction.orderId);
     const lines = await orderRepo.getLines(orderAfter.id);
     for (const line of lines || []) {
@@ -302,9 +311,14 @@ async function recordPaymentSuccess(transactionId, userIdFromOrder = null) {
       return await orderRepo.findById(orderAfter.id);
     }
     return orderAfter;
-  } catch (e) {
-    await t.rollback();
-    throw e;
+  } catch (postErr) {
+    logger.error("recordPaymentSuccess: post-commit fulfillment failed — order is paid but downstream state may be incomplete", {
+      orderId: transaction.orderId,
+      transactionId,
+      error: postErr.message,
+      stack: postErr.stack,
+    });
+    return await orderRepo.findById(transaction.orderId);
   }
 }
 
@@ -330,6 +344,7 @@ async function fulfillFreeOrder(orderId) {
   }
   if (order.paymentStatus === PAYMENT_STATUS.PAID) return order;
 
+  // Block 1: commit the payment status change atomically.
   const t = await sequelize.transaction();
   try {
     const orderInTx = await orderRepo.findById(orderId, { transaction: t });
@@ -343,7 +358,14 @@ async function fulfillFreeOrder(orderId) {
       metadata: null,
     }, { transaction: t });
     await t.commit();
+  } catch (e) {
+    await t.rollback();
+    throw e;
+  }
 
+  // Block 2: post-commit fulfillment — runs outside the transaction so a failure here
+  // cannot attempt to roll back an already-committed transaction.
+  try {
     const orderAfter = await orderRepo.findById(orderId);
     const lines = await orderRepo.getLines(orderAfter.id);
 
@@ -352,10 +374,14 @@ async function fulfillFreeOrder(orderId) {
       await productVariantRepo.decrementQuantityAndClamp(line.productVariantId, line.quantity);
     }
 
-    const cart = orderAfter.userId
-      ? await cartRepo.findByUser(orderAfter.userId)
-      : await cartRepo.findBySessionId(orderAfter.sessionId);
-    if (cart) await cartRepo.clearLines(cart.id);
+    // Only clear the cart for cart-sourced orders. Event registrations must not wipe
+    // unrelated items the customer may have in their cart.
+    if (orderAfter.source === ORDER_SOURCE.CART) {
+      const cart = orderAfter.userId
+        ? await cartRepo.findByUser(orderAfter.userId)
+        : await cartRepo.findBySessionId(orderAfter.sessionId);
+      if (cart) await cartRepo.clearLines(cart.id);
+    }
 
     const provider = getMeetingProvider();
     for (const line of lines || []) {
@@ -382,7 +408,13 @@ async function fulfillFreeOrder(orderId) {
             const meetingPlain = meeting.get ? meeting.get({ plain: true }) : meeting;
             const { zoomRegistrantId } = await provider.addRegistrant(meetingPlain, regPlain);
             if (zoomRegistrantId) await registrationRepo.update(reg.id, { zoomRegistrantId });
-          } catch (_) {}
+          } catch (zoomErr) {
+            logger.warn("fulfillFreeOrder: Zoom registration failed (non-fatal)", {
+              registrationId: reg.id,
+              eventId: line.eventId,
+              error: zoomErr.message,
+            });
+          }
         }
       }
     }
@@ -408,9 +440,13 @@ async function fulfillFreeOrder(orderId) {
       return await orderRepo.findById(orderAfter.id);
     }
     return orderAfter;
-  } catch (e) {
-    await t.rollback();
-    throw e;
+  } catch (postErr) {
+    logger.error("fulfillFreeOrder: post-commit fulfillment failed — order is paid but downstream state may be incomplete", {
+      orderId,
+      error: postErr.message,
+      stack: postErr.stack,
+    });
+    return await orderRepo.findById(orderId);
   }
 }
 
@@ -594,6 +630,19 @@ async function createOrderFromEvent(eventId, userId, sessionId, opts = {}) {
 
   const t = await sequelize.transaction();
   try {
+    // Re-verify variant availability inside the transaction to guard against concurrent bookings
+    // that could pass the controller-level check but then oversell the last seat.
+    const variantInTx = await productVariantRepo.findById(event.productVariantId, { transaction: t });
+    if (!variantInTx || !variantInTx.active) {
+      const err = new Error("This session is no longer available.");
+      err.status = 400;
+      throw err;
+    }
+    if (variantInTx.quantity != null && variantInTx.quantity < 1) {
+      const err = new Error("This session is sold out.");
+      err.status = 400;
+      throw err;
+    }
     const order = await orderRepo.create(orderPayload, { transaction: t });
     await orderRepo.createLineFromVariant(order.id, snapshot, 1, { transaction: t, eventId });
     await t.commit();
