@@ -114,11 +114,16 @@ module.exports = {
    */
   async findUpcomingForAdmin() {
     const rows = await eventRepo.findUpcomingWithDetails();
-    return (rows || []).map((row) => {
+    const events = (rows || []).map((row) => {
       const ev = row.get ? row.get({ plain: true }) : row;
-      ev.registrationCount = Array.isArray(ev.Registrations) ? ev.Registrations.length : 0;
+      ev.registrationCount = 0;
       return ev;
     });
+    const countByEventId = await registrationRepo.countPaidByEventIds(events.map((ev) => ev.id));
+    for (const ev of events) {
+      ev.registrationCount = countByEventId.get(String(ev.id)) || 0;
+    }
+    return events;
   },
 
   /**
@@ -127,11 +132,16 @@ module.exports = {
    */
   async findPastForAdmin() {
     const rows = await eventRepo.findPastWithDetails();
-    return (rows || []).map((row) => {
+    const events = (rows || []).map((row) => {
       const ev = row.get ? row.get({ plain: true }) : row;
-      ev.registrationCount = Array.isArray(ev.Registrations) ? ev.Registrations.length : 0;
+      ev.registrationCount = 0;
       return ev;
     });
+    const countByEventId = await registrationRepo.countPaidByEventIds(events.map((ev) => ev.id));
+    for (const ev of events) {
+      ev.registrationCount = countByEventId.get(String(ev.id)) || 0;
+    }
+    return events;
   },
 
   async findByProductId(productId, options = {}) {
@@ -401,23 +411,26 @@ module.exports = {
     for (const reg of registrations) {
       const order = reg.orderId ? await orderRepo.findById(reg.orderId) : null;
 
-      if (order && order.paymentStatus === PAYMENT_STATUS.PAID) {
-        const result = await orderService.refundOrderForEventCancellation(order.id);
-        if (!result.refunded) {
-          return { ok: false, processed, total, error: result.error || "Stripe refund failed." };
-        }
-        // Auto-close any pending RefundRequest for this order — refund was already issued via event cancellation.
-        const pendingRefundRequest = await refundRequestRepo.findPendingByOrder(order.id);
-        if (pendingRefundRequest) {
-          await refundRequestRepo.update(pendingRefundRequest.id, {
-            status: REFUND_REQUEST_STATUS.APPROVED,
-            processedAt: new Date(),
-            processedByUserId: null,
-          });
-          logger.info("processEventRefundsAndCleanup: auto-approved orphaned refund request", {
-            orderId: order.id,
-            refundRequestId: pendingRefundRequest.id,
-          });
+      if (order && orderService.isPaymentStatusRefundable(order.paymentStatus)) {
+        const remaining = await orderService.getRemainingRefundableAmount(order.id);
+        if (remaining !== null && remaining > 0.0001) {
+          const result = await orderService.refundOrderForEventCancellation(order.id);
+          if (!result.refunded) {
+            return { ok: false, processed, total, error: result.error || "Stripe refund failed." };
+          }
+          // Auto-close any pending RefundRequest for this order — refund was already issued via event cancellation.
+          const pendingRefundRequest = await refundRequestRepo.findPendingByOrder(order.id);
+          if (pendingRefundRequest) {
+            await refundRequestRepo.update(pendingRefundRequest.id, {
+              status: REFUND_REQUEST_STATUS.APPROVED,
+              processedAt: new Date(),
+              processedByUserId: null,
+            });
+            logger.info("processEventRefundsAndCleanup: auto-approved orphaned refund request", {
+              orderId: order.id,
+              refundRequestId: pendingRefundRequest.id,
+            });
+          }
         }
       } else if (order && order.paymentStatus === PAYMENT_STATUS.PENDING) {
         await orderRepo.update(order.id, {

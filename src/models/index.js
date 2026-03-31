@@ -26,7 +26,9 @@ const Media = require("./Media");
 const ProductMedia = require("./ProductMedia");
 const CollectionMedia = require("./CollectionMedia");
 const Event = require("./Event");
+const OrderAttendee = require("./OrderAttendee");
 const RefundRequest = require("./RefundRequest");
+const RefundTransaction = require("./RefundTransaction");
 const Registration = require("./Registration");
 const AdminZoomAccount = require("./AdminZoomAccount");
 const EventMeeting = require("./EventMeeting");
@@ -107,6 +109,12 @@ Event.hasMany(Registration, { foreignKey: "eventId" });
 Registration.belongsTo(Event, { foreignKey: "eventId" });
 Event.hasOne(EventMeeting, { foreignKey: "eventId" });
 EventMeeting.belongsTo(Event, { foreignKey: "eventId" });
+Order.hasMany(OrderAttendee, { foreignKey: "orderId" });
+OrderAttendee.belongsTo(Order, { foreignKey: "orderId" });
+OrderLine.hasMany(OrderAttendee, { foreignKey: "orderLineId" });
+OrderAttendee.belongsTo(OrderLine, { foreignKey: "orderLineId" });
+Event.hasMany(OrderAttendee, { foreignKey: "eventId" });
+OrderAttendee.belongsTo(Event, { foreignKey: "eventId" });
 
 // --- Cart & CartLine (line references ProductVariant) ---
 User.hasMany(Cart, { foreignKey: "userId" });
@@ -131,6 +139,8 @@ OrderLine.hasMany(Registration, { foreignKey: "orderLineId" });
 Registration.belongsTo(OrderLine, { foreignKey: "orderLineId" });
 User.hasMany(Registration, { foreignKey: "userId" });
 Registration.belongsTo(User, { foreignKey: "userId" });
+OrderAttendee.hasOne(Registration, { foreignKey: "orderAttendeeId" });
+Registration.belongsTo(OrderAttendee, { foreignKey: "orderAttendeeId", as: "OrderAttendee" });
 
 // --- Transaction ---
 Order.hasMany(Transaction, { foreignKey: "orderId" });
@@ -139,6 +149,20 @@ Transaction.belongsTo(Order, { foreignKey: "orderId" });
 // --- RefundRequest ---
 Order.hasMany(RefundRequest, { foreignKey: "orderId" });
 RefundRequest.belongsTo(Order, { foreignKey: "orderId" });
+Order.hasMany(RefundTransaction, { foreignKey: "orderId", as: "RefundTransactions" });
+RefundTransaction.belongsTo(Order, { foreignKey: "orderId", as: "Order" });
+RefundRequest.hasMany(RefundTransaction, { foreignKey: "refundRequestId", as: "RefundTransactions" });
+RefundTransaction.belongsTo(RefundRequest, { foreignKey: "refundRequestId", as: "RefundRequest" });
+Transaction.hasMany(RefundTransaction, { foreignKey: "paymentTransactionId", as: "RefundTransactions" });
+RefundTransaction.belongsTo(Transaction, { foreignKey: "paymentTransactionId", as: "PaymentTransaction" });
+OrderLine.hasMany(RefundTransaction, { foreignKey: "orderLineId", as: "RefundTransactions" });
+RefundTransaction.belongsTo(OrderLine, { foreignKey: "orderLineId", as: "OrderLine" });
+Registration.hasMany(RefundTransaction, { foreignKey: "registrationId", as: "RefundTransactions" });
+RefundTransaction.belongsTo(Registration, { foreignKey: "registrationId", as: "Registration" });
+OrderAttendee.hasMany(RefundTransaction, { foreignKey: "orderAttendeeId", as: "RefundTransactions" });
+RefundTransaction.belongsTo(OrderAttendee, { foreignKey: "orderAttendeeId", as: "OrderAttendee" });
+User.hasMany(RefundTransaction, { foreignKey: "createdByUserId", as: "CreatedRefundTransactions" });
+RefundTransaction.belongsTo(User, { foreignKey: "createdByUserId", as: "CreatedByUser" });
 User.hasMany(RefundRequest, { as: "RequestedRefunds", foreignKey: "requestedByUserId" });
 RefundRequest.belongsTo(User, { as: "RequestedByUser", foreignKey: "requestedByUserId" });
 User.hasMany(RefundRequest, { as: "ProcessedRefunds", foreignKey: "processedByUserId" });
@@ -182,7 +206,9 @@ module.exports = {
   ProductMedia,
   CollectionMedia,
   Event,
+  OrderAttendee,
   RefundRequest,
+  RefundTransaction,
   Registration,
   AdminZoomAccount,
   EventMeeting,

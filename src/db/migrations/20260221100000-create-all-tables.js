@@ -274,7 +274,7 @@ module.exports = {
       personType: { type: Sequelize.ENUM("private", "legal"), allowNull: false, defaultValue: "private" },
       companyName: { type: Sequelize.STRING, allowNull: true },
       companyOib: { type: Sequelize.STRING(11), allowNull: true },
-      paymentStatus: { type: Sequelize.ENUM("pending", "paid", "failed", "refunded", "voided"), allowNull: false, defaultValue: "paid" },
+      paymentStatus: { type: Sequelize.ENUM("pending", "paid", "failed", "partially_refunded", "refunded", "voided"), allowNull: false, defaultValue: "paid" },
       fulfillmentStatus: { type: Sequelize.ENUM("pending", "processing", "shipped", "delivered", "refund_requested", "refunded", "cancelled", "returned"), allowNull: false, defaultValue: "pending" },
       source: { type: Sequelize.ENUM("cart", "event"), allowNull: false, defaultValue: "cart" },
       total: { type: Sequelize.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
@@ -357,12 +357,31 @@ module.exports = {
     await queryInterface.addIndex("order_lines", ["orderId"]);
     await queryInterface.addIndex("order_lines", ["eventId"]);
 
+    // --- order_attendees ---
+    await queryInterface.createTable("order_attendees", {
+      id: uuid,
+      orderId: { type: Sequelize.UUID, allowNull: false, references: { model: "orders", key: "id" }, onUpdate: "CASCADE", onDelete: "CASCADE" },
+      orderLineId: { type: Sequelize.UUID, allowNull: false, references: { model: "order_lines", key: "id" }, onUpdate: "CASCADE", onDelete: "CASCADE" },
+      eventId: { type: Sequelize.UUID, allowNull: false, references: { model: "events", key: "id" }, onUpdate: "CASCADE", onDelete: "CASCADE" },
+      attendeeIndex: { type: Sequelize.INTEGER, allowNull: false },
+      email: { type: Sequelize.STRING, allowNull: false },
+      forename: { type: Sequelize.STRING, allowNull: true },
+      surname: { type: Sequelize.STRING, allowNull: true },
+      userId: { type: Sequelize.UUID, allowNull: true, references: { model: "users", key: "id" }, onUpdate: "CASCADE", onDelete: "SET NULL" },
+      ...ts,
+    });
+    await queryInterface.addIndex("order_attendees", ["orderId"]);
+    await queryInterface.addIndex("order_attendees", ["orderLineId"]);
+    await queryInterface.addIndex("order_attendees", ["eventId"]);
+    await queryInterface.addIndex("order_attendees", ["orderLineId", "attendeeIndex"], { unique: true });
+
     // --- registrations ---
     await queryInterface.createTable("registrations", {
       id: uuid,
       eventId: { type: Sequelize.UUID, allowNull: false, references: { model: "events", key: "id" }, onUpdate: "CASCADE", onDelete: "CASCADE" },
       orderId: { type: Sequelize.UUID, allowNull: false, references: { model: "orders", key: "id" }, onUpdate: "CASCADE", onDelete: "CASCADE" },
       orderLineId: { type: Sequelize.UUID, allowNull: false, references: { model: "order_lines", key: "id" }, onUpdate: "CASCADE", onDelete: "CASCADE" },
+      orderAttendeeId: { type: Sequelize.UUID, allowNull: false, references: { model: "order_attendees", key: "id" }, onUpdate: "CASCADE", onDelete: "CASCADE" },
       userId: { type: Sequelize.UUID, allowNull: true, references: { model: "users", key: "id" }, onUpdate: "CASCADE", onDelete: "SET NULL" },
       email: { type: Sequelize.STRING, allowNull: false },
       forename: { type: Sequelize.STRING, allowNull: true },
@@ -375,7 +394,7 @@ module.exports = {
     await queryInterface.addIndex("registrations", ["eventId"]);
     await queryInterface.addIndex("registrations", ["orderId"]);
     await queryInterface.addIndex("registrations", ["orderLineId"]);
-    await queryInterface.addIndex("registrations", ["eventId", "orderLineId"], { unique: true });
+    await queryInterface.addIndex("registrations", ["orderAttendeeId"], { unique: true });
 
     // --- transactions ---
     await queryInterface.createTable("transactions", {
@@ -390,6 +409,37 @@ module.exports = {
     });
     await queryInterface.addIndex("transactions", ["orderId"]);
     await queryInterface.addIndex("transactions", ["gatewayReference"], { name: "transactions_gateway_reference" });
+
+    // --- refund_transactions ---
+    await queryInterface.createTable("refund_transactions", {
+      id: uuid,
+      orderId: { type: Sequelize.UUID, allowNull: false, references: { model: "orders", key: "id" }, onUpdate: "CASCADE", onDelete: "CASCADE" },
+      refundRequestId: { type: Sequelize.UUID, allowNull: true },
+      paymentTransactionId: { type: Sequelize.UUID, allowNull: true, references: { model: "transactions", key: "id" }, onUpdate: "CASCADE", onDelete: "SET NULL" },
+      stripeRefundId: { type: Sequelize.STRING, allowNull: true },
+      paymentIntentId: { type: Sequelize.STRING, allowNull: true },
+      amount: { type: Sequelize.DECIMAL(10, 2), allowNull: false },
+      currency: { type: Sequelize.STRING, allowNull: false, defaultValue: "EUR" },
+      status: { type: Sequelize.ENUM("pending", "succeeded", "failed", "cancelled"), allowNull: false, defaultValue: "pending" },
+      scopeType: { type: Sequelize.ENUM("full_order", "line_quantity", "event_attendee"), allowNull: false, defaultValue: "full_order" },
+      orderLineId: { type: Sequelize.UUID, allowNull: true, references: { model: "order_lines", key: "id" }, onUpdate: "CASCADE", onDelete: "SET NULL" },
+      registrationId: { type: Sequelize.UUID, allowNull: true, references: { model: "registrations", key: "id" }, onUpdate: "CASCADE", onDelete: "SET NULL" },
+      orderAttendeeId: { type: Sequelize.UUID, allowNull: true, references: { model: "order_attendees", key: "id" }, onUpdate: "CASCADE", onDelete: "SET NULL" },
+      refundedQuantity: { type: Sequelize.INTEGER, allowNull: true },
+      reason: { type: Sequelize.TEXT, allowNull: true },
+      metadata: { type: Sequelize.TEXT, allowNull: true },
+      createdByUserId: { type: Sequelize.UUID, allowNull: true, references: { model: "users", key: "id" }, onUpdate: "CASCADE", onDelete: "SET NULL" },
+      processedAt: { type: Sequelize.DATE, allowNull: true },
+      ...ts,
+    });
+    await queryInterface.addIndex("refund_transactions", ["orderId"]);
+    await queryInterface.addIndex("refund_transactions", ["status"]);
+    await queryInterface.addIndex("refund_transactions", ["stripeRefundId"], { unique: true });
+    await queryInterface.addIndex("refund_transactions", ["refundRequestId"]);
+    await queryInterface.addIndex("refund_transactions", ["paymentTransactionId"]);
+    await queryInterface.addIndex("refund_transactions", ["orderLineId"]);
+    await queryInterface.addIndex("refund_transactions", ["registrationId"]);
+    await queryInterface.addIndex("refund_transactions", ["orderAttendeeId"]);
 
     // --- refund_requests ---
     await queryInterface.createTable("refund_requests", {
@@ -406,6 +456,14 @@ module.exports = {
     await queryInterface.addIndex("refund_requests", ["orderId"]);
     await queryInterface.addIndex("refund_requests", ["status"]);
     await queryInterface.addIndex("refund_requests", ["requestedByUserId"]);
+    await queryInterface.addConstraint("refund_transactions", {
+      fields: ["refundRequestId"],
+      type: "foreign key",
+      references: { table: "refund_requests", field: "id" },
+      onUpdate: "CASCADE",
+      onDelete: "SET NULL",
+      name: "refund_transactions_refund_request_id_fkey",
+    });
 
     // --- payment_methods ---
     await queryInterface.createTable("payment_methods", {
@@ -433,9 +491,11 @@ module.exports = {
     // Drop in reverse dependency order
     await queryInterface.dropTable("processed_stripe_events");
     await queryInterface.dropTable("payment_methods");
+    await queryInterface.dropTable("refund_transactions");
     await queryInterface.dropTable("refund_requests");
     await queryInterface.dropTable("transactions");
     await queryInterface.dropTable("registrations");
+    await queryInterface.dropTable("order_attendees");
     await queryInterface.dropTable("order_lines");
     await queryInterface.dropTable("cart_lines");
     await queryInterface.dropTable("event_meetings");

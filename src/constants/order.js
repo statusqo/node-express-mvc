@@ -3,7 +3,7 @@
  * Used by Order model, order.repo, order.service, and controllers.
  */
 
-const PAYMENT_STATUS_LIST = ["pending", "paid", "failed", "refunded", "voided"];
+const PAYMENT_STATUS_LIST = ["pending", "paid", "failed", "partially_refunded", "refunded", "voided"];
 const FULFILLMENT_STATUS_LIST = ["pending", "processing", "shipped", "delivered", "refund_requested", "refunded", "cancelled", "returned"];
 const ORDER_SOURCE_LIST = ["cart", "event"];
 

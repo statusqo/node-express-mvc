@@ -20,13 +20,12 @@ const orderRepo = require("../repos/order.repo");
 const orderLineRepo = require("../repos/orderLine.repo");
 const userRepo = require("../repos/user.repo");
 const transactionRepo = require("../repos/transaction.repo");
+const refundTransactionRepo = require("../repos/refundTransaction.repo");
 const logger = require("../config/logger");
 
 const { normalizeError, toError } = require("./errors");
 const { PAYMENT_STATUS } = require("../constants/order");
-const registrationRepo = require("../repos/registration.repo");
-const eventMeetingRepo = require("../repos/eventMeeting.repo");
-const { getMeetingProvider } = require("./meeting.interface");
+const { REFUND_TRANSACTION_STATUS } = require("../constants/refundTransaction");
 
 const GATEWAY_NAME = "stripe";
 const TIMEOUT_MS = 30000;
@@ -752,53 +751,57 @@ async function handleWebhook(event) {
           break;
         }
         const order = orders[0];
-
-        // Idempotency: already fully processed (e.g. webhook delivered twice).
-        if (order.paymentStatus === PAYMENT_STATUS.REFUNDED) {
-          logger.info("charge.refunded: order already marked refunded, skipping", { orderId: order.id });
-          break;
-        }
-
-        // Update the matching transaction to refunded.
-        const transactions = await transactionRepo.findByOrder(order.id);
-        const successTx = transactions.find(
-          (t) => t.gatewayReference === paymentIntentId && t.status === "success"
-        );
-        if (successTx) {
-          await transactionRepo.update(successTx.id, { status: "refunded" });
-        }
-
-        // Mark the order as refunded — this is the single place that performs this transition.
-        await orderRepo.update(order.id, { paymentStatus: "refunded", fulfillmentStatus: "refunded" });
-
-        // Restore variant quantities.
-        await orderService.restoreVariantQuantitiesForOrder(order.id);
-
-        // Remove Zoom registrants (idempotent — 404 means already removed) and soft-delete registrations.
-        const registrations = await registrationRepo.findAllByOrderId(order.id);
-        const provider = getMeetingProvider();
-        for (const reg of registrations) {
-          if (provider && reg.zoomRegistrantId) {
-            const meeting = await eventMeetingRepo.findByEventId(reg.eventId);
-            if (meeting) {
-              try {
-                const meetingPlain = meeting.get ? meeting.get({ plain: true }) : meeting;
-                await provider.removeRegistrant(meetingPlain, reg.zoomRegistrantId);
-                logger.info("charge.refunded: Zoom registrant removed", { registrationId: reg.id, orderId: order.id });
-              } catch (zoomErr) {
-                logger.warn("charge.refunded: Zoom removal failed (non-fatal)", {
-                  registrationId: reg.id,
-                  orderId: order.id,
-                  error: zoomErr.message,
-                });
-              }
-            }
+        const refunds = (charge.refunds && Array.isArray(charge.refunds.data)) ? charge.refunds.data : [];
+        for (const refund of refunds) {
+          if (!refund || !refund.id) continue;
+          const refundTx = await refundTransactionRepo.findByStripeRefundId(refund.id);
+          if (!refundTx) {
+            logger.warn("charge.refunded: unknown refund id, skipping side effects", { orderId: order.id, refundId: refund.id });
+            continue;
           }
-          await registrationRepo.destroy(reg.id);
-          logger.info("charge.refunded: registration soft-deleted", { registrationId: reg.id, orderId: order.id });
+          const mappedStatus =
+            refund.status === "succeeded"
+              ? REFUND_TRANSACTION_STATUS.SUCCEEDED
+              : refund.status === "failed"
+                ? REFUND_TRANSACTION_STATUS.FAILED
+                : refund.status === "canceled"
+                  ? REFUND_TRANSACTION_STATUS.CANCELLED
+                  : REFUND_TRANSACTION_STATUS.PENDING;
+          await refundTransactionRepo.update(refundTx.id, {
+            status: mappedStatus,
+            metadata: JSON.stringify({ stripeStatus: refund.status }),
+          });
+          if (mappedStatus === REFUND_TRANSACTION_STATUS.SUCCEEDED) {
+            await orderService.applyRefundTransactionEffects(refundTx.id);
+          }
         }
+        await orderService.recomputeOrderPaymentStatusByRefunds(order.id);
+        logger.info("charge.refunded: refund reconciliation complete", { orderId: order.id });
+        break;
+      }
 
-        logger.info("charge.refunded: refund finalized", { orderId: order.id });
+      case "refund.updated": {
+        const refund = event.data.object;
+        if (!refund || !refund.id) break;
+        const refundTx = await refundTransactionRepo.findByStripeRefundId(refund.id);
+        if (!refundTx) break;
+        const mappedStatus =
+          refund.status === "succeeded"
+            ? REFUND_TRANSACTION_STATUS.SUCCEEDED
+            : refund.status === "failed"
+              ? REFUND_TRANSACTION_STATUS.FAILED
+              : refund.status === "canceled"
+                ? REFUND_TRANSACTION_STATUS.CANCELLED
+                : REFUND_TRANSACTION_STATUS.PENDING;
+        await refundTransactionRepo.update(refundTx.id, {
+          status: mappedStatus,
+          metadata: JSON.stringify({ stripeStatus: refund.status }),
+        });
+        if (mappedStatus === REFUND_TRANSACTION_STATUS.SUCCEEDED) {
+          await orderService.applyRefundTransactionEffects(refundTx.id);
+        } else if (mappedStatus !== REFUND_TRANSACTION_STATUS.PENDING) {
+          await orderService.recomputeOrderPaymentStatusByRefunds(refundTx.orderId);
+        }
         break;
       }
 
@@ -876,16 +879,34 @@ async function handleWebhook(event) {
   }
 }
 
-async function createRefund(paymentIntentId) {
+async function createRefund(input) {
   if (!stripe) {
     const err = toError(normalizeError(new Error("Stripe is not configured."), GATEWAY_NAME));
     err.status = 500;
     throw err;
   }
   const start = Date.now();
-  logger.info("Stripe: initiating refund", { paymentIntentIdLast4: safeId(paymentIntentId) });
+  const paymentIntentId = typeof input === "string" ? input : input && input.paymentIntentId;
+  const amountMinor = typeof input === "object" && input ? input.amountMinor : null;
+  const reason = typeof input === "object" && input ? input.reason : null;
+  const metadata = typeof input === "object" && input ? input.metadata : null;
+  const idempotencyKey = typeof input === "object" && input ? input.idempotencyKey : null;
+  if (!paymentIntentId) {
+    const err = new Error("Missing paymentIntentId for refund.");
+    err.status = 400;
+    throw err;
+  }
+  logger.info("Stripe: initiating refund", { paymentIntentIdLast4: safeId(paymentIntentId), amountMinor: amountMinor || undefined });
   try {
-    const refund = await withTimeout(stripe.refunds.create({ payment_intent: paymentIntentId }));
+    const params = { payment_intent: paymentIntentId };
+    if (Number.isInteger(amountMinor) && amountMinor > 0) params.amount = amountMinor;
+    if (reason) params.reason = reason;
+    if (metadata && typeof metadata === "object") params.metadata = metadata;
+    const refund = await withTimeout(
+      idempotencyKey
+        ? stripe.refunds.create(params, { idempotencyKey })
+        : stripe.refunds.create(params)
+    );
     logger.info("Stripe: refund created", {
       paymentIntentIdLast4: safeId(paymentIntentId),
       refundId: refund.id,

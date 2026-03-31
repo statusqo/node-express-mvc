@@ -17,7 +17,7 @@ block content
 
         //- ── Event summary card ───────────────────────────────────────
         .da-panel(style='margin-bottom: 1.5rem')
-            +eventSummaryCard(event, registrants ? registrants.length : 0)
+            +eventSummaryCard(event, paidRegistrantCount != null ? paidRegistrantCount : 0)
 
         //- ── Registrants table ───────────────────────────────────────
         .da-panel

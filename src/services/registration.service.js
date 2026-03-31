@@ -2,10 +2,17 @@ const registrationRepo = require("../repos/registration.repo");
 const eventRepo = require("../repos/event.repo");
 const eventMeetingRepo = require("../repos/eventMeeting.repo");
 const orderRepo = require("../repos/order.repo");
+const orderLineRepo = require("../repos/orderLine.repo");
+const refundTransactionRepo = require("../repos/refundTransaction.repo");
 const orderService = require("./order.service");
+const stripeGateway = require("../gateways/stripe.gateway");
 const logger = require("../config/logger");
 const { getMeetingProvider } = require("../gateways/meeting.interface");
-const { PAYMENT_STATUS } = require("../constants/order");
+const { PAYMENT_STATUS, FULFILLMENT_STATUS } = require("../constants/order");
+const { TRANSACTION_STATUS } = require("../constants/transaction");
+const { REFUND_TRANSACTION_SCOPE, REFUND_TRANSACTION_STATUS } = require("../constants/refundTransaction");
+
+const MONEY_EPS = 0.0001;
 
 module.exports = {
   /**
@@ -17,6 +24,15 @@ module.exports = {
   async findRegistrantsForEvent(eventId) {
     const rows = await registrationRepo.findAllByEventIdWithDetails(eventId);
     return (rows || []).map((row) => (row.get ? row.get({ plain: true }) : row));
+  },
+
+  /**
+   * Count event registrants whose orders are paid or partially refunded.
+   * @param {string} eventId
+   * @returns {Promise<number>}
+   */
+  async countPaidRegistrantsForEvent(eventId) {
+    return await registrationRepo.countPaidByEventId(eventId);
   },
 
   /**
@@ -75,26 +91,96 @@ module.exports = {
 
     // Step 2: Handle the associated order.
     const order = registration.Order;
+    let handledByRefundTransaction = false;
     if (order) {
-      if (order.paymentStatus === PAYMENT_STATUS.PAID) {
-        // refundOrderForEventCancellation handles:
-        //   - paid orders with stripePaymentIntentId → Stripe refund + transaction update + seat restore
-        //   - paid orders without PI (free €0 invoice) → just mark refunded + seat restore
-        const result = await orderService.refundOrderForEventCancellation(order.id);
-        if (!result.refunded) {
-          throw new Error(result.error || "Could not refund order.");
+      if (orderService.isPaymentStatusRefundable(order.paymentStatus)) {
+        if (!order.stripePaymentIntentId) {
+          throw new Error("Order has no payment intent; cannot issue a seat refund.");
         }
-        logger.info("cancelRegistration: order refunded", { registrationId, orderId: order.id });
+        const orderLine = await orderLineRepo.findById(registration.orderLineId);
+        if (!orderLine) {
+          throw new Error("Order line not found for this registration.");
+        }
+        const refundAmount = Number(orderLine.price) || 0;
+        if (refundAmount <= 0) {
+          throw new Error("Invalid refund amount for this registration.");
+        }
+        const remainingRefundable = await orderService.getRemainingRefundableAmount(order.id);
+        if (remainingRefundable === null || remainingRefundable + MONEY_EPS < refundAmount) {
+          throw new Error("Refund amount exceeds remaining refundable balance for this order.");
+        }
+        const transactions = await orderService.getTransactionsForOrder(order.id);
+        const successTx = transactions.find(
+          (t) => t.gatewayReference === order.stripePaymentIntentId && t.status === TRANSACTION_STATUS.SUCCESS
+        );
+        const refund = await stripeGateway.createRefund({
+          paymentIntentId: order.stripePaymentIntentId,
+          amountMinor: Math.round(refundAmount * 100),
+          reason: "requested_by_customer",
+          metadata: {
+            orderId: String(order.id),
+            registrationId: String(registration.id),
+            scopeType: REFUND_TRANSACTION_SCOPE.EVENT_ATTENDEE,
+          },
+          idempotencyKey: `registration_refund_${registration.id}`,
+        });
+        const mappedStatus =
+          refund.status === "succeeded"
+            ? REFUND_TRANSACTION_STATUS.SUCCEEDED
+            : refund.status === "failed"
+              ? REFUND_TRANSACTION_STATUS.FAILED
+              : refund.status === "canceled"
+                ? REFUND_TRANSACTION_STATUS.CANCELLED
+                : REFUND_TRANSACTION_STATUS.PENDING;
+        const refundMeta = JSON.stringify({
+          stripeStatus: refund.status,
+          zoomRemovedBeforeRefund: true,
+        });
+        let refundTx = await refundTransactionRepo.findByStripeRefundId(refund.id);
+        if (!refundTx) {
+          refundTx = await refundTransactionRepo.create({
+            orderId: order.id,
+            paymentTransactionId: successTx ? successTx.id : null,
+            stripeRefundId: refund.id,
+            paymentIntentId: order.stripePaymentIntentId,
+            amount: refundAmount,
+            currency: order.currency,
+            status: mappedStatus,
+            scopeType: REFUND_TRANSACTION_SCOPE.EVENT_ATTENDEE,
+            orderLineId: registration.orderLineId,
+            registrationId: registration.id,
+            orderAttendeeId: registration.orderAttendeeId || null,
+            refundedQuantity: 1,
+            reason: "Admin cancelled event registrant",
+            metadata: refundMeta,
+          });
+        } else {
+          await refundTransactionRepo.update(refundTx.id, {
+            status: mappedStatus,
+            metadata: refundMeta,
+          });
+        }
+        if (refund.status !== "succeeded") {
+          throw new Error("Refund is pending. Please retry in a moment.");
+        }
+        await orderService.applyRefundTransactionEffects(refundTx.id);
+        handledByRefundTransaction = true;
+        logger.info("cancelRegistration: seat refund completed", { registrationId, orderId: order.id, refundId: refund.id });
       } else if (order.paymentStatus === PAYMENT_STATUS.PENDING) {
-        await orderRepo.update(order.id, { paymentStatus: "cancelled", fulfillmentStatus: "cancelled" });
+        await orderRepo.update(order.id, {
+          paymentStatus: PAYMENT_STATUS.VOIDED,
+          fulfillmentStatus: FULFILLMENT_STATUS.CANCELLED,
+        });
         logger.info("cancelRegistration: pending order cancelled", { registrationId, orderId: order.id });
       }
       // Already refunded/cancelled — proceed without further financial action.
     }
 
     // Step 3: Soft-delete the registration.
-    await registrationRepo.destroy(registrationId);
-    logger.info("cancelRegistration: registration soft-deleted", { registrationId, eventId });
+    if (!handledByRefundTransaction) {
+      await registrationRepo.destroy(registrationId);
+      logger.info("cancelRegistration: registration soft-deleted", { registrationId, eventId });
+    }
     return { cancelled: true };
   },
 };

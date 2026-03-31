@@ -1,19 +1,149 @@
 const { sequelize } = require("../db");
 const logger = require("../config/logger");
 const orderRepo = require("../repos/order.repo");
+const orderLineRepo = require("../repos/orderLine.repo");
 const cartRepo = require("../repos/cart.repo");
 const productVariantRepo = require("../repos/productVariant.repo");
 const eventRepo = require("../repos/event.repo");
+const orderAttendeeRepo = require("../repos/orderAttendee.repo");
 const userRepo = require("../repos/user.repo");
 const transactionRepo = require("../repos/transaction.repo");
+const refundTransactionRepo = require("../repos/refundTransaction.repo");
 const registrationRepo = require("../repos/registration.repo");
 const eventMeetingRepo = require("../repos/eventMeeting.repo");
 const { PAYMENT_STATUS, FULFILLMENT_STATUS, FULFILLMENT_STATUS_LIST, TRANSACTION_STATUS, REGISTRATION_STATUS, ORDER_SOURCE } = require("../constants");
+const { REFUND_TRANSACTION_STATUS, REFUND_TRANSACTION_SCOPE } = require("../constants/refundTransaction");
 const { getMeetingProvider } = require("../gateways/meeting.interface");
 const emailService = require("./email.service");
 // stripeGateway is required lazily to avoid circular dependency with stripe.gateway
 
 const { DEFAULT_CURRENCY } = require("../config/constants");
+
+function normalizePerson(value) {
+  return value && String(value).trim() ? String(value).trim() : null;
+}
+
+function toAttendeeRowsForVariantEntry(entry) {
+  if (!entry || !Array.isArray(entry.attendees)) return [];
+  return entry.attendees
+    .map((a) => ({
+      email: a && a.email ? String(a.email).trim().toLowerCase() : "",
+      forename: normalizePerson(a?.forename),
+      surname: normalizePerson(a?.surname),
+    }))
+    .filter((a) => a.email);
+}
+
+function buildAttendeeMapFromOpts(opts = {}) {
+  const map = new Map();
+  const raw = Array.isArray(opts.attendees) ? opts.attendees : [];
+  for (const entry of raw) {
+    const productVariantId = entry && entry.productVariantId ? String(entry.productVariantId).trim() : "";
+    if (!productVariantId) continue;
+    map.set(productVariantId, toAttendeeRowsForVariantEntry(entry));
+  }
+  return map;
+}
+
+async function createOrderAttendeesForLine({ orderId, orderLineId, eventId, orderUserId, personType, quantity, fallbackContact, selectedAttendees, transaction }) {
+  const qty = Number(quantity) || 1;
+  const legalOrder = personType === "legal";
+  const rows = [];
+  if (legalOrder) {
+    if (!Array.isArray(selectedAttendees) || selectedAttendees.length !== qty) {
+      const err = new Error("Attendee details are required for each reserved event seat.");
+      err.status = 400;
+      throw err;
+    }
+    for (let i = 0; i < selectedAttendees.length; i++) {
+      const attendee = selectedAttendees[i];
+      if (!attendee || !attendee.email) {
+        const err = new Error("Each attendee must include a valid email address.");
+        err.status = 400;
+        throw err;
+      }
+      rows.push({
+        orderId,
+        orderLineId,
+        eventId,
+        attendeeIndex: i + 1,
+        email: attendee.email,
+        forename: attendee.forename || null,
+        surname: attendee.surname || null,
+        userId: null,
+      });
+    }
+  } else {
+    if (!fallbackContact || !fallbackContact.email) {
+      const err = new Error("Email is required for event registration.");
+      err.status = 400;
+      throw err;
+    }
+    rows.push({
+      orderId,
+      orderLineId,
+      eventId,
+      attendeeIndex: 1,
+      email: fallbackContact.email,
+      forename: fallbackContact.forename || null,
+      surname: fallbackContact.surname || null,
+      userId: orderUserId || null,
+    });
+  }
+  await orderAttendeeRepo.bulkCreate(rows, { transaction });
+}
+
+async function createRegistrationsAndSyncZoomForOrder(orderAfter) {
+  const lines = await orderRepo.getLines(orderAfter.id);
+  const provider = getMeetingProvider();
+  for (const line of lines || []) {
+    if (!line.eventId) continue;
+    const attendees = await orderAttendeeRepo.findAllByOrderLineId(line.id);
+    for (const attendee of attendees || []) {
+      const [reg, created] = await registrationRepo.findOrCreateByOrderAttendee(
+        attendee.id,
+        {
+          eventId: line.eventId,
+          orderId: orderAfter.id,
+          orderLineId: line.id,
+          orderAttendeeId: attendee.id,
+          userId: attendee.userId || null,
+          email: attendee.email || "",
+          forename: attendee.forename || null,
+          surname: attendee.surname || null,
+          status: REGISTRATION_STATUS.REGISTERED,
+        }
+      );
+      logger.info("recordRegistration: registration", {
+        registrationId: reg.id,
+        eventId: line.eventId,
+        orderId: orderAfter.id,
+        created,
+      });
+      if (provider && reg && !reg.zoomRegistrantId) {
+        const event = await eventRepo.findById(line.eventId);
+        const meeting = event && event.isOnline ? await eventMeetingRepo.findByEventId(line.eventId) : null;
+        if (event && event.isOnline && meeting) {
+          try {
+            const regPlain = reg.get ? reg.get({ plain: true }) : reg;
+            const meetingPlain = meeting.get ? meeting.get({ plain: true }) : meeting;
+            const { zoomRegistrantId } = await provider.addRegistrant(meetingPlain, regPlain);
+            if (zoomRegistrantId) {
+              await registrationRepo.update(reg.id, { zoomRegistrantId });
+            }
+          } catch (zoomErr) {
+            logger.warn("registrationZoomSync failed (non-fatal)", {
+              registrationId: reg.id,
+              eventId: line.eventId,
+              error: zoomErr.message,
+            });
+          }
+        }
+      }
+    }
+  }
+  return lines;
+}
 
 /**
  * Get cart total for payment (same pricing as createOrderFromCart). Uses ProductPrice from variants.
@@ -140,6 +270,7 @@ async function createOrderFromCart(userId, sessionId, opts = {}) {
   const t = await sequelize.transaction();
   try {
     const order = await orderRepo.create(orderPayload, { transaction: t });
+    const attendeeMapByVariant = buildAttendeeMapFromOpts(opts);
 
     let total = 0;
     for (const line of lines) {
@@ -158,7 +289,25 @@ async function createOrderFromCart(userId, sessionId, opts = {}) {
       total += snapshot.price * qty;
       const eventForVariant = await eventRepo.findByProductVariantId(line.productVariantId, { transaction: t });
       const lineEventId = eventForVariant ? eventForVariant.id : undefined;
-      await orderRepo.createLineFromVariant(order.id, snapshot, qty, { transaction: t, eventId: lineEventId });
+      const orderLine = await orderRepo.createLineFromVariant(order.id, snapshot, qty, { transaction: t, eventId: lineEventId });
+      if (lineEventId) {
+        const selectedAttendees = attendeeMapByVariant.get(String(line.productVariantId)) || [];
+        await createOrderAttendeesForLine({
+          orderId: order.id,
+          orderLineId: orderLine.id,
+          eventId: lineEventId,
+          orderUserId: order.userId,
+          personType,
+          quantity: qty,
+          fallbackContact: {
+            email: order.email ? String(order.email).trim().toLowerCase() : null,
+            forename: order.forename || null,
+            surname: order.surname || null,
+          },
+          selectedAttendees,
+          transaction: t,
+        });
+      }
     }
 
     await order.update({ total }, { transaction: t });
@@ -242,51 +391,7 @@ async function recordPaymentSuccess(transactionId, userIdFromOrder = null) {
       if (cart) await cartRepo.clearLines(cart.id);
     }
 
-    // Create registrations for event order lines (one per eventId + orderLineId)
-    const provider = getMeetingProvider();
-    for (const line of lines || []) {
-      if (!line.eventId) continue;
-      const [reg, created] = await registrationRepo.findOrCreate(
-        { eventId: line.eventId, orderLineId: line.id },
-        {
-          eventId: line.eventId,
-          orderId: orderAfter.id,
-          orderLineId: line.id,
-          userId: orderAfter.userId || null,
-          email: orderAfter.email || "",
-          forename: orderAfter.forename || null,
-          surname: orderAfter.surname || null,
-          status: REGISTRATION_STATUS.REGISTERED,
-        }
-      );
-      logger.info("recordPaymentSuccess: registration", {
-        registrationId: reg.id,
-        eventId: line.eventId,
-        orderId: orderAfter.id,
-        created,
-      });
-      if (provider && reg) {
-        const event = await eventRepo.findById(line.eventId);
-        const meeting = event && event.isOnline ? await eventMeetingRepo.findByEventId(line.eventId) : null;
-        if (event && event.isOnline && meeting) {
-          try {
-            const regPlain = reg.get ? reg.get({ plain: true }) : reg;
-            const meetingPlain = meeting.get ? meeting.get({ plain: true }) : meeting;
-            const { zoomRegistrantId } = await provider.addRegistrant(meetingPlain, regPlain);
-            if (zoomRegistrantId) {
-              await registrationRepo.update(reg.id, { zoomRegistrantId });
-              logger.info("recordPaymentSuccess: Zoom registrant added", { registrationId: reg.id, eventId: line.eventId });
-            }
-          } catch (zoomErr) {
-            logger.warn("recordPaymentSuccess: Zoom registration failed (non-fatal)", {
-              registrationId: reg.id,
-              eventId: line.eventId,
-              error: zoomErr.message,
-            });
-          }
-        }
-      }
-    }
+    await createRegistrationsAndSyncZoomForOrder(orderAfter);
 
     if (emailService.sendOrderConfirmationEmail && emailService.isMailConfigured && emailService.isMailConfigured()) {
       try {
@@ -383,41 +488,7 @@ async function fulfillFreeOrder(orderId) {
       if (cart) await cartRepo.clearLines(cart.id);
     }
 
-    const provider = getMeetingProvider();
-    for (const line of lines || []) {
-      if (!line.eventId) continue;
-      const [reg] = await registrationRepo.findOrCreate(
-        { eventId: line.eventId, orderLineId: line.id },
-        {
-          eventId: line.eventId,
-          orderId: orderAfter.id,
-          orderLineId: line.id,
-          userId: orderAfter.userId || null,
-          email: orderAfter.email || "",
-          forename: orderAfter.forename || null,
-          surname: orderAfter.surname || null,
-          status: REGISTRATION_STATUS.REGISTERED,
-        }
-      );
-      if (provider && reg) {
-        const event = await eventRepo.findById(line.eventId);
-        const meeting = event && event.isOnline ? await eventMeetingRepo.findByEventId(line.eventId) : null;
-        if (event && event.isOnline && meeting) {
-          try {
-            const regPlain = reg.get ? reg.get({ plain: true }) : reg;
-            const meetingPlain = meeting.get ? meeting.get({ plain: true }) : meeting;
-            const { zoomRegistrantId } = await provider.addRegistrant(meetingPlain, regPlain);
-            if (zoomRegistrantId) await registrationRepo.update(reg.id, { zoomRegistrantId });
-          } catch (zoomErr) {
-            logger.warn("fulfillFreeOrder: Zoom registration failed (non-fatal)", {
-              registrationId: reg.id,
-              eventId: line.eventId,
-              error: zoomErr.message,
-            });
-          }
-        }
-      }
-    }
+    await createRegistrationsAndSyncZoomForOrder(orderAfter);
 
     if (emailService.sendOrderConfirmationEmail && emailService.isMailConfigured && emailService.isMailConfigured()) {
       try {
@@ -474,6 +545,148 @@ async function restoreVariantQuantitiesForOrder(orderId) {
   }
 }
 
+function toMoneyNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+const REFUND_ELIGIBLE_PAYMENT_STATUSES = [PAYMENT_STATUS.PAID, PAYMENT_STATUS.PARTIALLY_REFUNDED];
+
+function parseRefundTxMetadata(refundTx) {
+  if (!refundTx || !refundTx.metadata) return {};
+  try {
+    return typeof refundTx.metadata === "string" ? JSON.parse(refundTx.metadata) : refundTx.metadata;
+  } catch (_) {
+    return {};
+  }
+}
+
+async function getSucceededRefundedTotal(orderId) {
+  const rows = await refundTransactionRepo.findAllSucceededByOrderId(orderId);
+  return rows.reduce((acc, row) => acc + toMoneyNumber(row.amount), 0);
+}
+
+/**
+ * Remaining order total that can still be refunded via Stripe (major units).
+ * @param {string} orderId
+ * @returns {Promise<number|null>}
+ */
+async function getRemainingRefundableAmount(orderId) {
+  const order = await orderRepo.findById(orderId);
+  if (!order) return null;
+  const refunded = await getSucceededRefundedTotal(orderId);
+  return Math.max(0, toMoneyNumber(order.total) - refunded);
+}
+
+function isPaymentStatusRefundable(paymentStatus) {
+  return REFUND_ELIGIBLE_PAYMENT_STATUSES.includes(paymentStatus);
+}
+
+/**
+ * Restore variant stock for each remaining registration row (one increment per seat).
+ * Used for full-order refunds after partial attendee refunds already restored some units.
+ */
+async function restoreVariantQuantitiesForRemainingRegistrations(orderId) {
+  const registrations = await registrationRepo.findAllByOrderId(orderId);
+  const counts = new Map();
+  for (const reg of registrations || []) {
+    const line = await orderLineRepo.findById(reg.orderLineId);
+    if (line && line.productVariantId) {
+      const pid = line.productVariantId;
+      counts.set(pid, (counts.get(pid) || 0) + 1);
+    }
+  }
+  for (const [productVariantId, n] of counts) {
+    if (n > 0) await productVariantRepo.incrementQuantity(productVariantId, n);
+  }
+}
+
+async function recomputeOrderPaymentStatusByRefunds(orderId) {
+  const order = await orderRepo.findById(orderId);
+  if (!order) return null;
+  const refundedRows = await refundTransactionRepo.findAllSucceededByOrderId(orderId);
+  const refundedTotal = refundedRows.reduce((acc, row) => acc + toMoneyNumber(row.amount), 0);
+  const orderTotal = toMoneyNumber(order.total);
+  const epsilon = 0.0001;
+
+  let paymentStatus = PAYMENT_STATUS.PAID;
+  if (refundedTotal > epsilon && refundedTotal + epsilon < orderTotal) {
+    paymentStatus = PAYMENT_STATUS.PARTIALLY_REFUNDED;
+  } else if (refundedTotal + epsilon >= orderTotal && orderTotal > 0) {
+    paymentStatus = PAYMENT_STATUS.REFUNDED;
+  } else if (orderTotal === 0 && refundedTotal > epsilon) {
+    paymentStatus = PAYMENT_STATUS.REFUNDED;
+  }
+
+  const updates = { paymentStatus };
+  if (paymentStatus === PAYMENT_STATUS.REFUNDED) {
+    updates.fulfillmentStatus = FULFILLMENT_STATUS.REFUNDED;
+  }
+  await orderRepo.update(orderId, updates);
+  return await orderRepo.findById(orderId);
+}
+
+async function applyRefundTransactionEffects(refundTxId) {
+  const refundTx = await refundTransactionRepo.findById(refundTxId);
+  if (!refundTx) return { applied: false, error: "Refund transaction not found." };
+  if (refundTx.status !== REFUND_TRANSACTION_STATUS.SUCCEEDED) {
+    return { applied: false, error: "Refund transaction not succeeded." };
+  }
+  if (refundTx.processedAt) return { applied: true };
+
+  const meta = parseRefundTxMetadata(refundTx);
+  const zoomRemovedBeforeRefund = meta.zoomRemovedBeforeRefund === true;
+
+  if (refundTx.scopeType === REFUND_TRANSACTION_SCOPE.FULL_ORDER) {
+    if (refundTx.paymentTransactionId) {
+      await transactionRepo.update(refundTx.paymentTransactionId, { status: TRANSACTION_STATUS.REFUNDED });
+    }
+    await restoreVariantQuantitiesForRemainingRegistrations(refundTx.orderId);
+    const registrations = await registrationRepo.findAllByOrderId(refundTx.orderId);
+    const provider = getMeetingProvider();
+    for (const reg of registrations || []) {
+      if (!zoomRemovedBeforeRefund && provider && reg.zoomRegistrantId) {
+        const meeting = await eventMeetingRepo.findByEventId(reg.eventId);
+        if (meeting) {
+          try {
+            const meetingPlain = meeting.get ? meeting.get({ plain: true }) : meeting;
+            await provider.removeRegistrant(meetingPlain, reg.zoomRegistrantId);
+          } catch (_) {}
+        }
+      }
+      await registrationRepo.destroy(reg.id);
+    }
+  } else if (refundTx.scopeType === REFUND_TRANSACTION_SCOPE.LINE_QUANTITY) {
+    const line = refundTx.orderLineId ? await orderLineRepo.findById(refundTx.orderLineId) : null;
+    if (line && line.productVariantId && refundTx.refundedQuantity > 0) {
+      await productVariantRepo.incrementQuantity(line.productVariantId, Number(refundTx.refundedQuantity));
+    }
+  } else if (refundTx.scopeType === REFUND_TRANSACTION_SCOPE.EVENT_ATTENDEE) {
+    const reg = refundTx.registrationId ? await registrationRepo.findById(refundTx.registrationId) : null;
+    if (reg) {
+      const line = await orderLineRepo.findById(reg.orderLineId);
+      if (line && line.productVariantId) {
+        await productVariantRepo.incrementQuantity(line.productVariantId, 1);
+      }
+      const provider = getMeetingProvider();
+      if (!zoomRemovedBeforeRefund && provider && reg.zoomRegistrantId) {
+        const meeting = await eventMeetingRepo.findByEventId(reg.eventId);
+        if (meeting) {
+          try {
+            const meetingPlain = meeting.get ? meeting.get({ plain: true }) : meeting;
+            await provider.removeRegistrant(meetingPlain, reg.zoomRegistrantId);
+          } catch (_) {}
+        }
+      }
+      await registrationRepo.destroy(reg.id);
+    }
+  }
+
+  await refundTransactionRepo.update(refundTx.id, { processedAt: new Date() });
+  await recomputeOrderPaymentStatusByRefunds(refundTx.orderId);
+  return { applied: true };
+}
+
 /**
  * Full refund for an order (e.g. when admin cancels an event). Updates order, transaction, restores variant quantities.
  * Caller must ensure the order is eligible (e.g. paid order for cancelled event).
@@ -483,20 +696,38 @@ async function restoreVariantQuantitiesForOrder(orderId) {
 async function refundOrderForEventCancellation(orderId) {
   const order = await orderRepo.findById(orderId);
   if (!order) return { refunded: false, error: "Order not found." };
-  if (order.paymentStatus !== PAYMENT_STATUS.PAID) {
-    // Unpaid orders never decremented variant quantity, so nothing to restore.
-    return { refunded: false, error: "Order is not paid." };
+  if (!isPaymentStatusRefundable(order.paymentStatus)) {
+    return { refunded: false, error: "Order is not in a refundable payment state." };
   }
 
-  logger.info("refundOrderForEventCancellation: starting", { orderId, paymentStatus: order.paymentStatus });
+  const remaining = await getRemainingRefundableAmount(orderId);
+  if (remaining === null || remaining <= 0) {
+    return { refunded: false, error: "No refundable amount remaining." };
+  }
 
-  // Always restore seats for any paid order — the event is cancelled regardless of Stripe outcome.
-  await restoreVariantQuantitiesForOrder(order.id);
+  logger.info("refundOrderForEventCancellation: starting", { orderId, paymentStatus: order.paymentStatus, remaining });
 
   const paymentIntentId = order.stripePaymentIntentId;
+  const transactions = await transactionRepo.findByOrder(order.id);
+  const successTx = transactions.find((t) => t.gatewayReference === paymentIntentId && t.status === TRANSACTION_STATUS.SUCCESS);
+  const refundTxBase = {
+    orderId: order.id,
+    paymentTransactionId: successTx ? successTx.id : null,
+    paymentIntentId: paymentIntentId || null,
+    amount: remaining,
+    currency: order.currency,
+    scopeType: REFUND_TRANSACTION_SCOPE.FULL_ORDER,
+    refundedQuantity: null,
+    reason: "Event cancellation refund",
+  };
+
   if (!paymentIntentId) {
-    // Paid without Stripe (cash, manual, legacy) — mark refunded so admin knows, no Stripe call needed.
-    await orderRepo.update(order.id, { paymentStatus: "refunded", fulfillmentStatus: "refunded" });
+    const refundTx = await refundTransactionRepo.create({
+      ...refundTxBase,
+      status: REFUND_TRANSACTION_STATUS.SUCCEEDED,
+      stripeRefundId: null,
+    });
+    await applyRefundTransactionEffects(refundTx.id);
     logger.info("refundOrderForEventCancellation: marked refunded (no Stripe PI)", { orderId });
     return { refunded: true };
   }
@@ -504,19 +735,36 @@ async function refundOrderForEventCancellation(orderId) {
   try {
     // require stripe gateway here to break circular dependency
     const stripeGateway = require("../gateways/stripe.gateway");
-    await stripeGateway.createRefund(paymentIntentId);
+    const idempotencyKey = `event_cancel_refund_${order.id}_${Math.round(remaining * 100)}`;
+    const refund = await stripeGateway.createRefund({
+      paymentIntentId,
+      amountMinor: Math.round(remaining * 100),
+      reason: "requested_by_customer",
+      metadata: { orderId: String(order.id), scopeType: REFUND_TRANSACTION_SCOPE.FULL_ORDER },
+      idempotencyKey,
+    });
+    let refundTx = await refundTransactionRepo.findByStripeRefundId(refund.id);
+    const refundMeta = JSON.stringify({ stripeStatus: refund.status });
+    if (!refundTx) {
+      refundTx = await refundTransactionRepo.create({
+        ...refundTxBase,
+        stripeRefundId: refund.id,
+        status: refund.status === "succeeded" ? REFUND_TRANSACTION_STATUS.SUCCEEDED : REFUND_TRANSACTION_STATUS.PENDING,
+        metadata: refundMeta,
+      });
+    } else {
+      await refundTransactionRepo.update(refundTx.id, {
+        status: refund.status === "succeeded" ? REFUND_TRANSACTION_STATUS.SUCCEEDED : REFUND_TRANSACTION_STATUS.PENDING,
+        metadata: refundMeta,
+      });
+    }
+    if (refund.status === "succeeded") {
+      await applyRefundTransactionEffects(refundTx.id);
+    }
   } catch (e) {
-    // Stripe refund failed — seats are already freed but the financial refund is pending.
-    // Admin must process the refund manually via Stripe dashboard.
     logger.error("refundOrderForEventCancellation: Stripe refund failed", { orderId, error: e.message });
     return { refunded: false, error: e.message || "Stripe refund failed." };
   }
-  const transactions = await transactionRepo.findByOrder(order.id);
-  const successTx = transactions.find((t) => t.gatewayReference === paymentIntentId && t.status === TRANSACTION_STATUS.SUCCESS);
-  if (successTx) {
-    await transactionRepo.update(successTx.id, { status: TRANSACTION_STATUS.REFUNDED });
-  }
-  await orderRepo.update(order.id, { paymentStatus: "refunded", fulfillmentStatus: "refunded" });
   logger.info("refundOrderForEventCancellation: refund complete", { orderId });
   return { refunded: true };
 }
@@ -644,7 +892,26 @@ async function createOrderFromEvent(eventId, userId, sessionId, opts = {}) {
       throw err;
     }
     const order = await orderRepo.create(orderPayload, { transaction: t });
-    await orderRepo.createLineFromVariant(order.id, snapshot, 1, { transaction: t, eventId });
+    const orderLine = await orderRepo.createLineFromVariant(order.id, snapshot, 1, { transaction: t, eventId });
+    await createOrderAttendeesForLine({
+      orderId: order.id,
+      orderLineId: orderLine.id,
+      eventId,
+      orderUserId: order.userId,
+      personType,
+      quantity: 1,
+      fallbackContact: {
+        email: order.email ? String(order.email).trim().toLowerCase() : null,
+        forename: order.forename || null,
+        surname: order.surname || null,
+      },
+      selectedAttendees: [{
+        email: order.email ? String(order.email).trim().toLowerCase() : "",
+        forename: order.forename || null,
+        surname: order.surname || null,
+      }],
+      transaction: t,
+    });
     await t.commit();
     return order;
   } catch (e) {
@@ -773,6 +1040,11 @@ module.exports = {
   fulfillFreeOrder,
   recordPaymentFailed,
   restoreVariantQuantitiesForOrder,
+  getRemainingRefundableAmount,
+  getSucceededRefundedTotal,
+  isPaymentStatusRefundable,
+  recomputeOrderPaymentStatusByRefunds,
+  applyRefundTransactionEffects,
   refundOrderForEventCancellation,
   cancelOrder,
   getOrderById,

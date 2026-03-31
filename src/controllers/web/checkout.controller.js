@@ -120,6 +120,7 @@ module.exports = {
       personType: req.user?.personType || 'private',
       companyName: req.user?.companyName || null,
       companyOib: req.user?.companyOib || null,
+      attendees: parsed.data.attendees || [],
       clearCart: false,
     };
 

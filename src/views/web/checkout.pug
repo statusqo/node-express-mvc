@@ -36,6 +36,7 @@ block content
       p(style="margin:0.5rem 0 0; font-size:0.9rem; color:#555") You will be charged exactly this amount when you click Place order.
 
     form#checkoutForm(action="/checkout" method="post" data-stripe-key=(stripePublishableKey || '') data-user-logged-in=(user ? '1' : '') data-requires-address=(requiresAddress ? '1' : '0'))
+      input#attendeesPayload(type="hidden" name="attendees" value="")
       if user
         p(style="margin-bottom:1rem; padding:0.75rem; background:#e8f4fd; border-radius:6px; font-size:0.95rem")
           | You can
@@ -52,6 +53,23 @@ block content
             strong OIB:
             |  #{user.companyOib || '—'}
           p(style="margin:0.5rem 0 0; font-size:0.85rem; color:#555") Your R1 receipt will be issued to the above company. To change company details, update your account profile.
+        - const eventLines = (lines || []).filter((line) => line && line.ProductVariant && line.ProductVariant.Event && line.ProductVariant.Event.id)
+        if eventLines.length > 0
+          section(style="margin-bottom:1.25rem; padding:0.75rem; border:1px solid #d0d0d0; border-radius:6px; background:#fff")
+            h3(style="margin:0 0 0.75rem 0; font-size:1rem") Event attendees
+            p(style="margin:0 0 0.75rem 0; font-size:0.9rem; color:#555") Add one attendee for each reserved event seat.
+            each line in eventLines
+              - const variant = line.ProductVariant || {}
+              - const variantId = line.productVariantId || variant.id
+              - const lineTitle = line.title || (variant.Product && variant.Product.title) || variant.title || "Event session"
+              - const lineQty = Number(line.quantity) || 1
+              section(data-attendee-group="1" data-product-variant-id=variantId style="margin:0 0 0.75rem 0; padding:0.75rem; border:1px solid #ececec; border-radius:6px")
+                h4(style="margin:0 0 0.5rem 0; font-size:0.95rem")= lineTitle + " (" + lineQty + " seat" + (lineQty > 1 ? "s" : "") + ")"
+                - for (let i = 0; i < lineQty; i++)
+                  .attendee-row(style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:0.5rem; margin-bottom:0.5rem" data-attendee-row="1" data-attendee-index=(i + 1))
+                    input(type="text" placeholder="Forename" data-attendee-forename="1" value=(i === 0 && user && user.forename ? user.forename : ""))
+                    input(type="text" placeholder="Surname" data-attendee-surname="1" value=(i === 0 && user && user.surname ? user.surname : ""))
+                    input(type="email" placeholder="Email" data-attendee-email="1" value=(i === 0 && user && user.email ? user.email : "") required)
 
       h3(style="margin-top:1rem") Contact &amp; delivery details
       div(style="margin-bottom:0.75rem")

@@ -1,16 +1,22 @@
 const refundRequestRepo = require("../repos/refundRequest.repo");
 const orderRepo = require("../repos/order.repo");
+const transactionRepo = require("../repos/transaction.repo");
 const stripeGateway = require("../gateways/stripe.gateway");
 const logger = require("../config/logger");
 const registrationRepo = require("../repos/registration.repo");
 const eventMeetingRepo = require("../repos/eventMeeting.repo");
-const { PAYMENT_STATUS } = require("../constants/order");
+const refundTransactionRepo = require("../repos/refundTransaction.repo");
+const orderService = require("./order.service");
+const { TRANSACTION_STATUS } = require("../constants/transaction");
 const { REFUND_REQUEST_STATUS } = require("../constants/refundRequest");
+const { REFUND_TRANSACTION_STATUS, REFUND_TRANSACTION_SCOPE } = require("../constants/refundTransaction");
 const { getMeetingProvider } = require("../gateways/meeting.interface");
 
 const PENDING = REFUND_REQUEST_STATUS.PENDING;
 const APPROVED = REFUND_REQUEST_STATUS.APPROVED;
 const REJECTED = REFUND_REQUEST_STATUS.REJECTED;
+
+const MONEY_EPS = 0.0001;
 
 /**
  * Create a refund request for an order. Caller must ensure order belongs to user/session.
@@ -26,8 +32,14 @@ async function createRefundRequest(orderId, requestedByUserId, reason = null) {
     err.status = 404;
     throw err;
   }
-  if (order.paymentStatus !== PAYMENT_STATUS.PAID) {
-    const err = new Error("Only paid orders can request a refund.");
+  if (!orderService.isPaymentStatusRefundable(order.paymentStatus)) {
+    const err = new Error("Only paid or partially refunded orders can request a refund.");
+    err.status = 400;
+    throw err;
+  }
+  const remaining = await orderService.getRemainingRefundableAmount(orderId);
+  if (remaining === null || remaining <= MONEY_EPS) {
+    const err = new Error("No refundable balance remains for this order.");
     err.status = 400;
     throw err;
   }
@@ -39,12 +51,6 @@ async function createRefundRequest(orderId, requestedByUserId, reason = null) {
   const existingPending = await refundRequestRepo.findPendingByOrder(orderId);
   if (existingPending) {
     const err = new Error("A refund request is already pending for this order.");
-    err.status = 400;
-    throw err;
-  }
-  const existingApproved = await refundRequestRepo.findByOrder(orderId);
-  if (existingApproved.some((r) => r.status === APPROVED)) {
-    const err = new Error("This order has already received a refund (full or partial).");
     err.status = 400;
     throw err;
   }
@@ -126,8 +132,15 @@ async function approveRefundRequest(requestId, processedByUserId) {
     err.status = 404;
     throw err;
   }
-  if (order.paymentStatus !== PAYMENT_STATUS.PAID) {
-    const err = new Error("Order is not paid; cannot refund.");
+  if (!orderService.isPaymentStatusRefundable(order.paymentStatus)) {
+    const err = new Error("Order is not in a refundable payment state.");
+    err.status = 400;
+    throw err;
+  }
+
+  const remaining = await orderService.getRemainingRefundableAmount(order.id);
+  if (remaining === null || remaining <= MONEY_EPS) {
+    const err = new Error("No refundable balance remains for this order.");
     err.status = 400;
     throw err;
   }
@@ -139,7 +152,7 @@ async function approveRefundRequest(requestId, processedByUserId) {
     throw err;
   }
 
-  logger.info("Refund approval started", { requestId, orderId: order.id, paymentIntentId });
+  logger.info("Refund approval started", { requestId, orderId: order.id, paymentIntentId, remaining });
 
   // Step 1: Remove registrants from Zoom before charging Stripe.
   // Non-404 errors abort the entire approval — customer must not be refunded while still having Zoom access.
@@ -163,7 +176,8 @@ async function approveRefundRequest(requestId, processedByUserId) {
       continue;
     }
     try {
-      await provider.removeRegistrant(meeting, reg.zoomRegistrantId);
+      const meetingPlain = meeting.get ? meeting.get({ plain: true }) : meeting;
+      await provider.removeRegistrant(meetingPlain, reg.zoomRegistrantId);
       logger.info("Zoom registrant removed for refund approval", { orderId: order.id, registrantId: reg.zoomRegistrantId });
     } catch (e) {
       if (e.status === 404) {
@@ -176,15 +190,58 @@ async function approveRefundRequest(requestId, processedByUserId) {
     }
   }
 
-  // Step 2: Issue Stripe refund. Throws on failure — Zoom removal already done but idempotent on retry (404).
-  logger.info("Issuing Stripe refund for refund approval", { orderId: order.id, paymentIntentId });
-  const refund = await stripeGateway.createRefund(paymentIntentId);
+  // Step 2: Issue Stripe refund for the remaining balance. Throws on failure — Zoom removal already done; idempotent on retry (404).
+  logger.info("Issuing Stripe refund for refund approval", { orderId: order.id, paymentIntentId, remaining });
+  const transactions = await transactionRepo.findByOrder(order.id);
+  const successTx = transactions.find((t) => t.gatewayReference === paymentIntentId && t.status === TRANSACTION_STATUS.SUCCESS);
+  const refund = await stripeGateway.createRefund({
+    paymentIntentId,
+    amountMinor: Math.round(remaining * 100),
+    reason: "requested_by_customer",
+    metadata: { orderId: String(order.id), refundRequestId: String(requestId), scopeType: REFUND_TRANSACTION_SCOPE.FULL_ORDER },
+    idempotencyKey: `refund_request_${requestId}`,
+  });
+  const mappedStatus =
+    refund.status === "succeeded"
+      ? REFUND_TRANSACTION_STATUS.SUCCEEDED
+      : refund.status === "failed"
+        ? REFUND_TRANSACTION_STATUS.FAILED
+        : refund.status === "canceled"
+          ? REFUND_TRANSACTION_STATUS.CANCELLED
+          : REFUND_TRANSACTION_STATUS.PENDING;
+  const refundMeta = JSON.stringify({
+    stripeStatus: refund.status,
+    zoomRemovedBeforeRefund: true,
+  });
+  let refundTx = await refundTransactionRepo.findByStripeRefundId(refund.id);
+  if (!refundTx) {
+    refundTx = await refundTransactionRepo.create({
+      orderId: order.id,
+      refundRequestId: request.id,
+      paymentTransactionId: successTx ? successTx.id : null,
+      stripeRefundId: refund.id,
+      paymentIntentId,
+      amount: remaining,
+      currency: order.currency,
+      status: mappedStatus,
+      scopeType: REFUND_TRANSACTION_SCOPE.FULL_ORDER,
+      reason: request.reason || null,
+      metadata: refundMeta,
+      createdByUserId: processedByUserId || null,
+    });
+  } else {
+    await refundTransactionRepo.update(refundTx.id, {
+      status: mappedStatus,
+      metadata: refundMeta,
+    });
+  }
+  if (refund.status === "succeeded") {
+    await orderService.applyRefundTransactionEffects(refundTx.id);
+  }
   logger.info("Stripe refund issued", { orderId: order.id, refundId: refund.id, status: refund.status });
 
-  // Step 3: Mark RefundRequest as approved.
-  // Order/Transaction state, quantity restoration, and registration soft-deletes are intentionally
-  // deferred to the `charge.refunded` Stripe webhook, which fires only after money is actually
-  // returned to the customer. This prevents marking an order refunded if Stripe later reports failure.
+  // Step 3: Mark RefundRequest as approved. DB side effects for succeeded refunds run immediately via applyRefundTransactionEffects;
+  // pending/failed refunds are reconciled by Stripe webhooks (charge.refunded / refund.updated).
   await refundRequestRepo.update(requestId, {
     status: APPROVED,
     processedAt: new Date(),
@@ -192,7 +249,7 @@ async function approveRefundRequest(requestId, processedByUserId) {
     stripeRefundId: refund.id,
   });
 
-  logger.info("Refund approval complete — awaiting charge.refunded webhook for DB finalisation", { requestId, orderId: order.id });
+  logger.info("Refund approval complete", { requestId, orderId: order.id, refundStatus: refund.status });
   return await refundRequestRepo.findById(requestId);
 }
 

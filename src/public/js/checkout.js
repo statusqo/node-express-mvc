@@ -55,6 +55,7 @@
     var saveCardHidden = document.getElementById("saveCardHidden");
     var saveCardRow = document.querySelector(".saveCardRow");
     var userLoggedIn = form.getAttribute("data-user-logged-in") === "1";
+    var attendeesPayloadInput = document.getElementById("attendeesPayload");
 
     function syncSaveCardHidden() {
       if (saveCardHidden && saveCardCheckbox) saveCardHidden.value = saveCardCheckbox.checked ? "1" : "0";
@@ -93,6 +94,33 @@
         ev.preventDefault();
         if (sameAsDelivery && sameAsDelivery.checked) copyDeliveryToBilling();
 
+        function collectAttendeesPayload() {
+          var groups = form.querySelectorAll("[data-attendee-group='1']");
+          var payload = [];
+          for (var g = 0; g < groups.length; g++) {
+            var group = groups[g];
+            var productVariantId = (group.getAttribute("data-product-variant-id") || "").trim();
+            if (!productVariantId) continue;
+            var rows = group.querySelectorAll("[data-attendee-row='1']");
+            var attendees = [];
+            for (var r = 0; r < rows.length; r++) {
+              var row = rows[r];
+              var emailEl = row.querySelector("[data-attendee-email='1']");
+              var forenameEl = row.querySelector("[data-attendee-forename='1']");
+              var surnameEl = row.querySelector("[data-attendee-surname='1']");
+              var email = emailEl && emailEl.value ? String(emailEl.value).trim().toLowerCase() : "";
+              var forename = forenameEl && forenameEl.value ? String(forenameEl.value).trim() : "";
+              var surname = surnameEl && surnameEl.value ? String(surnameEl.value).trim() : "";
+              if (!email) {
+                return { error: "Each event attendee must have an email address." };
+              }
+              attendees.push({ email: email, forename: forename, surname: surname });
+            }
+            payload.push({ productVariantId: productVariantId, attendees: attendees });
+          }
+          return { value: payload };
+        }
+
         var useSavedCard = paySavedCard && paySavedCard.checked;
         var savedPaymentMethodSelect = document.getElementById("savedPaymentMethod");
         var selectedPmId = savedPaymentMethodSelect && savedPaymentMethodSelect.value ? String(savedPaymentMethodSelect.value).trim() : "";
@@ -113,9 +141,22 @@
         }
         if (cardErrors) cardErrors.textContent = "";
 
+        var attendeesResult = collectAttendeesPayload();
+        if (attendeesResult.error) {
+          if (cardErrors) cardErrors.textContent = attendeesResult.error;
+          if (placeOrderBtn) {
+            placeOrderBtn.disabled = false;
+            placeOrderBtn.textContent = "Place order";
+          }
+          return;
+        }
+        if (attendeesPayloadInput) {
+          attendeesPayloadInput.value = JSON.stringify(attendeesResult.value || []);
+        }
+
         function buildFormBody() {
           var bodyParams = new URLSearchParams();
-          var fields = ["forename","surname","email","mobile","deliveryLine1","deliveryLine2","deliveryCity","deliveryState","deliveryPostcode","deliveryCountry","billingLine1","billingLine2","billingCity","billingState","billingPostcode","billingCountry","sameAsDelivery","saveCard","paymentMethodId"];
+          var fields = ["forename","surname","email","mobile","deliveryLine1","deliveryLine2","deliveryCity","deliveryState","deliveryPostcode","deliveryCountry","billingLine1","billingLine2","billingCity","billingState","billingPostcode","billingCountry","sameAsDelivery","saveCard","paymentMethodId","attendees"];
           for (var i = 0; i < fields.length; i++) {
             var el = form.querySelector('[name="' + fields[i] + '"]');
             if (el && el.name && (el.value !== undefined)) bodyParams.append(el.name, el.value || "");

@@ -53,12 +53,16 @@ module.exports = {
       return res.redirect((req.adminPrefix || "") + "/events");
     }
 
-    const registrants = await registrationService.findRegistrantsForEvent(eventId);
+    const [registrants, paidRegistrantCount] = await Promise.all([
+      registrationService.findRegistrantsForEvent(eventId),
+      registrationService.countPaidRegistrantsForEvent(eventId),
+    ]);
 
     res.render("admin/events/registrants", {
       title: "Registrants",
       event,
       registrants,
+      paidRegistrantCount,
     });
   },
 };

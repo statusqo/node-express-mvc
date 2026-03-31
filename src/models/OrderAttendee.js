@@ -1,16 +1,11 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../db/client");
-const { REGISTRATION_STATUS_LIST, REGISTRATION_STATUS } = require("../constants/registration");
 
-const Registration = sequelize.define("Registration", {
+const OrderAttendee = sequelize.define("OrderAttendee", {
   id: {
     type: DataTypes.UUID,
     defaultValue: DataTypes.UUIDV4,
     primaryKey: true,
-  },
-  eventId: {
-    type: DataTypes.UUID,
-    allowNull: false,
   },
   orderId: {
     type: DataTypes.UUID,
@@ -20,13 +15,13 @@ const Registration = sequelize.define("Registration", {
     type: DataTypes.UUID,
     allowNull: false,
   },
-  orderAttendeeId: {
+  eventId: {
     type: DataTypes.UUID,
     allowNull: false,
   },
-  userId: {
-    type: DataTypes.UUID,
-    allowNull: true,
+  attendeeIndex: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
   },
   email: {
     type: DataTypes.STRING,
@@ -40,25 +35,19 @@ const Registration = sequelize.define("Registration", {
     type: DataTypes.STRING,
     allowNull: true,
   },
-  status: {
-    type: DataTypes.ENUM(...REGISTRATION_STATUS_LIST),
-    allowNull: false,
-    defaultValue: REGISTRATION_STATUS.REGISTERED,
-  },
-  zoomRegistrantId: {
-    type: DataTypes.STRING,
+  userId: {
+    type: DataTypes.UUID,
     allowNull: true,
   },
 }, {
   timestamps: true,
-  paranoid: true,
-  tableName: "registrations",
+  tableName: "order_attendees",
   indexes: [
-    { fields: ["eventId"] },
     { fields: ["orderId"] },
     { fields: ["orderLineId"] },
-    { unique: true, fields: ["orderAttendeeId"] },
+    { fields: ["eventId"] },
+    { unique: true, fields: ["orderLineId", "attendeeIndex"] },
   ],
 });
 
-module.exports = Registration;
+module.exports = OrderAttendee;
