@@ -13,6 +13,14 @@ function getUserIdAndSession(req) {
   return { userId, sessionId };
 }
 
+function getCartActorContext(req) {
+  const userId = req.user ? req.user.id : null;
+  return {
+    isGuest: !userId,
+    personType: req.user?.personType === "legal" ? "legal" : "private",
+  };
+}
+
 function getRedirectUrl(req, defaultPath = "/cart") {
   const referer = req.get("Referer");
   if (referer) {
@@ -28,6 +36,7 @@ function getRedirectUrl(req, defaultPath = "/cart") {
 module.exports = {
   async show(req, res) {
     const { userId, sessionId } = getUserIdAndSession(req);
+    const actorContext = getCartActorContext(req);
     const { removedCount } = await cartService.validateAndCleanCart(userId, sessionId);
     if (removedCount > 0) {
       res.setFlash("error", "Some items in your cart are no longer available and have been removed.");
@@ -37,37 +46,50 @@ module.exports = {
       title: "Cart",
       cart,
       lines: lines || [],
+      actorContext,
     });
   },
 
   async add(req, res) {
     const { userId, sessionId } = getUserIdAndSession(req);
+    const actorContext = getCartActorContext(req);
     const parsed = validateAddToCart(req.body);
     if (!parsed.ok) {
       res.setFlash("error", "Invalid request. Please specify a valid item.");
       return res.redirect(getRedirectUrl(req, "/"));
     }
     try {
-      await cartService.addToCart(userId, sessionId, parsed.data.productVariantId, parsed.data.quantity || 1);
+      await cartService.addToCart(userId, sessionId, parsed.data.productVariantId, parsed.data.quantity || 1, actorContext);
       res.setFlash("success", "Added to cart.");
     } catch (err) {
-      res.setFlash("error", err.status === 404 ? "Item not found or not available." : "Could not add to cart.");
+      if (err.status === 404) {
+        res.setFlash("error", "Item not found or not available.");
+      } else if (err.status === 400 && err.message) {
+        res.setFlash("error", err.message);
+      } else {
+        res.setFlash("error", "Could not add to cart.");
+      }
     }
     return res.redirect(getRedirectUrl(req, "/cart"));
   },
 
   async update(req, res) {
     const { userId, sessionId } = getUserIdAndSession(req);
+    const actorContext = getCartActorContext(req);
     const parsed = validateUpdateCartLine(req.body);
     if (!parsed.ok) {
       res.setFlash("error", "Invalid request.");
       return res.redirect("/cart");
     }
     try {
-      await cartService.setQuantity(userId, sessionId, parsed.data.productVariantId, parsed.data.quantity);
+      await cartService.setQuantity(userId, sessionId, parsed.data.productVariantId, parsed.data.quantity, actorContext);
       res.setFlash("success", "Cart updated.");
-    } catch (_) {
-      res.setFlash("error", "Could not update cart.");
+    } catch (err) {
+      if (err.status === 400 && err.message) {
+        res.setFlash("error", err.message);
+      } else {
+        res.setFlash("error", "Could not update cart.");
+      }
     }
     return res.redirect("/cart");
   },

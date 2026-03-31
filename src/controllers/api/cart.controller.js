@@ -12,13 +12,24 @@ function getUserIdAndSession(req) {
   return { userId, sessionId };
 }
 
-function formatCartForApi(cart, lines) {
+function getCartActorContext(req) {
+  const userId = req.user ? req.user.id : null;
+  return {
+    isGuest: !userId,
+    personType: req.user?.personType === "legal" ? "legal" : "private",
+  };
+}
+
+function formatCartForApi(cart, lines, actorContext = {}) {
   const lineList = (lines || []).map((line) => {
     const variant = line.ProductVariant || {};
     const product = variant.Product || {};
     const priceRow = variant.ProductPrices?.[0];
     const price = priceRow ? Number(priceRow.amount) : 0;
     const qty = Number(line.quantity) || 1;
+    const isEventVariant = Boolean(variant.Event && variant.Event.id);
+    const isQuantityRestricted = isEventVariant && (actorContext.isGuest || actorContext.personType !== "legal");
+    const showQuantityStepper = !isQuantityRestricted;
     const productVariantId = line.productVariantId || variant.id;
     const title = product.title || variant.title || "";
     return {
@@ -27,6 +38,10 @@ function formatCartForApi(cart, lines) {
       price,
       quantity: qty,
       subtotal: price * qty,
+      isEventVariant,
+      isQuantityRestricted,
+      showQuantityStepper,
+      canIncrease: !isQuantityRestricted || qty < 1,
     };
   });
   const count = lineList.reduce((acc, l) => acc + l.quantity, 0);
@@ -37,14 +52,15 @@ module.exports = {
   async add(req, res) {
     try {
       const { userId, sessionId } = getUserIdAndSession(req);
+      const actorContext = getCartActorContext(req);
       const parsed = validateAddToCart(req.body);
       if (!parsed.ok) {
         return res.status(400).json({ error: "Invalid request." });
       }
       const { productVariantId, quantity } = parsed.data;
-      await cartService.addToCart(userId, sessionId, productVariantId, quantity);
+      await cartService.addToCart(userId, sessionId, productVariantId, quantity, actorContext);
       const { cart, lines } = await cartService.getCartWithLines(userId, sessionId);
-      const payload = formatCartForApi(cart, lines);
+      const payload = formatCartForApi(cart, lines, actorContext);
       return res.json(payload);
     } catch (err) {
       const status = err.status || 500;
@@ -55,8 +71,9 @@ module.exports = {
   async getCart(req, res) {
     try {
       const { userId, sessionId } = getUserIdAndSession(req);
+      const actorContext = getCartActorContext(req);
       const { cart, lines } = await cartService.getCartWithLines(userId, sessionId);
-      const payload = formatCartForApi(cart, lines);
+      const payload = formatCartForApi(cart, lines, actorContext);
       return res.json(payload);
     } catch (err) {
       const status = err.status || 500;
@@ -67,6 +84,7 @@ module.exports = {
   async update(req, res) {
     try {
       const { userId, sessionId } = getUserIdAndSession(req);
+      const actorContext = getCartActorContext(req);
       const parsed = validateUpdateCartLine(req.body);
       if (!parsed.ok) {
         return res.status(400).json({ error: "Invalid request." });
@@ -75,10 +93,10 @@ module.exports = {
       if (quantity <= 0) {
         await cartService.removeFromCart(userId, sessionId, productVariantId);
       } else {
-        await cartService.setQuantity(userId, sessionId, productVariantId, quantity);
+        await cartService.setQuantity(userId, sessionId, productVariantId, quantity, actorContext);
       }
       const { cart, lines } = await cartService.getCartWithLines(userId, sessionId);
-      const payload = formatCartForApi(cart, lines);
+      const payload = formatCartForApi(cart, lines, actorContext);
       return res.json(payload);
     } catch (err) {
       const status = err.status || 500;
@@ -89,13 +107,14 @@ module.exports = {
   async remove(req, res) {
     try {
       const { userId, sessionId } = getUserIdAndSession(req);
+      const actorContext = getCartActorContext(req);
       const parsed = validateRemoveFromCart(req.body);
       if (!parsed.ok) {
         return res.status(400).json({ error: "Invalid request." });
       }
       await cartService.removeFromCart(userId, sessionId, parsed.data.productVariantId);
       const { cart, lines } = await cartService.getCartWithLines(userId, sessionId);
-      const payload = formatCartForApi(cart, lines);
+      const payload = formatCartForApi(cart, lines, actorContext);
       return res.json(payload);
     } catch (err) {
       const status = err.status || 500;

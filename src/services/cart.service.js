@@ -1,5 +1,24 @@
 const cartRepo = require("../repos/cart.repo");
 const productVariantRepo = require("../repos/productVariant.repo");
+const eventRepo = require("../repos/event.repo");
+
+const EVENT_VARIANT_PRIVATE_GUEST_MAX_QTY_MESSAGE =
+  "Event sessions are limited to quantity 1 for guests and private users.";
+
+function isPrivateOrGuestCartActor(userId, actorContext = {}) {
+  if (!userId) return true;
+  return actorContext.personType !== "legal";
+}
+
+async function ensureAllowedEventVariantQuantity(userId, productVariantId, quantity, actorContext = {}) {
+  const event = await eventRepo.findByProductVariantId(productVariantId);
+  if (!event) return;
+  if (quantity <= 1) return;
+  if (!isPrivateOrGuestCartActor(userId, actorContext)) return;
+  const err = new Error(EVENT_VARIANT_PRIVATE_GUEST_MAX_QTY_MESSAGE);
+  err.status = 400;
+  throw err;
+}
 
 /**
  * Get or create cart for the current request (user or session).
@@ -25,7 +44,7 @@ async function getCartWithLines(userId, sessionId) {
 /**
  * Add product variant to cart. Validates variant exists, is active and has a price.
  */
-async function addToCart(userId, sessionId, productVariantId, quantity = 1) {
+async function addToCart(userId, sessionId, productVariantId, quantity = 1, actorContext = {}) {
   const variant = await productVariantRepo.findById(productVariantId);
   if (!variant || !variant.active) {
     const err = new Error("Product variant not found or not available.");
@@ -44,6 +63,11 @@ async function addToCart(userId, sessionId, productVariantId, quantity = 1) {
     throw err;
   }
   const cart = await getOrCreateCart(userId, sessionId);
+  if (isPrivateOrGuestCartActor(userId, actorContext)) {
+    const existingLine = await cartRepo.getLine(cart.id, productVariantId);
+    const currentQty = existingLine ? Number(existingLine.quantity) || 0 : 0;
+    await ensureAllowedEventVariantQuantity(userId, productVariantId, currentQty + quantity, actorContext);
+  }
   return await cartRepo.addLine(cart.id, productVariantId, quantity);
 }
 
@@ -58,8 +82,11 @@ async function removeFromCart(userId, sessionId, productVariantId) {
 /**
  * Set line quantity. Remove line if quantity <= 0.
  */
-async function setQuantity(userId, sessionId, productVariantId, quantity) {
+async function setQuantity(userId, sessionId, productVariantId, quantity, actorContext = {}) {
   const cart = await getOrCreateCart(userId, sessionId);
+  if (isPrivateOrGuestCartActor(userId, actorContext)) {
+    await ensureAllowedEventVariantQuantity(userId, productVariantId, quantity, actorContext);
+  }
   return await cartRepo.setLineQuantity(cart.id, productVariantId, quantity);
 }
 

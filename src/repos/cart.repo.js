@@ -1,4 +1,4 @@
-const { Cart, CartLine, ProductVariant, Product, ProductPrice, TaxRate } = require("../models");
+const { Cart, CartLine, ProductVariant, Product, ProductPrice, TaxRate, Event } = require("../models");
 
 const defaultLineInclude = [
   {
@@ -9,6 +9,7 @@ const defaultLineInclude = [
     include: [
       { model: Product, as: "Product", attributes: ["id", "title", "slug", "isPhysical"], include: [{ model: TaxRate, as: "TaxRate", attributes: ["percentage"], required: false }] },
       { model: ProductPrice, as: "ProductPrices", where: { isDefault: true }, required: false, limit: 1, attributes: ["amount", "currency"] },
+      { model: Event, as: "Event", attributes: ["id"], required: false },
     ],
   },
 ];
@@ -98,6 +99,14 @@ module.exports = {
     line.quantity = quantity;
     await line.save(options);
     return line;
+  },
+
+  async getLine(cartId, productVariantId, options = {}) {
+    if (!cartId || !productVariantId) return null;
+    return await CartLine.findOne({
+      where: { cartId, productVariantId },
+      ...options,
+    });
   },
 
   async clearLines(cartId, options = {}) {

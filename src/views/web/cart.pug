@@ -10,21 +10,25 @@ block content
     ul(style="list-style:none; padding:0")
       each line in lines
         - const variant = line.ProductVariant || {}
+        - const event = variant.Event || null
         - const product = variant.Product || {}
         - const priceRow = variant.ProductPrices && variant.ProductPrices[0]
         - const price = line.price != null ? Number(line.price) : (priceRow ? Number(priceRow.amount) : 0)
         - const subtotal = price * (line.quantity || 1)
         - const title = line.title || (product && product.title) || variant.title || ''
         - const productVariantId = line.productVariantId || variant.id
+        - const isRestrictedEventLine = !!(event && event.id) && (actorContext && (actorContext.isGuest || actorContext.personType !== 'legal'))
+        - const maxQuantity = isRestrictedEventLine ? 1 : 99
         li(style="border:1px solid #ddd; padding:1rem; margin-bottom:0.5rem; display:flex; justify-content:space-between; align-items:center")
           div
             strong= title
             span(style="margin-left:1rem") #{line.quantity} × #{price.toFixed(2)}
           div
-            form(action="/cart/update" method="post" style="display:inline")
-              input(type="hidden" name="productVariantId" value=productVariantId)
-              input(type="number" name="quantity" value=line.quantity min="1" max="99" style="width:4rem")
-              button(type="submit") Update
+            if !isRestrictedEventLine
+              form(action="/cart/update" method="post" style="display:inline")
+                input(type="hidden" name="productVariantId" value=productVariantId)
+                input(type="number" name="quantity" value=line.quantity min="1" max=maxQuantity style="width:4rem")
+                button(type="submit") Update
             form(action="/cart/remove" method="post" style="display:inline; margin-left:0.5rem")
               input(type="hidden" name="productVariantId" value=productVariantId)
               button(type="submit") Remove

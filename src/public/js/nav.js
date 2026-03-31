@@ -57,6 +57,24 @@ document.addEventListener("DOMContentLoaded", function () {
     const priceStr = price.toFixed(2);
     const productVariantId = escapeHtml(line.productVariantId);
     const title = escapeHtml(line.title);
+    const showQuantityStepper = line.showQuantityStepper !== false;
+    const plusDisabled = line.canIncrease === false;
+    const plusDisabledAttr = plusDisabled ? ' disabled aria-disabled="true"' : "";
+    const stepperHtml = showQuantityStepper
+      ? (
+        '<button type="button" class="cart-drawer-qty-btn cart-drawer-qty-minus" data-product-variant-id="' +
+        productVariantId +
+        '" aria-label="Decrease quantity">−</button>' +
+        '<span class="cart-drawer-qty" aria-live="polite">' +
+        qty +
+        "</span>" +
+        '<button type="button" class="cart-drawer-qty-btn cart-drawer-qty-plus" data-product-variant-id="' +
+        productVariantId +
+        '" aria-label="Increase quantity"' +
+        plusDisabledAttr +
+        ">+</button>"
+      )
+      : "";
     return (
       '<li class="cart-drawer-item" data-product-variant-id="' +
       productVariantId +
@@ -76,15 +94,7 @@ document.addEventListener("DOMContentLoaded", function () {
       subtotal +
       "</span>" +
       '<div class="cart-drawer-item-actions">' +
-      '<button type="button" class="cart-drawer-qty-btn cart-drawer-qty-minus" data-product-variant-id="' +
-      productVariantId +
-      '" aria-label="Decrease quantity">−</button>' +
-      '<span class="cart-drawer-qty" aria-live="polite">' +
-      qty +
-      "</span>" +
-      '<button type="button" class="cart-drawer-qty-btn cart-drawer-qty-plus" data-product-variant-id="' +
-      productVariantId +
-      '" aria-label="Increase quantity">+</button>' +
+      stepperHtml +
       '<button type="button" class="cart-drawer-remove-btn" data-product-variant-id="' +
       productVariantId +
       '" aria-label="Remove from cart"><i class="fa-solid fa-trash-can"></i></button>' +
@@ -167,6 +177,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const plusBtn = ev.target.closest(".cart-drawer-qty-plus");
     if (plusBtn) {
       ev.preventDefault();
+      if (plusBtn.disabled || plusBtn.getAttribute("aria-disabled") === "true") return;
       const productVariantId = plusBtn.getAttribute("data-product-variant-id");
       const item = plusBtn.closest(".cart-drawer-item");
       const qtyEl = item ? item.querySelector(".cart-drawer-qty") : null;
