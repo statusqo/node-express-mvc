@@ -1,13 +1,11 @@
-/* Admin navbar / sidebar — layout and nav fragment (dash-nav.pug).
- * Included in admin layout: aside.admin-sidebar > include ../fragments/admin/dash-nav
+/* Admin navbar / sidebar — layout and shell for dash-nav.pug.
+ * Colours: inherits admin-dark.css --ds-* tokens; rail uses a slightly deeper “nav” treatment.
+ * Nav link rules: admin-sidebar-nav.css
  */
 
 :root {
-    --sidebar-width: 250px;
+    --sidebar-width: 256px;
     --admin-header-height: 60px;
-    --color-sidebar-bg: #1a1a1a;
-    --color-sidebar-text: #e0e0e0;
-    --color-sidebar-hover: #333;
 }
 
 .admin-layout {
@@ -15,12 +13,34 @@
     min-height: 100vh;
 }
 
-/* Sidebar — constrained to viewport height so footer (logout) is always visible */
+/*
+ * Nav rail spin vs main shell (header/content use --ds-bg + --ds-surface):
+ * one step deeper than page header, cool vignette shadow, hairline accent on the right.
+ */
 .admin-sidebar {
+    --color-sidebar-bg: var(--ds-surface-2);
+    --color-sidebar-bg-elevated: var(--ds-surface-3);
+    --color-sidebar-border: var(--ds-border);
+    --color-sidebar-border-strong: rgba(255, 255, 255, 0.1);
+    --color-sidebar-text: var(--ds-text-1);
+    --color-sidebar-text-muted: var(--ds-text-2);
+    --color-sidebar-hover: rgba(255, 255, 255, 0.06);
+    --color-sidebar-hover-strong: rgba(255, 255, 255, 0.1);
+    --color-sidebar-focus: var(--ds-accent);
+    --color-sidebar-active-fill: var(--ds-accent-dim);
+    --color-sidebar-active-outline: rgba(76, 94, 255, 0.35);
+    --color-sidebar-edge-glow: rgba(76, 94, 255, 0.07);
+
     width: var(--sidebar-width);
     height: 100vh;
     max-height: 100vh;
     background-color: var(--color-sidebar-bg);
+    background-image: linear-gradient(
+        180deg,
+        var(--color-sidebar-edge-glow) 0%,
+        transparent 28%,
+        transparent 100%
+    );
     color: var(--color-sidebar-text);
     flex-shrink: 0;
     display: flex;
@@ -28,33 +48,48 @@
     overflow: hidden;
     position: sticky;
     top: 0;
+    border-right: 1px solid var(--color-sidebar-border);
+    box-shadow:
+        1px 0 0 rgba(76, 94, 255, 0.12),
+        6px 0 32px rgba(0, 0, 0, 0.45);
 }
 
 .dash-nav {
-    padding: 1rem;
+    padding: 1.125rem 0.875rem 1rem;
     height: 100%;
     min-height: 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    gap: 0;
 }
 
 .dash-brand {
-    font-size: 1.5rem;
-    font-weight: bold;
-    margin-bottom: 2rem;
-    text-align: center;
+    font-size: 1.125rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 1.25rem;
+    padding: 0 0.35rem 1rem;
+    text-align: left;
     flex-shrink: 0;
+    border-bottom: 1px solid var(--color-sidebar-border);
+    line-height: 1.2;
 }
 
 .dash-brand a {
-    color: #fff;
+    color: var(--color-sidebar-text);
     text-decoration: none;
+    display: block;
+    transition: color 0.15s ease;
+}
+
+.dash-brand a:hover {
+    color: var(--ds-accent-light);
 }
 
 .dash-menu {
     list-style: none;
-    padding: 0;
+    padding: 0.25rem 0 0;
     margin: 0;
     flex: 1 1 0;
     min-height: 0;
@@ -62,55 +97,108 @@
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+.dash-menu::-webkit-scrollbar {
+    width: 6px;
+}
+
+.dash-menu::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 99px;
 }
 
 .dash-item {
-    margin-bottom: 0.5rem;
+    margin-bottom: 2px;
 }
 
 .dash-link {
     display: block;
-    padding: 0.75rem 1rem;
+    padding: 0.5rem 0.75rem;
     color: var(--color-sidebar-text);
     text-decoration: none;
     border-radius: 4px;
-    transition: background-color 0.2s;
+    transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .dash-link:hover {
     background-color: var(--color-sidebar-hover);
-    color: #fff;
+    color: var(--color-sidebar-text);
 }
 
 .dash-footer {
-    padding-top: 1rem;
-    border-top: 1px solid #333;
+    padding: 1rem 0.35rem 0;
+    margin-top: auto;
+    border-top: 1px solid var(--color-sidebar-border);
     flex-shrink: 0;
+    background: linear-gradient(to top, var(--color-sidebar-bg) 0%, var(--color-sidebar-bg) 72%, transparent);
+}
+
+.dash-footer form {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
 }
 
 .dash-footer .dash-form-inline {
     display: block;
-    margin-bottom: 0.5rem;
+    margin: 0;
 }
 
 .dash-logout {
     width: 100%;
-    background: transparent;
-    border: 1px solid #555;
-    color: #aaa;
-    padding: 0.5rem;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0.6rem 1rem;
     cursor: pointer;
     border-radius: 4px;
-    transition: all 0.2s;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    font-family: inherit;
+    letter-spacing: 0.03em;
+    text-align: center;
+    line-height: 1.35;
+    color: var(--color-sidebar-text-muted);
+    background: var(--color-sidebar-bg-elevated);
+    border: none;
+    -webkit-appearance: none;
+    appearance: none;
+    box-shadow: inset 0 0 0 1px var(--color-sidebar-border);
+    transition:
+        background-color 0.2s ease,
+        color 0.2s ease,
+        box-shadow 0.2s ease,
+        transform 0.15s ease;
 }
 
 .dash-logout:hover {
-    background: #333;
-    color: #fff;
-    border-color: #777;
+    background: rgba(76, 94, 255, 0.1);
+    color: var(--color-sidebar-text);
+    box-shadow:
+        inset 0 0 0 1px var(--ds-border-accent),
+        0 2px 12px rgba(0, 0, 0, 0.25);
 }
 
-/* Main content area (flex so layout works) */
+.dash-logout:focus-visible {
+    outline: 2px solid var(--color-sidebar-focus);
+    outline-offset: 2px;
+}
+
+.dash-logout:active {
+    transform: scale(0.99);
+    background: var(--ds-surface-3);
+    color: var(--color-sidebar-text);
+    box-shadow:
+        inset 0 0 0 1px var(--color-sidebar-border),
+        inset 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
 .admin-content {
     flex-grow: 1;
     display: flex;

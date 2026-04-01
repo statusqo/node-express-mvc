@@ -103,20 +103,26 @@ block content
                                     | Category
                                     span.req *
                                 select#productCategoryId.da-form-select(name='productCategoryId' required)
-                                    option(value='' disabled selected=(!(product && product.productCategoryId))) — Select category —
+                                    option(value='' disabled selected=(!(product && product.productCategoryId))) Select category
                                     each pc in productCategories
-                                        option(value=pc.id selected=(product && product.productCategoryId === pc.id))
-                                            = pc.name + ' (' + pc.kpdCode + ')'
+                                        option(value=pc.id selected=(product && product.productCategoryId === pc.id))= pc.name
                             .da-form-group
                                 label.da-form-label(for='taxRateId')
                                     | Tax Rate
-                                    span.req *
-                                select#taxRateId.da-form-select(name='taxRateId' required)
-                                    option(value='' disabled selected=(!(product && product.taxRateId))) — Select tax rate —
-                                    each tr in taxRates
-                                        option(value=tr.id selected=(product && product.taxRateId === tr.id))
-                                            = tr.name + ' (' + tr.stripeTaxRateId + ')'
-                                p.da-form-hint Stripe Tax Rate applied to this product on invoices for e-racuni.hr VAT compliance.
+                                    if checkoutVatEnabled
+                                        span.req *
+                                if checkoutVatEnabled
+                                    select#taxRateId.da-form-select(name='taxRateId' required)
+                                        option(value='' disabled selected=(!(product && product.taxRateId))) Select tax rate
+                                        each tr in taxRates
+                                            option(value=tr.id selected=(product && product.taxRateId === tr.id))= tr.name
+                                    p.da-form-hint Stripe Tax Rate applied to this product on invoices when checkout VAT is enabled in Settings.
+                                else
+                                    select#taxRateId.da-form-select(name='taxRateId' disabled=true)
+                                        option(value='' selected=(!(product && product.taxRateId))) Not used (VAT off in Settings)
+                                        each tr in taxRates
+                                            option(value=tr.id selected=(product && product.taxRateId === tr.id))= tr.name
+                                    p.da-form-hint Tax assignment is disabled. Enable "Checkout VAT and Stripe invoice tax" under Settings → More settings to require a rate per product.
                             .da-form-group
                                 label.da-form-label(for='unitOfMeasure')
                                     | Unit of Measure

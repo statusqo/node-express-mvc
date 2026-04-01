@@ -1,0 +1,54 @@
+extends ../../layouts/admin
+
+block append links
+    link(rel='preconnect' href='https://fonts.googleapis.com')
+    link(rel='preconnect' href='https://fonts.gstatic.com' crossorigin)
+
+block content
+    .da-page
+        .da-page-header
+            .da-page-header-left
+                h1.da-page-title Seminars
+                p.da-page-subtitle= (products ? products.length : 0) + ' product' + ((products && products.length !== 1) ? 's' : '')
+
+        p.da-events-type-hint
+            | Seminars are storefront catalog items only (no scheduled sessions in this app). Create and edit them under&nbsp;
+            a.da-events-type-hint-link(href=(adminPrefix || '') + '/products') Products
+            | &nbsp;with type&nbsp;
+            strong Seminar
+            | . Default variant quantity is typically 0 for display-only catalog; customers arrange dates via the inquiry form on the site.
+
+        .da-section
+            .da-section-header
+                h2.da-section-title Seminar products
+                span.da-count= products ? products.length : 0
+            .da-panel
+                .da-table-scroll
+                    table.da-table(role='table' aria-label='Seminar products')
+                        thead
+                            tr
+                                th(scope='col') Title
+                                th.da-col-slug(scope='col') Slug
+                                th(scope='col') Default price
+                                th(scope='col' style='text-align:right') Actions
+                        tbody
+                            if products && products.length
+                                each p in products
+                                    tr
+                                        td
+                                            span.da-cell-primary= p.title
+                                        td.da-col-slug
+                                            span.da-cell-mono= p.slug || '—'
+                                        td
+                                            span.da-cell-secondary= p.priceAmount != null ? (p.currency || 'USD') + ' ' + Number(p.priceAmount).toFixed(2) : '—'
+                                        td
+                                            .da-cell-actions
+                                                a.da-row-btn.da-row-btn--edit(
+                                                    href=(adminPrefix || '') + '/products/' + p.id + '/edit'
+                                                    aria-label='Edit product ' + p.title
+                                                ) Edit product
+                            else
+                                tr
+                                    td(colspan='4')
+                                        .da-table-empty
+                                            span No seminar products yet.

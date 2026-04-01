@@ -1,5 +1,5 @@
 const registrationRepo = require("../repos/registration.repo");
-const eventRepo = require("../repos/event.repo");
+const eventService = require("./event.service");
 const eventMeetingRepo = require("../repos/eventMeeting.repo");
 const orderRepo = require("../repos/order.repo");
 const orderLineRepo = require("../repos/orderLine.repo");
@@ -33,6 +33,74 @@ module.exports = {
    */
   async countPaidRegistrantsForEvent(eventId) {
     return await registrationRepo.countPaidByEventId(eventId);
+  },
+
+  /**
+   * Admin registrant edit: registration with order, event row, and meeting if any. All plain objects.
+   * @returns {Promise<{ registration: object, event: object, meeting: object|null }|null>}
+   */
+  async getRegistrationForAdminEdit(registrationId, eventId) {
+    const registrationRow = await registrationRepo.findByIdWithOrder(registrationId);
+    if (!registrationRow) return null;
+    if (String(registrationRow.eventId) !== String(eventId)) return null;
+    const eventRow = await eventService.findById(eventId);
+    if (!eventRow) return null;
+    const meetingRow = await eventMeetingRepo.findByEventId(eventId);
+    return {
+      registration: registrationRow.get ? registrationRow.get({ plain: true }) : registrationRow,
+      event: eventRow.get ? eventRow.get({ plain: true }) : eventRow,
+      meeting: meetingRow ? (meetingRow.get ? meetingRow.get({ plain: true }) : meetingRow) : null,
+    };
+  },
+
+  /**
+   * Add registrant to Zoom for an existing registration (admin recovery).
+   * Idempotent: if zoomRegistrantId already set, returns ok with alreadySynced.
+   * @returns {Promise<{ ok: boolean, alreadySynced?: boolean, zoomRegistrantId?: string, error?: string }>}
+   */
+  async retryZoomSyncForRegistration(registrationId, eventId) {
+    const registrationRow = await registrationRepo.findById(registrationId);
+    if (!registrationRow) {
+      return { ok: false, error: "Registration not found." };
+    }
+    if (String(registrationRow.eventId) !== String(eventId)) {
+      return { ok: false, error: "Registration does not belong to this event." };
+    }
+
+    if (registrationRow.zoomRegistrantId) {
+      return { ok: true, alreadySynced: true, zoomRegistrantId: registrationRow.zoomRegistrantId };
+    }
+
+    const eventRow = await eventService.findById(eventId);
+    if (!eventRow || !eventRow.isOnline) {
+      return { ok: false, error: "Event is not an online session; Zoom sync does not apply." };
+    }
+
+    const meetingRow = await eventMeetingRepo.findByEventId(eventId);
+    if (!meetingRow) {
+      return { ok: false, error: "No meeting linked to this event. Create or sync the meeting first." };
+    }
+
+    const provider = getMeetingProvider();
+    if (!provider || typeof provider.addRegistrant !== "function") {
+      return { ok: false, error: "Meeting provider is not configured." };
+    }
+
+    const regPlain = registrationRow.get ? registrationRow.get({ plain: true }) : registrationRow;
+    const meetingPlain = meetingRow.get ? meetingRow.get({ plain: true }) : meetingRow;
+
+    try {
+      const { zoomRegistrantId } = await provider.addRegistrant(meetingPlain, regPlain);
+      if (!zoomRegistrantId) {
+        return { ok: false, error: "Zoom did not return a registrant id." };
+      }
+      await registrationRepo.update(registrationId, { zoomRegistrantId });
+      logger.info("retryZoomSyncForRegistration: Zoom registrant saved", { registrationId, eventId });
+      return { ok: true, zoomRegistrantId };
+    } catch (err) {
+      logger.warn("retryZoomSyncForRegistration failed", { registrationId, eventId, error: err.message });
+      return { ok: false, error: err.message || "Zoom sync failed." };
+    }
   },
 
   /**

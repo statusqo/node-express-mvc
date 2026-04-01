@@ -1,5 +1,6 @@
 //- Media picker component (COMPONENT_STANDARD)
 //- Usage: include this file, then +mediaPickerSection({ inputName, attachedMedia, uploadsBaseUrl, apiUrl, label?, hint? })
+//- Requires +adminDialogShell from fragments/admin/admin-dialog-shell (via layouts/admin components include).
 mixin mediaPickerSection(options)
   - const inputName = options.inputName || 'mediaIds[]'
   - const attachedMedia = options.attachedMedia || []
@@ -29,11 +30,9 @@ mixin mediaPickerSection(options)
           button.admin-media-picker-remove(type="button" data-action="remove-attached" aria-label="Remove") Remove
         input(type="hidden" name=inputName value=item.id)
     button.admin-btn.admin-media-picker-open(type="button" data-action="open-media-picker") Select media
-    div.admin-media-picker-modal(role="dialog" aria-modal="true" aria-labelledby="media-picker-title" hidden)
-      div.admin-media-picker-modal-overlay(data-action="close-media-picker")
-      div.admin-media-picker-modal-box
-        h2#media-picker-title.admin-media-picker-modal-title Select media
-        div.admin-media-picker-grid
-        div.admin-media-picker-modal-actions
-          button.admin-btn.admin-btn-primary.admin-media-picker-add-selected(type="button" data-action="add-selected") Add selected
-          button.admin-btn.admin-media-picker-cancel(type="button" data-action="close-media-picker") Cancel
+    +adminDialogShell({ shellClass: 'admin-media-picker-modal', labelledBy: 'media-picker-title', closeDataAction: 'close-media-picker' })
+      h2#media-picker-title.admin-media-picker-modal-title Select media
+      div.admin-media-picker-grid
+      div.admin-media-picker-modal-actions
+        button.admin-btn.admin-btn-primary.admin-media-picker-add-selected(type="button" data-action="add-selected") Add selected
+        button.admin-btn.admin-media-picker-cancel(type="button" data-action="close-media-picker") Cancel

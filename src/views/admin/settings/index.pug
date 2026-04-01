@@ -1,0 +1,41 @@
+extends ../../layouts/admin
+
+block append links
+    link(rel='preconnect' href='https://fonts.googleapis.com')
+    link(rel='preconnect' href='https://fonts.gstatic.com' crossorigin)
+
+block content
+    .da-page
+
+        +pageHeader('Settings', 'Application configuration and external integrations')
+
+        .da-section
+            .da-section-header
+                h2.da-section-title Integrations
+            .da-card(style='max-width: 720px;')
+                .da-card-header
+                    h2.da-card-title Zoom
+                .da-card-body
+                    p.da-card-desc
+                        | Link your Zoom account to host webinars and online sessions. Registrants can receive calendar links and join URLs automatically when appropriate.
+                    a.da-btn.da-btn--primary(href=(adminPrefix || '') + '/zoom/connect')
+                        svg(xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                            path(d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71')
+                            path(d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71')
+                        | Connect Zoom
+
+        .da-section
+            .da-section-header
+                h2.da-section-title More settings
+            .da-card(style='max-width: 720px;')
+                .da-card-body
+                    form(method='post' action=(adminPrefix || '') + '/settings')
+                        .da-form-group
+                            label.admin-checkbox(style='display: flex; align-items: flex-start; gap: 0.65rem; cursor: pointer;')
+                                input(type='checkbox' name='checkoutVatEnabled' value='on' checked=checkoutVatEnabled style='margin-top: 0.2rem')
+                                span
+                                    strong Checkout VAT and Stripe invoice tax
+                                    br
+                                    span.da-form-hint(style='display: block; margin-top: 0.35rem; font-weight: normal;')
+                                        | When enabled, customers see a PDV breakdown at checkout and Stripe Invoice line items include tax rates (e-racuni). Products must have a tax rate assigned. When disabled, tax rates are not sent to Stripe and the storefront does not show a VAT split.
+                        button.da-btn.da-btn--primary(type='submit') Save settings

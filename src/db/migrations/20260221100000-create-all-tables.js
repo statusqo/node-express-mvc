@@ -480,6 +480,13 @@ module.exports = {
     });
     await queryInterface.addIndex("payment_methods", ["userId"]);
 
+    // --- store_settings (key-value merchant / app options) ---
+    await queryInterface.createTable("store_settings", {
+      key: { type: Sequelize.STRING(190), allowNull: false, primaryKey: true },
+      value: { type: Sequelize.TEXT, allowNull: true },
+      ...ts,
+    });
+
     // --- processed_stripe_events ---
     await queryInterface.createTable("processed_stripe_events", {
       eventId: { type: Sequelize.STRING, primaryKey: true },
@@ -490,6 +497,7 @@ module.exports = {
   async down(queryInterface) {
     // Drop in reverse dependency order
     await queryInterface.dropTable("processed_stripe_events");
+    await queryInterface.dropTable("store_settings");
     await queryInterface.dropTable("payment_methods");
     await queryInterface.dropTable("refund_transactions");
     await queryInterface.dropTable("refund_requests");

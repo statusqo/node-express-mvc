@@ -1,6 +1,7 @@
 /**
- * Admin controller for event-type product sections (Webinars, Seminars, Classrooms).
- * Expects req.eventTypeSlug ('webinar'|'seminar'|'classroom') and req.sectionPath ('webinars'|'seminars'|'classrooms') set by route middleware.
+ * Admin controller for event-type product sections (Webinars, Classrooms).
+ * Seminars use src/controllers/admin/seminars.controller.js (product list only).
+ * Expects req.eventTypeSlug ('webinar'|'classroom') and req.sectionPath ('webinars'|'classrooms') set by route middleware.
  * Events page: inline add/edit/delete with single Save.
  */
 const productService = require("../../services/product.service");
@@ -15,7 +16,7 @@ function toPlain(obj) {
 }
 
 function getTypeLabel(sectionPath) {
-  const labels = { webinars: "Webinars", seminars: "Seminars", classrooms: "Classrooms" };
+  const labels = { webinars: "Webinars", classrooms: "Classrooms" };
   return labels[sectionPath] || sectionPath;
 }
 

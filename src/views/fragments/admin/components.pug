@@ -1,6 +1,8 @@
 //- Admin shared component mixins.
 //- Included once from layouts/admin.pug — available on every admin page without explicit include.
 
+include admin-dialog-shell
+
 //- ── +pageHeader(title, subtitle) ────────────────────────────────────────────
 //- Page title block. Pass a block for right-side content (+backBtn or +addBtn).
 mixin pageHeader(title, subtitle)

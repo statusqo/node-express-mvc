@@ -15,6 +15,7 @@ const { PAYMENT_STATUS, FULFILLMENT_STATUS, FULFILLMENT_STATUS_LIST, TRANSACTION
 const { REFUND_TRANSACTION_STATUS, REFUND_TRANSACTION_SCOPE } = require("../constants/refundTransaction");
 const { getMeetingProvider } = require("../gateways/meeting.interface");
 const emailService = require("./email.service");
+const storeSettingService = require("./storeSetting.service");
 // stripeGateway is required lazily to avoid circular dependency with stripe.gateway
 
 const { DEFAULT_CURRENCY } = require("../config/constants");
@@ -267,6 +268,8 @@ async function createOrderFromCart(userId, sessionId, opts = {}) {
     };
   }
 
+  const checkoutVatEnabled = await storeSettingService.isCheckoutVatEnabled();
+
   const t = await sequelize.transaction();
   try {
     const order = await orderRepo.create(orderPayload, { transaction: t });
@@ -281,24 +284,47 @@ async function createOrderFromCart(userId, sessionId, opts = {}) {
       if (variant.quantity != null && variant.quantity < 1) {
         throw new Error("One or more items in your cart are sold out.");
       }
-      const snapshot = await productVariantRepo.getOrderLineSnapshot(line.productVariantId, { transaction: t });
+      const snapshot = await productVariantRepo.getOrderLineSnapshot(line.productVariantId, {
+        transaction: t,
+        checkoutVatEnabled,
+      });
       if (!snapshot) {
         throw new Error(`Product variant ${line.productVariantId} not found.`);
       }
-      const qty = line.quantity || 1;
-      total += snapshot.price * qty;
+      if (checkoutVatEnabled && (!snapshot.stripeTaxRateId || snapshot.vatRate == null)) {
+        const err = new Error("One or more products are missing a tax rate. Please contact the store.");
+        err.status = 400;
+        throw err;
+      }
       const eventForVariant = await eventRepo.findByProductVariantId(line.productVariantId, { transaction: t });
       const lineEventId = eventForVariant ? eventForVariant.id : undefined;
-      const orderLine = await orderRepo.createLineFromVariant(order.id, snapshot, qty, { transaction: t, eventId: lineEventId });
+      const selectedAttendees = attendeeMapByVariant.get(String(line.productVariantId)) || [];
+      const cartQty = Number(line.quantity) || 1;
+      let orderLineQty = cartQty;
+      if (lineEventId && personType === "legal") {
+        orderLineQty = Array.isArray(selectedAttendees) ? selectedAttendees.length : 0;
+        if (orderLineQty < 1) {
+          const err = new Error("Add at least one attendee for each event in your order.");
+          err.status = 400;
+          throw err;
+        }
+        if (variant.quantity != null && Number(variant.quantity) < orderLineQty) {
+          const err = new Error("Not enough seats remaining for one or more events.");
+          err.status = 400;
+          throw err;
+        }
+      }
+
+      total += snapshot.price * orderLineQty;
+      const orderLine = await orderRepo.createLineFromVariant(order.id, snapshot, orderLineQty, { transaction: t, eventId: lineEventId });
       if (lineEventId) {
-        const selectedAttendees = attendeeMapByVariant.get(String(line.productVariantId)) || [];
         await createOrderAttendeesForLine({
           orderId: order.id,
           orderLineId: orderLine.id,
           eventId: lineEventId,
           orderUserId: order.userId,
           personType,
-          quantity: qty,
+          quantity: orderLineQty,
           fallbackContact: {
             email: order.email ? String(order.email).trim().toLowerCase() : null,
             forename: order.forename || null,
@@ -823,58 +849,12 @@ async function createOrderFromEvent(eventId, userId, sessionId, opts = {}) {
     throw err;
   }
 
-  const snapshot = await productVariantRepo.getOrderLineSnapshot(event.productVariantId);
-  if (!snapshot) {
-    const err = new Error("Product variant not found.");
-    err.status = 404;
-    throw err;
-  }
-
-  const total = Number(snapshot.price) || 0;
-  const currency = snapshot.currency || DEFAULT_CURRENCY;
+  const checkoutVatEnabled = await storeSettingService.isCheckoutVatEnabled();
 
   // Guests are always private persons regardless of what opts says
   const personType = userId ? (opts.personType === 'legal' ? 'legal' : 'private') : 'private';
   const companyName = personType === 'legal' ? (opts.companyName || null) : null;
   const companyOib = personType === 'legal' ? (opts.companyOib || null) : null;
-
-  let orderPayload = {
-    userId: userId || null,
-    sessionId: sessionId || null,
-    paymentStatus: PAYMENT_STATUS.PENDING,
-    fulfillmentStatus: FULFILLMENT_STATUS.PENDING,
-    source: ORDER_SOURCE.EVENT,
-    personType,
-    companyName,
-    companyOib,
-    forename: opts.forename || null,
-    surname: opts.surname || null,
-    email: opts.email || null,
-    mobile: null,
-    deliveryLine1: null,
-    deliveryLine2: null,
-    deliveryCity: null,
-    deliveryState: null,
-    deliveryPostcode: null,
-    deliveryCountry: null,
-    billingLine1: opts.billingLine1 || null,
-    billingLine2: opts.billingLine2 || null,
-    billingCity: opts.billingCity || null,
-    billingState: opts.billingState || null,
-    billingPostcode: opts.billingPostcode || null,
-    billingCountry: opts.billingCountry || null,
-    total,
-    currency,
-  };
-
-  if (userId) {
-    const user = await userRepo.findById(userId);
-    orderPayload = {
-      ...orderPayload,
-      forename: opts.forename || user?.username || user?.email?.split("@")[0] || null,
-      email: opts.email || user?.email || null,
-    };
-  }
 
   const t = await sequelize.transaction();
   try {
@@ -891,6 +871,62 @@ async function createOrderFromEvent(eventId, userId, sessionId, opts = {}) {
       err.status = 400;
       throw err;
     }
+    const snapshot = await productVariantRepo.getOrderLineSnapshot(event.productVariantId, {
+      transaction: t,
+      checkoutVatEnabled,
+    });
+    if (!snapshot) {
+      const err = new Error("Product variant not found.");
+      err.status = 404;
+      throw err;
+    }
+    if (checkoutVatEnabled && (!snapshot.stripeTaxRateId || snapshot.vatRate == null)) {
+      const err = new Error("This product is missing a tax rate. Please contact the store.");
+      err.status = 400;
+      throw err;
+    }
+
+    const total = Number(snapshot.price) || 0;
+    const currency = snapshot.currency || DEFAULT_CURRENCY;
+
+    let orderPayload = {
+      userId: userId || null,
+      sessionId: sessionId || null,
+      paymentStatus: PAYMENT_STATUS.PENDING,
+      fulfillmentStatus: FULFILLMENT_STATUS.PENDING,
+      source: ORDER_SOURCE.EVENT,
+      personType,
+      companyName,
+      companyOib,
+      forename: opts.forename || null,
+      surname: opts.surname || null,
+      email: opts.email || null,
+      mobile: null,
+      deliveryLine1: null,
+      deliveryLine2: null,
+      deliveryCity: null,
+      deliveryState: null,
+      deliveryPostcode: null,
+      deliveryCountry: null,
+      billingLine1: opts.billingLine1 || null,
+      billingLine2: opts.billingLine2 || null,
+      billingCity: opts.billingCity || null,
+      billingState: opts.billingState || null,
+      billingPostcode: opts.billingPostcode || null,
+      billingCountry: opts.billingCountry || null,
+      total,
+      currency,
+    };
+
+    if (userId) {
+      const user = await userRepo.findById(userId, { transaction: t });
+      orderPayload = {
+        ...orderPayload,
+        forename: opts.forename || user?.username || user?.email?.split("@")[0] || null,
+        email: opts.email || user?.email || null,
+      };
+    }
+
     const order = await orderRepo.create(orderPayload, { transaction: t });
     const orderLine = await orderRepo.createLineFromVariant(order.id, snapshot, 1, { transaction: t, eventId });
     await createOrderAttendeesForLine({
@@ -1031,6 +1067,24 @@ async function getTransactionsForOrder(orderId) {
   return await transactionRepo.findByOrder(orderId);
 }
 
+/**
+ * Admin order edit: order header + line items + payment transactions (plain objects).
+ * @param {string} orderId
+ * @returns {Promise<{ order: object, orderLines: object[], transactions: object[] }|null>}
+ */
+async function getAdminOrderEditPayload(orderId) {
+  if (!orderId) return null;
+  const orderRow = await orderRepo.findById(orderId);
+  if (!orderRow) return null;
+  const lines = await orderRepo.getLines(orderId, {});
+  const txs = await transactionRepo.findByOrder(orderId);
+  return {
+    order: orderRow.get ? orderRow.get({ plain: true }) : orderRow,
+    orderLines: (lines || []).map((l) => (l.get ? l.get({ plain: true }) : l)),
+    transactions: (txs || []).map((t) => (t.get ? t.get({ plain: true }) : t)),
+  };
+}
+
 module.exports = {
   getCartTotalForPayment,
   createOrderFromCart,
@@ -1057,4 +1111,5 @@ module.exports = {
   updateOrderForAdmin,
   claimGuestOrdersByEmail,
   getTransactionsForOrder,
+  getAdminOrderEditPayload,
 };

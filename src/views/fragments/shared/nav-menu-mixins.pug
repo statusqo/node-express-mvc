@@ -1,0 +1,25 @@
+//- Reusable menu tree (DB MenuItem trees from menu.service buildMenuTree).
+//- Use for admin sidebar, footers, or inline link groups. Pass GET-only trees (POST items handled separately).
+//-
+//- @param items       - array of root nodes with optional .children
+//- @param adminPrefix - e.g. res.locals.adminPrefix or '' for site-relative URLs
+
+mixin navMenuBranch(items, adminPrefix, depth)
+    each item in (items || [])
+        if !item.method || item.method === 'GET'
+            if item.children && item.children.length
+                li.admin-nav-group(data-nav-group class=(item.cssClass || null))
+                    .admin-nav-row
+                        a.admin-nav-link.admin-nav-link--parent(href=(adminPrefix || '') + item.url)= item.label
+                        button.admin-nav-toggle(
+                            type="button"
+                            class="admin-nav-toggle"
+                            aria-expanded="false"
+                            aria-label="Toggle " + item.label + " submenu"
+                        )
+                            span.admin-nav-chevron(aria-hidden="true")
+                    ul.admin-nav-sublist(role="list")
+                        +navMenuBranch(item.children, adminPrefix, (depth || 0) + 1)
+            else
+                li.admin-nav-item(class=(item.cssClass || null))
+                    a.admin-nav-link(href=(adminPrefix || '') + item.url target=item.target || "_self")= item.label

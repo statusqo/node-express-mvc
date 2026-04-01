@@ -64,6 +64,30 @@ async function sendContactEmail({ name, email, message }) {
   });
 }
 
+async function sendSeminarInquiryEmail({ name, email, message, productTitle, productSlug }) {
+  if (!config.mail.to) {
+    const err = new Error("Mail admin recipient (MAIL_TO) is not configured.");
+    err.status = 500;
+    throw err;
+  }
+  const transporter = getTransporter();
+  const safeName = sanitizeHeaderValue(name);
+  const safeEmail = sanitizeHeaderValue(email);
+  const title = sanitizeHeaderValue(productTitle || productSlug || "Seminar");
+  const slug = String(productSlug || "").trim().substring(0, 120);
+
+  await transporter.sendMail({
+    from: config.mail.from,
+    to: config.mail.to,
+    replyTo: { name: safeName, address: safeEmail },
+    subject: `Seminar inquiry: ${title}`,
+    text:
+      `Seminar: ${title}\n` +
+      (slug ? `Storefront URL: /seminars/${slug}\n` : "") +
+      `\nName: ${safeName}\nEmail: ${safeEmail}\n\n${String(message || "").trim()}`,
+  });
+}
+
 /**
  * Send order confirmation to the customer. No-op if mail is not configured.
  * @param {Object} order - Order plain object: email, id, total, currency, forename
@@ -147,4 +171,11 @@ async function sendWelcomeEmail(user) {
   });
 }
 
-module.exports = { sendContactEmail, sendOrderConfirmationEmail, sendEventCancellationEmail, sendWelcomeEmail, isMailConfigured };
+module.exports = {
+  sendContactEmail,
+  sendSeminarInquiryEmail,
+  sendOrderConfirmationEmail,
+  sendEventCancellationEmail,
+  sendWelcomeEmail,
+  isMailConfigured,
+};

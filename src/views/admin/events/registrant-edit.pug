@@ -1,0 +1,104 @@
+extends ../../layouts/admin
+
+block content
+    - var fmtDate = function(d) { return d ? new Date(d).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'; }
+    - var fmtTime = function(d) { return d ? new Date(d).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}) : ''; }
+    - var fullName = [registration.forename, registration.surname].filter(Boolean).join(' ') || '—'
+    - var registrantsListUrl = (adminPrefix || '') + '/events/' + event.id + '/registrants'
+    - var retryZoomUrl = (adminPrefix || '') + '/events/' + event.id + '/registrants/' + registration.id + '/retry-zoom'
+    - var cancelUrl = (adminPrefix || '') + '/events/' + event.id + '/registrants/' + registration.id + '/cancel'
+    - var cancelFormId = 'cancel-reg-form-edit'
+    - var cancelMsg = fullName !== '—' ? 'Remove ' + fullName + ' from this event?' : 'Remove this registrant from this event?'
+    - var cancelBullets = ['The registration will be permanently removed']
+    - var isRefundableOrder = registration.Order && (registration.Order.paymentStatus === 'paid' || registration.Order.paymentStatus === 'partially_refunded')
+    - if (isRefundableOrder) cancelBullets.push('A full or partial Stripe refund will be issued for this seat (this order line’s amount, within the remaining refundable balance)')
+    - if (eventRow.isOnline) cancelBullets.push('The attendee will be removed from the Zoom meeting')
+    - var canRetryZoom = eventRow.isOnline && meeting && !registration.zoomRegistrantId
+    - var zoomStatusLabel = registration.zoomRegistrantId ? 'Linked' : (eventRow.isOnline && !meeting ? 'No meeting on event' : !eventRow.isOnline ? 'N/A (in-person)' : 'Not linked — use Retry')
+
+    .da-page
+        +pageHeader('Edit registrant', fullName)
+            +backBtn(registrantsListUrl, 'Back to registrants')
+
+        .da-panel(style='margin-bottom: 1.5rem')
+            +eventSummaryCard(event, paidRegistrantCount != null ? paidRegistrantCount : 0)
+
+        .da-form-grid
+            .da-form-main
+                .da-card
+                    .da-card-header
+                        h2.da-card-title Registration
+                    .da-card-body
+                        .da-form-section
+                            span.da-form-section-label Details
+                            +readonlyField('Name')
+                                | #{fullName}
+                            +readonlyField('Email')
+                                | #{registration.email || '—'}
+                            +readonlyField('Registered')
+                                | #{fmtDate(registration.createdAt)} #{registration.createdAt ? fmtTime(registration.createdAt) : ''}
+                            +readonlyField('Order')
+                                if registration.orderId
+                                    a.da-order-link(href=(adminPrefix || '') + '/orders/' + registration.orderId + '/edit')
+                                        span.da-cell-mono= registration.orderId.slice(0, 8) + '…'
+                                else
+                                    span.da-cell-muted —
+                            if registration.Order && registration.Order.paymentStatus
+                                +readonlyField('Order payment')
+                                    - var payClass = ({paid:'success', pending:'warning', failed:'danger', refunded:'info', voided:'neutral'})[registration.Order.paymentStatus] || 'neutral'
+                                    span.da-badge(class='da-badge--' + payClass)= registration.Order.paymentStatus.charAt(0).toUpperCase() + registration.Order.paymentStatus.slice(1)
+                        .da-form-section
+                            span.da-form-section-label Zoom
+                            +readonlyField('Session type')
+                                if eventRow.isOnline
+                                    span.da-badge.da-badge--info Online
+                                else
+                                    span In-person
+                            +readonlyField('Meeting')
+                                if meeting && meeting.zoomMeetingId
+                                    span.da-cell-mono= meeting.zoomMeetingId
+                                else if eventRow.isOnline
+                                    span.da-cell-muted No meeting record
+                                else
+                                    span.da-cell-muted —
+                            +readonlyField('Zoom registrant')
+                                if registration.zoomRegistrantId
+                                    span.da-cell-mono= registration.zoomRegistrantId
+                                else
+                                    span.da-cell-muted= zoomStatusLabel
+
+                    .da-card-footer
+                        if canRetryZoom
+                            form(method='post' action=retryZoomUrl style='display:inline')
+                                button.da-btn.da-btn--primary(type='submit') Retry Zoom sync
+                        else if registration.zoomRegistrantId
+                            p.da-refund-empty(style='margin:0') Already synced to Zoom.
+                        else if eventRow.isOnline && !meeting
+                            p.da-refund-empty(style='margin:0') Create a meeting for this event before Zoom sync.
+                        else if !eventRow.isOnline
+                            p.da-refund-empty(style='margin:0') Zoom does not apply to in-person events.
+
+                .da-card
+                    .da-card-header
+                        h2.da-card-title Danger zone
+                    .da-card-body
+                        p.da-refund-empty(style='margin-top:0') Cancel removes this registration from the event. For paid or partially refunded orders, Stripe will refund this seat’s amount (full or partial vs the original charge, depending on line price and prior refunds).
+                        form(id=cancelFormId method='post' action=cancelUrl style='display:none')
+                        button.da-btn.da-btn--danger(
+                            type='button'
+                            data-confirm-modal
+                            data-confirm-title='Cancel Registration'
+                            data-confirm-msg=cancelMsg
+                            data-confirm-bullets=JSON.stringify(cancelBullets)
+                            data-form-id=cancelFormId
+                        ) Cancel registration
+
+            .da-form-aside
+                .da-card
+                    .da-card-header
+                        h2.da-card-title IDs
+                    .da-card-body
+                        +readonlyField('Registration')
+                            span.da-cell-mono= registration.id
+                        +readonlyField('Event')
+                            span.da-cell-mono= event.id

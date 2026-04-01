@@ -81,12 +81,14 @@ module.exports = {
   },
 
   async getOrderLineSnapshot(variantId, options = {}) {
+    const checkoutVatEnabled = options.checkoutVatEnabled !== false;
+    const { checkoutVatEnabled: _omitVatFlag, ...sequelizeOpts } = options;
     const variant = await ProductVariant.findByPk(variantId, {
       include: [
         {
           model: Product,
           as: "Product",
-          attributes: ["id", "title", "unitOfMeasure"],
+          attributes: ["id", "title", "unitOfMeasure", "taxRateId"],
           include: [
             {
               model: ProductCategory,
@@ -104,21 +106,29 @@ module.exports = {
         },
         { model: ProductPrice, as: "ProductPrices", where: { isDefault: true }, required: false, limit: 1 },
       ],
-      ...options,
+      ...sequelizeOpts,
     });
     if (!variant) return null;
-    const product = variant.Product || (await Product.findByPk(variant.productId, options));
-    const priceRow = variant.ProductPrices?.[0] || (await this.getDefaultPrice(variantId, options));
-    return {
+    const product = variant.Product || (await Product.findByPk(variant.productId, sequelizeOpts));
+    const priceRow = variant.ProductPrices?.[0] || (await this.getDefaultPrice(variantId, sequelizeOpts));
+    const base = {
       productVariantId: variant.id,
       title: product?.title || variant.title || "Product",
       price: priceRow ? Number(priceRow.amount) : 0,
       currency: DEFAULT_CURRENCY,
-      vatRate: product?.TaxRate?.percentage != null ? Number(product.TaxRate.percentage) : 25,
       sku: variant.sku || null,
       kpd: product?.ProductCategory?.kpdCode || null,
       unit: product?.unitOfMeasure || null,
-      stripeTaxRateId: product?.TaxRate?.stripeTaxRateId || null,
+    };
+    if (!checkoutVatEnabled) {
+      return { ...base, vatRate: null, stripeTaxRateId: null };
+    }
+    const pct = product?.TaxRate?.percentage;
+    const txr = product?.TaxRate?.stripeTaxRateId || null;
+    return {
+      ...base,
+      vatRate: pct != null ? Number(pct) : null,
+      stripeTaxRateId: txr,
     };
   },
 };

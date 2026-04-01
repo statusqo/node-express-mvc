@@ -7,13 +7,25 @@ const slugSchema = z
   .transform((s) => s.toLowerCase())
   .pipe(z.string().min(1, "Slug is required.").max(255).regex(/^[a-z0-9-]+$/, "Slug must be lowercase letters, numbers, and hyphens only."));
 
-const ProductSchema = z.object({
+const taxRateIdRequired = z.string().trim().min(1, "Tax rate is required.").max(36);
+const taxRateIdOptional = z
+  .union([z.string(), z.undefined(), z.null()])
+  .optional()
+  .transform((v) => {
+    if (v == null || v === "") return null;
+    const s = String(v).trim();
+    return s.length > 0 ? s : null;
+  })
+  .refine((v) => v === null || (typeof v === "string" && v.length > 0 && v.length <= 36), "Invalid tax rate.");
+
+function buildProductSchema(taxRateRequired) {
+  return z.object({
   title: z.string().min(1, "Title is required.").trim().max(255),
   slug: z.string().trim().max(255).optional().nullable(),
   description: z.string().trim().max(10000).optional().nullable().transform((v) => (v && v.trim() ? v.trim() : null)),
   productTypeId: z.string().trim().max(36).optional().nullable().transform((v) => (v && v.trim() ? v.trim() : null)),
   productCategoryId: z.string().trim().min(1, "Product category is required.").max(36),
-  taxRateId: z.string().trim().min(1, "Tax rate is required.").max(36),
+  taxRateId: taxRateRequired ? taxRateIdRequired : taxRateIdOptional,
   priceAmount: z
     .union([z.string(), z.number()])
     .optional()
@@ -38,9 +50,11 @@ const ProductSchema = z.object({
     invalid_type_error: `Unit of measure must be one of: ${UNIT_OF_MEASURE_LIST.join(", ")}.`,
   }),
 });
+}
 
-function validateProduct(body, slugValue) {
-  const parsed = ProductSchema.safeParse(body);
+function validateProduct(body, slugValue, options = {}) {
+  const taxRateRequired = Boolean(options.taxRateRequired);
+  const parsed = buildProductSchema(taxRateRequired).safeParse(body);
   if (!parsed.success) return { ok: false, errors: parsed.error.issues };
   const slugToCheck = slugValue ?? parsed.data.slug ?? "";
   const slugResult = slugSchema.safeParse(slugToCheck.toLowerCase());

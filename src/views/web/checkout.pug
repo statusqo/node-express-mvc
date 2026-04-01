@@ -8,34 +8,42 @@ block content
   else
     section(style="margin-bottom:1.5rem; padding:1rem; border:1px solid #e0e0e0; border-radius:8px; background:#fafafa")
       h2(style="margin:0 0 0.75rem 0; font-size:1.1rem") Order summary
-      ul(style="list-style:none; padding:0; margin:0")
+      ul#checkoutSummaryList(style="list-style:none; padding:0; margin:0")
         each line in lines
           - const variant = line.ProductVariant || {}
           - const product = variant.Product || {}
+          - const event = variant.Event || null
+          - const isEventLine = !!(event && event.id)
+          - const productVariantId = String(line.productVariantId != null ? line.productVariantId : variant.id || '')
           - const priceRow = variant.ProductPrices && variant.ProductPrices[0]
           - const title = line.title || (product && product.title) || variant.title || ''
           - const price = line.price != null ? Number(line.price) : (priceRow ? Number(priceRow.amount) : 0)
           - const qty = line.quantity || 1
           - const lineSubtotal = price * qty
+          - const taxRate = checkoutVatEnabled ? (product.TaxRate && product.TaxRate.percentage != null ? Number(product.TaxRate.percentage) : 25) : 0
           - const currency = priceRow && priceRow.currency ? priceRow.currency : (checkoutCurrency || DEFAULT_CURRENCY)
-          li(style="padding:0.35rem 0; display:flex; justify-content:space-between")
-            span= title + " × " + qty
-            span= (lineSubtotal).toFixed(2) + " " + currency
+          li.checkout-summary-line(style="padding:0.35rem 0; display:flex; justify-content:space-between" data-unit-price=price data-initial-qty=qty data-is-event=(isEventLine ? '1' : '0') data-product-variant-id=(isEventLine ? productVariantId : '') data-tax-rate=taxRate)
+            span
+              span.checkout-summary-title= title
+              span.checkout-summary-qty-prefix  × 
+              span.checkout-summary-qty= qty
+            span.checkout-summary-subtotal= (lineSubtotal).toFixed(2) + " " + currency
       div(style="margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid #e0e0e0; display:flex; justify-content:space-between; font-weight:600")
         span Total to pay
         span#checkoutTotalDisplay= (checkoutTotal != null ? Number(checkoutTotal).toFixed(2) : '0.00') + " " + (checkoutCurrency || DEFAULT_CURRENCY)
-      if vatSummary && vatSummary.length > 0
-        div(style="margin-top:0.5rem; padding-top:0.5rem; border-top:1px solid #e0e0e0; font-size:0.82rem; color:#666")
+      if checkoutVatEnabled && vatSummary && vatSummary.length > 0
+        div#checkoutVatWrap(style="margin-top:0.5rem; padding-top:0.5rem; border-top:1px solid #e0e0e0; font-size:0.82rem; color:#666")
           each vg in vatSummary
-            div(style="display:flex; justify-content:space-between; padding:0.1rem 0")
-              span Net (excl. PDV #{vg.rate}%)
-              span= vg.net.toFixed(2) + " " + (checkoutCurrency || DEFAULT_CURRENCY)
-            div(style="display:flex; justify-content:space-between; padding:0.1rem 0")
-              span PDV #{vg.rate}%
-              span= vg.vatAmount.toFixed(2) + " " + (checkoutCurrency || DEFAULT_CURRENCY)
+            div.checkout-vat-rate-block(data-vat-rate=vg.rate)
+              div(style="display:flex; justify-content:space-between; padding:0.1rem 0")
+                span.checkout-vat-net-label Net (excl. PDV #{vg.rate}%)
+                span.checkout-vat-net-amount= vg.net.toFixed(2) + " " + (checkoutCurrency || DEFAULT_CURRENCY)
+              div(style="display:flex; justify-content:space-between; padding:0.1rem 0")
+                span.checkout-vat-amt-label PDV #{vg.rate}%
+                span.checkout-vat-amt= vg.vatAmount.toFixed(2) + " " + (checkoutCurrency || DEFAULT_CURRENCY)
       p(style="margin:0.5rem 0 0; font-size:0.9rem; color:#555") You will be charged exactly this amount when you click Place order.
 
-    form#checkoutForm(action="/checkout" method="post" data-stripe-key=(stripePublishableKey || '') data-user-logged-in=(user ? '1' : '') data-requires-address=(requiresAddress ? '1' : '0'))
+    form#checkoutForm(action="/checkout" method="post" data-stripe-key=(stripePublishableKey || '') data-user-logged-in=(user ? '1' : '') data-requires-address=(requiresAddress ? '1' : '0') data-person-type=(user && user.personType === 'legal' ? 'legal' : 'private') data-checkout-currency=(checkoutCurrency || DEFAULT_CURRENCY) data-checkout-vat-enabled=(checkoutVatEnabled ? '1' : '0'))
       input#attendeesPayload(type="hidden" name="attendees" value="")
       if user
         p(style="margin-bottom:1rem; padding:0.75rem; background:#e8f4fd; border-radius:6px; font-size:0.95rem")
@@ -57,19 +65,23 @@ block content
         if eventLines.length > 0
           section(style="margin-bottom:1.25rem; padding:0.75rem; border:1px solid #d0d0d0; border-radius:6px; background:#fff")
             h3(style="margin:0 0 0.75rem 0; font-size:1rem") Event attendees
-            p(style="margin:0 0 0.75rem 0; font-size:0.9rem; color:#555") Add one attendee for each reserved event seat.
+            p(style="margin:0 0 0.75rem 0; font-size:0.9rem; color:#555") Add registrants for each seat. Your cart holds one seat per event; use &ldquo;Add registrant&rdquo; for additional attendees (you must keep at least one).
             each line in eventLines
               - const variant = line.ProductVariant || {}
               - const variantId = line.productVariantId || variant.id
               - const lineTitle = line.title || (variant.Product && variant.Product.title) || variant.title || "Event session"
-              - const lineQty = Number(line.quantity) || 1
               section(data-attendee-group="1" data-product-variant-id=variantId style="margin:0 0 0.75rem 0; padding:0.75rem; border:1px solid #ececec; border-radius:6px")
-                h4(style="margin:0 0 0.5rem 0; font-size:0.95rem")= lineTitle + " (" + lineQty + " seat" + (lineQty > 1 ? "s" : "") + ")"
-                - for (let i = 0; i < lineQty; i++)
-                  .attendee-row(style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:0.5rem; margin-bottom:0.5rem" data-attendee-row="1" data-attendee-index=(i + 1))
-                    input(type="text" placeholder="Forename" data-attendee-forename="1" value=(i === 0 && user && user.forename ? user.forename : ""))
-                    input(type="text" placeholder="Surname" data-attendee-surname="1" value=(i === 0 && user && user.surname ? user.surname : ""))
-                    input(type="email" placeholder="Email" data-attendee-email="1" value=(i === 0 && user && user.email ? user.email : "") required)
+                h4(style="margin:0 0 0.5rem 0; font-size:0.95rem")
+                  span= lineTitle
+                  |  
+                  span.attendee-seat-summary 1 seat
+                .attendee-rows
+                  .attendee-row(style="display:grid; grid-template-columns: 1fr 1fr 1fr auto; gap:0.5rem; margin-bottom:0.5rem; align-items:end" data-attendee-row="1" data-attendee-index=1)
+                    input(type="text" placeholder="Forename" data-attendee-forename="1" value=(user && user.forename ? user.forename : ""))
+                    input(type="text" placeholder="Surname" data-attendee-surname="1" value=(user && user.surname ? user.surname : ""))
+                    input(type="email" placeholder="Email" data-attendee-email="1" value=(user && user.email ? user.email : "") required)
+                    button.attendee-remove(type="button" style="padding:0.35rem 0.5rem; white-space:nowrap") Remove
+                button.attendee-add(type="button" class="button" style="margin-top:0.35rem") Add registrant
 
       h3(style="margin-top:1rem") Contact &amp; delivery details
       div(style="margin-bottom:0.75rem")

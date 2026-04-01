@@ -28,7 +28,7 @@ function formatCartForApi(cart, lines, actorContext = {}) {
     const price = priceRow ? Number(priceRow.amount) : 0;
     const qty = Number(line.quantity) || 1;
     const isEventVariant = Boolean(variant.Event && variant.Event.id);
-    const isQuantityRestricted = isEventVariant && (actorContext.isGuest || actorContext.personType !== "legal");
+    const isQuantityRestricted = isEventVariant;
     const showQuantityStepper = !isQuantityRestricted;
     const productVariantId = line.productVariantId || variant.id;
     const title = product.title || variant.title || "";
@@ -41,7 +41,7 @@ function formatCartForApi(cart, lines, actorContext = {}) {
       isEventVariant,
       isQuantityRestricted,
       showQuantityStepper,
-      canIncrease: !isQuantityRestricted || qty < 1,
+      canIncrease: !isQuantityRestricted,
     };
   });
   const count = lineList.reduce((acc, l) => acc + l.quantity, 0);

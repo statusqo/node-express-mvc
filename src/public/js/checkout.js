@@ -73,6 +73,181 @@
     if (payNewCard) payNewCard.addEventListener("change", updatePaymentUI);
     updatePaymentUI();
 
+    var personType = form.getAttribute("data-person-type") || "private";
+
+    function getEffectiveQtyForSummaryLine(lineEl) {
+      var initialQty = parseInt(lineEl.getAttribute("data-initial-qty") || "1", 10) || 1;
+      var isEvent = lineEl.getAttribute("data-is-event") === "1";
+      var variantId = lineEl.getAttribute("data-product-variant-id") || "";
+      if (personType === "legal" && isEvent && variantId) {
+        var esc = variantId.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+        var group = form.querySelector('[data-attendee-group="1"][data-product-variant-id="' + esc + '"]');
+        if (group) {
+          var rows = group.querySelectorAll("[data-attendee-row='1']");
+          return Math.max(1, rows.length);
+        }
+      }
+      return initialQty;
+    }
+
+    function refreshCheckoutSummary() {
+      var list = document.getElementById("checkoutSummaryList");
+      var totalEl = document.getElementById("checkoutTotalDisplay");
+      if (!list || !totalEl) return;
+      var currency = form.getAttribute("data-checkout-currency") || "";
+      var lineEls = list.querySelectorAll(".checkout-summary-line");
+      var vatMap = {};
+      var grandTotal = 0;
+      var vatEnabled = form.getAttribute("data-checkout-vat-enabled") === "1";
+      for (var i = 0; i < lineEls.length; i++) {
+        var lineEl = lineEls[i];
+        var price = parseFloat(lineEl.getAttribute("data-unit-price") || "0", 10) || 0;
+        var qty = getEffectiveQtyForSummaryLine(lineEl);
+        var sub = price * qty;
+        grandTotal += sub;
+        if (vatEnabled) {
+          var rate = parseFloat(lineEl.getAttribute("data-tax-rate") || "25", 10) || 25;
+          vatMap[rate] = (vatMap[rate] || 0) + sub;
+        }
+        var qtySpan = lineEl.querySelector(".checkout-summary-qty");
+        var subSpan = lineEl.querySelector(".checkout-summary-subtotal");
+        if (qtySpan) qtySpan.textContent = String(qty);
+        if (subSpan) subSpan.textContent = sub.toFixed(2) + " " + currency;
+      }
+      totalEl.textContent = grandTotal.toFixed(2) + " " + currency;
+      var vatWrap = document.getElementById("checkoutVatWrap");
+      if (!vatWrap) return;
+      if (!vatEnabled) {
+        vatWrap.innerHTML = "";
+        return;
+      }
+      var rates = Object.keys(vatMap)
+        .map(function (k) { return parseFloat(k, 10); })
+        .sort(function (a, b) { return a - b; });
+      vatWrap.innerHTML = "";
+      for (var r = 0; r < rates.length; r++) {
+        var rate = rates[r];
+        var gross = vatMap[rate];
+        var net = gross / (1 + rate / 100);
+        var vatAmt = gross - net;
+        var block = document.createElement("div");
+        block.className = "checkout-vat-rate-block";
+        block.setAttribute("data-vat-rate", String(rate));
+        block.innerHTML =
+          '<div style="display:flex;justify-content:space-between;padding:0.1rem 0">' +
+          '<span class="checkout-vat-net-label">Net (excl. PDV ' +
+          rate +
+          "%)</span>" +
+          '<span class="checkout-vat-net-amount">' +
+          net.toFixed(2) +
+          " " +
+          currency +
+          "</span></div>" +
+          '<div style="display:flex;justify-content:space-between;padding:0.1rem 0">' +
+          '<span class="checkout-vat-amt-label">PDV ' +
+          rate +
+          "%</span>" +
+          '<span class="checkout-vat-amt">' +
+          vatAmt.toFixed(2) +
+          " " +
+          currency +
+          "</span></div>";
+        vatWrap.appendChild(block);
+      }
+    }
+
+    function updateGroupSeatLabels(group) {
+      var rows = group.querySelectorAll("[data-attendee-row='1']");
+      var n = rows.length;
+      var el = group.querySelector(".attendee-seat-summary");
+      if (el) el.textContent = n + (n === 1 ? " seat" : " seats");
+    }
+
+    function refreshAttendeeRemoveButtons() {
+      var groups = form.querySelectorAll("[data-attendee-group='1']");
+      for (var g = 0; g < groups.length; g++) {
+        var group = groups[g];
+        var rows = group.querySelectorAll("[data-attendee-row='1']");
+        var n = rows.length;
+        for (var r = 0; r < rows.length; r++) {
+          var btn = rows[r].querySelector(".attendee-remove");
+          if (btn) btn.disabled = n <= 1;
+        }
+      }
+    }
+
+    function onAttendeeRowsChanged() {
+      refreshAttendeeRemoveButtons();
+      refreshCheckoutSummary();
+    }
+
+    if (personType === "legal") {
+      form.addEventListener("click", function (ev) {
+        var addBtn = ev.target.closest(".attendee-add");
+        if (addBtn) {
+          ev.preventDefault();
+          var group = addBtn.closest("[data-attendee-group]");
+          if (!group) return;
+          var container = group.querySelector(".attendee-rows");
+          var firstRow = container ? container.querySelector("[data-attendee-row='1']") : null;
+          if (!container || !firstRow) return;
+          var clone = firstRow.cloneNode(true);
+          var inputs = clone.querySelectorAll("input");
+          for (var i = 0; i < inputs.length; i++) inputs[i].value = "";
+          container.appendChild(clone);
+          updateGroupSeatLabels(group);
+          onAttendeeRowsChanged();
+          return;
+        }
+        var remBtn = ev.target.closest(".attendee-remove");
+        if (remBtn) {
+          ev.preventDefault();
+          var row = remBtn.closest("[data-attendee-row='1']");
+          var grp = remBtn.closest("[data-attendee-group]");
+          var container = grp && grp.querySelector(".attendee-rows");
+          if (!row || !container || !grp) return;
+          var n = container.querySelectorAll("[data-attendee-row='1']").length;
+          if (n <= 1) return;
+          row.remove();
+          updateGroupSeatLabels(grp);
+          onAttendeeRowsChanged();
+        }
+      });
+      var ag = form.querySelectorAll("[data-attendee-group='1']");
+      for (var agi = 0; agi < ag.length; agi++) updateGroupSeatLabels(ag[agi]);
+      onAttendeeRowsChanged();
+    }
+
+    function collectAttendeesPayload() {
+      var groups = form.querySelectorAll("[data-attendee-group='1']");
+      var payload = [];
+      for (var g = 0; g < groups.length; g++) {
+        var group = groups[g];
+        var productVariantId = (group.getAttribute("data-product-variant-id") || "").trim();
+        if (!productVariantId) continue;
+        var rows = group.querySelectorAll("[data-attendee-row='1']");
+        var attendees = [];
+        for (var r = 0; r < rows.length; r++) {
+          var row = rows[r];
+          var emailEl = row.querySelector("[data-attendee-email='1']");
+          var forenameEl = row.querySelector("[data-attendee-forename='1']");
+          var surnameEl = row.querySelector("[data-attendee-surname='1']");
+          var email = emailEl && emailEl.value ? String(emailEl.value).trim().toLowerCase() : "";
+          var forename = forenameEl && forenameEl.value ? String(forenameEl.value).trim() : "";
+          var surname = surnameEl && surnameEl.value ? String(surnameEl.value).trim() : "";
+          if (!email) {
+            return { error: "Each event attendee must have an email address." };
+          }
+          attendees.push({ email: email, forename: forename, surname: surname });
+        }
+        if (attendees.length < 1) {
+          return { error: "Each event needs at least one attendee." };
+        }
+        payload.push({ productVariantId: productVariantId, attendees: attendees });
+      }
+      return { value: payload };
+    }
+
     if (stripePublishableKey && typeof Stripe !== "undefined") {
       var stripe = Stripe(stripePublishableKey);
       var elements = stripe.elements();
@@ -93,33 +268,6 @@
       form.addEventListener("submit", function (ev) {
         ev.preventDefault();
         if (sameAsDelivery && sameAsDelivery.checked) copyDeliveryToBilling();
-
-        function collectAttendeesPayload() {
-          var groups = form.querySelectorAll("[data-attendee-group='1']");
-          var payload = [];
-          for (var g = 0; g < groups.length; g++) {
-            var group = groups[g];
-            var productVariantId = (group.getAttribute("data-product-variant-id") || "").trim();
-            if (!productVariantId) continue;
-            var rows = group.querySelectorAll("[data-attendee-row='1']");
-            var attendees = [];
-            for (var r = 0; r < rows.length; r++) {
-              var row = rows[r];
-              var emailEl = row.querySelector("[data-attendee-email='1']");
-              var forenameEl = row.querySelector("[data-attendee-forename='1']");
-              var surnameEl = row.querySelector("[data-attendee-surname='1']");
-              var email = emailEl && emailEl.value ? String(emailEl.value).trim().toLowerCase() : "";
-              var forename = forenameEl && forenameEl.value ? String(forenameEl.value).trim() : "";
-              var surname = surnameEl && surnameEl.value ? String(surnameEl.value).trim() : "";
-              if (!email) {
-                return { error: "Each event attendee must have an email address." };
-              }
-              attendees.push({ email: email, forename: forename, surname: surname });
-            }
-            payload.push({ productVariantId: productVariantId, attendees: attendees });
-          }
-          return { value: payload };
-        }
 
         var useSavedCard = paySavedCard && paySavedCard.checked;
         var savedPaymentMethodSelect = document.getElementById("savedPaymentMethod");

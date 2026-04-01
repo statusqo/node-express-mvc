@@ -68,6 +68,76 @@ block content
                                 +readonlyField('Date')
                                     | #{order.createdAt ? new Date(order.createdAt).toLocaleString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'}) : '—'}
 
+                                +readonlyField('Order source')
+                                    if order.source === 'event'
+                                        span.da-badge.da-badge--info Event checkout
+                                    else
+                                        span Cart
+
+                                +readonlyField('Stripe PaymentIntent')
+                                    if order.stripePaymentIntentId
+                                        span.da-cell-mono= order.stripePaymentIntentId
+                                    else
+                                        span.da-cell-muted —
+
+                            .da-form-section
+                                span.da-form-section-label Line items
+
+                                if orderLines && orderLines.length
+                                    .da-table-scroll(style='margin-top:0.5rem')
+                                        table.da-table(role='table' aria-label='Order lines')
+                                            thead
+                                                tr
+                                                    th(scope='col') Title
+                                                    th(scope='col') Qty
+                                                    th(scope='col') Unit price
+                                                    th(scope='col') SKU
+                                                    th(scope='col') Event
+                                            tbody
+                                                each line in orderLines
+                                                    - var evId = line.eventId
+                                                    tr
+                                                        td= line.title || '—'
+                                                        td= line.quantity != null ? line.quantity : '—'
+                                                        td= line.price != null ? Number(line.price).toFixed(2) + ' ' + (order.currency || 'EUR') : '—'
+                                                        td
+                                                            span.da-cell-mono= line.sku || '—'
+                                                        td
+                                                            if evId
+                                                                a.da-row-btn.da-row-btn--edit(
+                                                                    href=(adminPrefix || '') + '/events/' + evId + '/registrants'
+                                                                ) Registrants
+                                                            else
+                                                                span.da-cell-muted —
+                                else
+                                    p.da-refund-empty No line items for this order.
+
+                            if transactions && transactions.length
+                                .da-form-section
+                                    span.da-form-section-label Payment transactions
+
+                                    .da-table-scroll(style='margin-top:0.5rem')
+                                        table.da-table(role='table' aria-label='Transactions')
+                                            thead
+                                                tr
+                                                    th(scope='col') Status
+                                                    th(scope='col') Amount
+                                                    th(scope='col') Gateway reference
+                                                    th.da-col-created(scope='col') Created
+                                            tbody
+                                                each tx in transactions
+                                                    tr
+                                                        td
+                                                            if tx.status
+                                                                span.da-badge(class='da-badge--' + ({success:'success',pending:'warning',failed:'danger',refunded:'info'})[tx.status] || 'neutral')= tx.status.charAt(0).toUpperCase() + tx.status.slice(1)
+                                                            else
+                                                                span —
+                                                        td= tx.amount != null ? Number(tx.amount).toFixed(2) + ' ' + (tx.currency || order.currency || 'EUR') : '—'
+                                                        td
+                                                            span.da-cell-mono= tx.gatewayReference || '—'
+                                                        td.da-col-created
+                                                            span.da-cell-muted= tx.createdAt ? new Date(tx.createdAt).toLocaleString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'}) : '—'
+
                             .da-form-section
                                 span.da-form-section-label Fulfillment
 

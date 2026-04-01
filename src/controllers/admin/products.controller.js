@@ -3,6 +3,7 @@ const { validateProduct } = require("../../validators/product.schema");
 const { parseDefinitionPairs, validateMetaObjectValues } = require("../../validators/metaObject.schema");
 const config = require("../../config");
 const { DEFAULT_CURRENCY } = require("../../config/constants");
+const storeSettingService = require("../../services/storeSetting.service");
 
 function slugify(s) {
   if (!s || typeof s !== "string") return "";
@@ -89,6 +90,7 @@ module.exports = {
   },
 
   async newForm(req, res) {
+    const checkoutVatEnabled = await storeSettingService.isCheckoutVatEnabled();
     const { types, categories, taxRates } = await productService.getFormData();
     res.render("admin/products/form", {
       title: "New Product",
@@ -101,12 +103,14 @@ module.exports = {
       attachedMedia: [],
       isEdit: false,
       DEFAULT_CURRENCY,
+      checkoutVatEnabled,
     });
   },
 
   async create(req, res) {
+    const checkoutVatEnabled = await storeSettingService.isCheckoutVatEnabled();
     const slugVal = req.body.slug ? String(req.body.slug).trim() : slugify(req.body.title);
-    const result = validateProduct(req.body, slugVal);
+    const result = validateProduct(req.body, slugVal, { taxRateRequired: checkoutVatEnabled });
     if (!result.ok) {
       const { types, categories, taxRates, metaObjects } = await productService.getFormData();
       const metaObjectsWithPairs = withDefinitionPairs(metaObjects);
@@ -123,6 +127,7 @@ module.exports = {
         isEdit: false,
         error: result.errors[0].message,
         DEFAULT_CURRENCY,
+        checkoutVatEnabled,
       });
     }
     const { types, categories, taxRates, metaObjects } = await productService.getFormData();
@@ -162,6 +167,7 @@ module.exports = {
         isEdit: false,
         error: metaValidation.errors?.join(" ") || "Invalid meta object values.",
         DEFAULT_CURRENCY,
+        checkoutVatEnabled,
       });
     }
     const validMetaIds = new Set((metaObjects || []).map((m) => String(m.id)));
@@ -181,15 +187,18 @@ module.exports = {
         isEdit: false,
         error: "One or more selected meta objects are invalid.",
         DEFAULT_CURRENCY,
+        checkoutVatEnabled,
       });
     }
-    await productService.create({
+    const createData = {
       ...result.data,
       quantity: result.data.quantity,
       metaObjectIds: ids,
       metaObjectValues: metaValidation.data,
       mediaIds: normalizeMediaIds(req.body.mediaIds),
-    });
+    };
+    if (!checkoutVatEnabled) createData.taxRateId = null;
+    await productService.create(createData);
     res.setFlash("success", "Product created.");
     res.redirect((req.adminPrefix || "") + "/products");
   },
@@ -213,6 +222,7 @@ module.exports = {
     const sortedMedia = [...mediaList].sort((a, b) => (a.ProductMedia?.sortOrder ?? 0) - (b.ProductMedia?.sortOrder ?? 0));
     const mediaIds = sortedMedia.map((m) => m.id);
     const attachedMedia = sortedMedia.map(toAttachedMediaItem);
+    const checkoutVatEnabled = await storeSettingService.isCheckoutVatEnabled();
     const { types, categories, taxRates, metaObjects } = await productService.getFormData();
     const metaObjectsWithPairs = withDefinitionPairs(metaObjects);
     const attachedMetaObjects = buildAttachedMetaObjects(metaObjectIds, metaObjectsWithPairs, metaObjectValues);
@@ -235,10 +245,12 @@ module.exports = {
       attachedMedia,
       isEdit: true,
       DEFAULT_CURRENCY,
+      checkoutVatEnabled,
     });
   },
 
   async update(req, res) {
+    const checkoutVatEnabled = await storeSettingService.isCheckoutVatEnabled();
     const { id } = req.params;
     const product = await productService.findByIdWithMetaObjects(id);
     if (!product) {
@@ -253,7 +265,7 @@ module.exports = {
       existingMetaObjectValues[mo.id] = vals && typeof vals === "object" ? vals : {};
     });
     const slugVal = req.body.slug ? String(req.body.slug).trim() : slugify(req.body.title);
-    const result = validateProduct(req.body, slugVal);
+    const result = validateProduct(req.body, slugVal, { taxRateRequired: checkoutVatEnabled });
     if (!result.ok) {
       const { types, categories, taxRates, metaObjects, media } = await productService.getFormData();
       const metaObjectsWithPairs = withDefinitionPairs(metaObjects);
@@ -273,6 +285,7 @@ module.exports = {
         isEdit: true,
         error: result.errors[0].message,
         DEFAULT_CURRENCY,
+        checkoutVatEnabled,
       });
     }
     const { types, categories, taxRates, metaObjects, media } = await productService.getFormData();
@@ -317,15 +330,18 @@ module.exports = {
         isEdit: true,
         error: metaValidation.errors?.join(" ") || "Invalid meta object values.",
         DEFAULT_CURRENCY,
+        checkoutVatEnabled,
       });
     }
-    await productService.update(id, {
+    const updatePayload = {
       ...result.data,
       quantity: result.data.quantity,
       metaObjectIds: validIds,
       metaObjectValues: metaValidation.data,
       mediaIds: normalizeMediaIds(req.body.mediaIds),
-    });
+    };
+    if (!checkoutVatEnabled) updatePayload.taxRateId = null;
+    await productService.update(id, updatePayload);
     res.setFlash("success", "Product updated.");
     res.redirect((req.adminPrefix || "") + "/products");
   },

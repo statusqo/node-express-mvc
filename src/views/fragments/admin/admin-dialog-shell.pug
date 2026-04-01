@@ -1,0 +1,19 @@
+//- Reusable animated dialog shell (same transitions as fragments/confirm-modal).
+//- mixin adminDialogShell(options)
+//-   options.shellClass — extra class on root (e.g. admin-media-picker-modal)
+//-   options.labelledBy — id of the dialog title element
+//-   options.closeDataAction — data-action value for overlay + close buttons
+mixin adminDialogShell(options)
+  - const shellClass = options.shellClass || ''
+  - const labelledBy = options.labelledBy || ''
+  - const closeAction = options.closeDataAction || 'close-dialog'
+  .da-admin-dialog(
+    class=shellClass
+    role='dialog'
+    aria-modal='true'
+    aria-labelledby=labelledBy
+    aria-hidden='true'
+  )
+    .da-admin-dialog__backdrop(data-action=closeAction)
+    .da-admin-dialog__box
+      block

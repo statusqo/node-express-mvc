@@ -22,6 +22,7 @@ const userRepo = require("../repos/user.repo");
 const transactionRepo = require("../repos/transaction.repo");
 const refundTransactionRepo = require("../repos/refundTransaction.repo");
 const logger = require("../config/logger");
+const storeSettingService = require("../services/storeSetting.service");
 
 const { normalizeError, toError } = require("./errors");
 const { PAYMENT_STATUS } = require("../constants/order");
@@ -503,6 +504,8 @@ async function createInvoiceForOrder(orderId, userId, sessionId, options = {}) {
     throw err;
   }
 
+  const attachStripeTaxRates = await storeSettingService.isCheckoutVatEnabled();
+
   try {
     const customer = await getOrCreateStripeCustomer(userId, email);
     await syncStripeCustomerWithOrder(customer.id, order);
@@ -572,7 +575,7 @@ async function createInvoiceForOrder(orderId, userId, sessionId, options = {}) {
         description: line.title || "Item",
         metadata: itemMeta,
       };
-      if (line.stripeTaxRateId) {
+      if (attachStripeTaxRates && line.stripeTaxRateId) {
         itemParams.tax_rates = [line.stripeTaxRateId];
       }
       await withTimeout(

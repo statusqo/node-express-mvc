@@ -34,12 +34,19 @@
     if (!attachedContainer || !openBtn || !modal || !grid) return;
 
     function showModal() {
-      modal.hidden = false;
+      if (window.AdminDialogModal) {
+        window.AdminDialogModal.open(modal);
+      }
       if (grid.children.length === 0) loadAndRenderGrid();
     }
 
     function hideModal() {
-      modal.hidden = true;
+      if (window.AdminDialogModal) {
+        window.AdminDialogModal.close(modal);
+      } else {
+        modal.setAttribute("aria-hidden", "true");
+        modal.classList.remove("da-admin-dialog--open", "da-admin-dialog--closing");
+      }
     }
 
     function getCurrentIds() {

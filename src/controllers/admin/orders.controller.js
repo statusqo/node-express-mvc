@@ -65,17 +65,18 @@ module.exports = {
 
   async editForm(req, res) {
     const { id } = req.params;
-    const order = await orderService.getOrderByIdForAdmin(id);
-    if (!order) {
+    const payload = await orderService.getAdminOrderEditPayload(id);
+    if (!payload) {
       res.setFlash("error", "Order not found.");
       return res.redirect((req.adminPrefix || "") + "/orders");
     }
-    const orderPlain = order.get ? order.get({ plain: true }) : order;
-    const refundRequests = await refundRequestService.findByOrder(order.id);
+    const refundRequests = await refundRequestService.findByOrder(id);
     const refundRequestsPlain = (refundRequests || []).map((r) => (r.get ? r.get({ plain: true }) : r));
     res.render("admin/orders/edit", {
       title: "Edit Order",
-      order: orderPlain,
+      order: payload.order,
+      orderLines: payload.orderLines,
+      transactions: payload.transactions,
       refundRequests: refundRequestsPlain,
       validFulfillmentStatuses: FULFILLMENT_STATUS_LIST,
     });
@@ -87,17 +88,18 @@ module.exports = {
     const result = validateOrderUpdate(req.body || {});
 
     if (!result.ok) {
-      const order = await orderService.getOrderByIdForAdmin(id);
-      if (!order) {
+      const payload = await orderService.getAdminOrderEditPayload(id);
+      if (!payload) {
         res.setFlash("error", "Order not found.");
         return res.redirect(ordersPath);
       }
-      const orderPlain = order.get ? order.get({ plain: true }) : order;
-      const refundRequests = await refundRequestService.findByOrder(order.id);
+      const refundRequests = await refundRequestService.findByOrder(id);
       const refundRequestsPlain = (refundRequests || []).map((r) => (r.get ? r.get({ plain: true }) : r));
       return res.status(400).render("admin/orders/edit", {
         title: "Edit Order",
-        order: orderPlain,
+        order: payload.order,
+        orderLines: payload.orderLines,
+        transactions: payload.transactions,
         refundRequests: refundRequestsPlain,
         validFulfillmentStatuses: FULFILLMENT_STATUS_LIST,
         error: result.errors[0].message,
@@ -111,13 +113,15 @@ module.exports = {
     } catch (err) {
       const status = err.status ?? err.statusCode ?? 400;
       const message = status === 404 ? "Order not found." : err.message || "Could not update order.";
-      const order = await orderService.getOrderByIdForAdmin(id);
-      const orderPlain = order ? (order.get ? order.get({ plain: true }) : order) : { id };
-      const refundRequests = order ? await refundRequestService.findByOrder(order.id) : [];
+      const payload = await orderService.getAdminOrderEditPayload(id);
+      const orderPlain = payload ? payload.order : { id };
+      const refundRequests = payload ? await refundRequestService.findByOrder(id) : [];
       const refundRequestsPlain = (refundRequests || []).map((r) => (r.get ? r.get({ plain: true }) : r));
       return res.status(status).render("admin/orders/edit", {
         title: "Edit Order",
         order: orderPlain,
+        orderLines: payload ? payload.orderLines : [],
+        transactions: payload ? payload.transactions : [],
         refundRequests: refundRequestsPlain,
         validFulfillmentStatuses: FULFILLMENT_STATUS_LIST,
         error: message,

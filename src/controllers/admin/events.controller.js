@@ -21,8 +21,55 @@ module.exports = {
   },
 
   /**
+   * GET /admin/events/:eventId/registrants/:registrationId/edit
+   */
+  async registrantEditForm(req, res) {
+    const { eventId, registrationId } = req.params;
+    const event = await eventService.findByIdForAdmin(eventId);
+    if (!event) {
+      res.setFlash("error", "Event not found.");
+      return res.redirect((req.adminPrefix || "") + "/events");
+    }
+    const data = await registrationService.getRegistrationForAdminEdit(registrationId, eventId);
+    if (!data) {
+      res.setFlash("error", "Registration not found.");
+      return res.redirect((req.adminPrefix || "") + "/events/" + eventId + "/registrants");
+    }
+    const paidRegistrantCount = await registrationService.countPaidRegistrantsForEvent(eventId);
+    res.render("admin/events/registrant-edit", {
+      title: "Edit registrant",
+      event,
+      registration: data.registration,
+      eventRow: data.event,
+      meeting: data.meeting,
+      paidRegistrantCount,
+    });
+  },
+
+  /**
+   * POST /admin/events/:eventId/registrants/:registrationId/retry-zoom
+   */
+  async registrantRetryZoom(req, res) {
+    const { eventId, registrationId } = req.params;
+    const redirectUrl = (req.adminPrefix || "") + "/events/" + eventId + "/registrants/" + registrationId + "/edit";
+    try {
+      const result = await registrationService.retryZoomSyncForRegistration(registrationId, eventId);
+      if (!result.ok) {
+        res.setFlash("error", result.error || "Zoom sync failed.");
+      } else if (result.alreadySynced) {
+        res.setFlash("success", "This registration is already linked to Zoom.");
+      } else {
+        res.setFlash("success", "Zoom sync completed.");
+      }
+    } catch (err) {
+      res.setFlash("error", err.message || "Zoom sync failed.");
+    }
+    return res.redirect(302, redirectUrl);
+  },
+
+  /**
    * POST /admin/events/:eventId/registrants/:registrationId/cancel
-   * Cancel a single registration (admin action). Issues refund if applicable.
+   * Cancel a single registration from an event (admin action). Issues refund if applicable.
    */
   async cancelRegistrant(req, res) {
     const { eventId, registrationId } = req.params;

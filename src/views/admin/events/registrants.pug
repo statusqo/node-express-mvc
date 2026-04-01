@@ -37,12 +37,7 @@ block content
                                 - var fullName = [r.forename, r.surname].filter(Boolean).join(' ') || '—'
                                 - var email = r.email || (r.User && r.User.email) || '—'
                                 - var payClass = ({paid:'success', pending:'warning', failed:'danger', refunded:'info', cancelled:'neutral'})[r.Order && r.Order.paymentStatus] || 'neutral'
-                                - var cancelFormId = 'cancel-reg-form-' + r.id
-                                - var cancelUrl = (adminPrefix || '') + '/events/' + event.id + '/registrants/' + r.id + '/cancel'
-                                - var cancelMsg = fullName !== '—' ? 'Remove ' + fullName + ' from this event?' : 'Remove this registrant from this event?'
-                                - var cancelBullets = ['The registration will be permanently removed']
-                                - if (r.Order && r.Order.paymentStatus === 'paid') cancelBullets.push('A full refund will be issued via Stripe')
-                                - if (event.isOnline) cancelBullets.push('The attendee will be removed from the Zoom meeting')
+                                - var editUrl = (adminPrefix || '') + '/events/' + event.id + '/registrants/' + r.id + '/edit'
                                 tr
                                     td
                                         span.da-cell-secondary= fullName
@@ -68,15 +63,10 @@ block content
                                             if r.createdAt
                                                 span.da-date-time= fmtTime(r.createdAt)
                                     td
-                                        form(id=cancelFormId method='post' action=cancelUrl style='display:none')
                                         .da-cell-actions
-                                            button.da-row-btn.da-row-btn--danger(
-                                                type='button'
-                                                data-confirm-modal
-                                                data-confirm-title='Cancel Registration'
-                                                data-confirm-msg=cancelMsg
-                                                data-confirm-bullets=JSON.stringify(cancelBullets)
-                                                data-form-id=cancelFormId
-                                            ) Cancel
+                                            a.da-row-btn.da-row-btn--edit(
+                                                href=editUrl
+                                                aria-label='Edit registrant ' + (r.id ? r.id.slice(0, 8) : '')
+                                            ) Edit
                         else
                             +tableEmpty('No registrants for this event.', 6)

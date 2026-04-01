@@ -33,6 +33,7 @@ const Registration = require("./Registration");
 const AdminZoomAccount = require("./AdminZoomAccount");
 const EventMeeting = require("./EventMeeting");
 const ProcessedStripeEvent = require("./ProcessedStripeEvent");
+const StoreSetting = require("./StoreSetting");
 
 // --- Menu <-> MenuItem ---
 Menu.hasMany(MenuItem, { foreignKey: "menuId" });
@@ -213,4 +214,5 @@ module.exports = {
   AdminZoomAccount,
   EventMeeting,
   ProcessedStripeEvent,
+  StoreSetting,
 };

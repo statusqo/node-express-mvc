@@ -20,6 +20,7 @@ const seminarsRoutes = require("./seminars.routes");
 const classroomsRoutes = require("./classrooms.routes");
 const eventsRoutes = require("./events.routes");
 const zoomController = require("../../controllers/admin/zoom.controller");
+const settingsController = require("../../controllers/admin/settings.controller");
 const { requireAuth } = require("../../middlewares/auth.middleware");
 const { uploadMedia } = require("../../middlewares/uploadMedia.middleware");
 
@@ -57,6 +58,10 @@ router.use(requireAuth);
 
 router.get(["/", ""], asyncHandler(dashboardController.index));
 
+// Application settings hub (integrations, app-wide options)
+router.get("/settings", asyncHandler(settingsController.index));
+router.post("/settings", asyncHandler(settingsController.updateMoreSettings));
+
 // Zoom OAuth (connect account for online events)
 router.get("/zoom/connect", asyncHandler(zoomController.connect));
 router.get("/zoom/callback", asyncHandler(zoomController.callback));
@@ -89,7 +94,7 @@ router.post("/products/:id/delete", asyncHandler(productsController.delete));
 // Events overview — all events across all types, with registrant lists
 router.use("/events", eventsRoutes);
 
-// Event-type product sections (Webinars, Seminars, Classrooms) — list products, manage events per product
+// Event-type product sections (Webinars, Classrooms) — list products, manage events per product. Seminars: admin/seminars.routes.js
 router.use("/webinars", webinarsRoutes);
 router.use("/seminars", seminarsRoutes);
 router.use("/classrooms", classroomsRoutes);

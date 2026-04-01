@@ -1,12 +1,22 @@
 const menuRepo = require("../repos/menu.repo");
 
 /**
+ * Raw Sequelize rows may use camelCase or snake_case depending on dialect/options.
+ */
+function normalizeMenuItemRow(row) {
+  if (!row || typeof row !== "object") return row;
+  const parentId =
+    row.parentId != null ? row.parentId : row.parent_id != null ? row.parent_id : null;
+  return { ...row, parentId };
+}
+
+/**
  * Builds a tree structure from flat array of menu items (no depth limit).
  * Deduplicates by id to avoid duplicate entries from malformed data.
  */
 function buildMenuTree(items, parentId = null, seenIds = new Set()) {
   const branch = [];
-  for (const item of items) {
+  for (const item of items.map(normalizeMenuItemRow)) {
     if (seenIds.has(item.id)) continue;
     const itemParentId = item.parentId;
     if (itemParentId === parentId || (itemParentId === null && parentId === null)) {

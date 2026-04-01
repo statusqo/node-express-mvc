@@ -1,5 +1,6 @@
 /**
- * Public controller for event-type product sections (Webinars, Seminars, Classrooms).
+ * Public controller for event-type product sections (Webinars, Classrooms).
+ * Seminars use src/controllers/web/seminars.controller.js (catalog + inquiry only).
  * Expects req.typeSlug and req.sectionPath set by route middleware (e.g. typeSlug: 'webinar', sectionPath: 'webinars').
  */
 const productService = require("../../services/product.service");
@@ -11,13 +12,14 @@ const { getDefaultGateway } = require("../../gateways");
 const config = require("../../config");
 const { DEFAULT_CURRENCY } = require("../../config/constants");
 const logger = require("../../config/logger");
+const storeSettingService = require("../../services/storeSetting.service");
 
 function toPlain(obj) {
   return obj && typeof obj.get === "function" ? obj.get({ plain: true }) : obj;
 }
 
 function getTypeLabel(sectionPath) {
-  const labels = { webinars: "Webinars", seminars: "Seminars", classrooms: "Classrooms" };
+  const labels = { webinars: "Webinars", classrooms: "Classrooms" };
   return labels[sectionPath] || sectionPath;
 }
 
@@ -126,6 +128,7 @@ module.exports = {
       }
     }
     const userPlain = req.user && typeof req.user.get === "function" ? req.user.get({ plain: true }) : req.user || null;
+    const checkoutVatEnabled = await storeSettingService.isCheckoutVatEnabled();
     res.render("web/event-type-products/register", {
       title: "Register: " + plain.title,
       product: plain,
@@ -138,6 +141,7 @@ module.exports = {
       stripePublishableKey: config.stripe?.publishableKey || "",
       user: userPlain,
       paymentMethods,
+      checkoutVatEnabled,
     });
   },
 

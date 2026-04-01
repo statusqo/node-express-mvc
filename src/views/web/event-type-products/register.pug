@@ -7,7 +7,7 @@ block content
       p(style="margin:0.5rem 0")= product.description
     if priceAmount != null
       p(style="font-size:1.125rem; margin-bottom:0.25rem") #{Number(priceAmount).toFixed(2)} #{currency} per session
-      if Number(priceAmount) > 0
+      if checkoutVatEnabled && Number(priceAmount) > 0
         - const _rate = (product.TaxRate && product.TaxRate.percentage != null) ? Number(product.TaxRate.percentage) : 25
         - const _net = Number(priceAmount) / (1 + _rate / 100)
         - const _vatAmt = Number(priceAmount) - _net

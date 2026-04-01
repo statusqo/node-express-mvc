@@ -2,20 +2,14 @@ const cartRepo = require("../repos/cart.repo");
 const productVariantRepo = require("../repos/productVariant.repo");
 const eventRepo = require("../repos/event.repo");
 
-const EVENT_VARIANT_PRIVATE_GUEST_MAX_QTY_MESSAGE =
-  "Event sessions are limited to quantity 1 for guests and private users.";
+const EVENT_VARIANT_MAX_QTY_MESSAGE =
+  "Event sessions are limited to quantity 1 in the cart. Add more seats at checkout.";
 
-function isPrivateOrGuestCartActor(userId, actorContext = {}) {
-  if (!userId) return true;
-  return actorContext.personType !== "legal";
-}
-
-async function ensureAllowedEventVariantQuantity(userId, productVariantId, quantity, actorContext = {}) {
+async function ensureAllowedEventVariantQuantity(productVariantId, quantity) {
   const event = await eventRepo.findByProductVariantId(productVariantId);
   if (!event) return;
   if (quantity <= 1) return;
-  if (!isPrivateOrGuestCartActor(userId, actorContext)) return;
-  const err = new Error(EVENT_VARIANT_PRIVATE_GUEST_MAX_QTY_MESSAGE);
+  const err = new Error(EVENT_VARIANT_MAX_QTY_MESSAGE);
   err.status = 400;
   throw err;
 }
@@ -44,7 +38,7 @@ async function getCartWithLines(userId, sessionId) {
 /**
  * Add product variant to cart. Validates variant exists, is active and has a price.
  */
-async function addToCart(userId, sessionId, productVariantId, quantity = 1, actorContext = {}) {
+async function addToCart(userId, sessionId, productVariantId, quantity = 1, _actorContext = {}) {
   const variant = await productVariantRepo.findById(productVariantId);
   if (!variant || !variant.active) {
     const err = new Error("Product variant not found or not available.");
@@ -63,11 +57,9 @@ async function addToCart(userId, sessionId, productVariantId, quantity = 1, acto
     throw err;
   }
   const cart = await getOrCreateCart(userId, sessionId);
-  if (isPrivateOrGuestCartActor(userId, actorContext)) {
-    const existingLine = await cartRepo.getLine(cart.id, productVariantId);
-    const currentQty = existingLine ? Number(existingLine.quantity) || 0 : 0;
-    await ensureAllowedEventVariantQuantity(userId, productVariantId, currentQty + quantity, actorContext);
-  }
+  const existingLine = await cartRepo.getLine(cart.id, productVariantId);
+  const currentQty = existingLine ? Number(existingLine.quantity) || 0 : 0;
+  await ensureAllowedEventVariantQuantity(productVariantId, currentQty + quantity);
   return await cartRepo.addLine(cart.id, productVariantId, quantity);
 }
 
@@ -82,11 +74,9 @@ async function removeFromCart(userId, sessionId, productVariantId) {
 /**
  * Set line quantity. Remove line if quantity <= 0.
  */
-async function setQuantity(userId, sessionId, productVariantId, quantity, actorContext = {}) {
+async function setQuantity(userId, sessionId, productVariantId, quantity, _actorContext = {}) {
   const cart = await getOrCreateCart(userId, sessionId);
-  if (isPrivateOrGuestCartActor(userId, actorContext)) {
-    await ensureAllowedEventVariantQuantity(userId, productVariantId, quantity, actorContext);
-  }
+  await ensureAllowedEventVariantQuantity(productVariantId, quantity);
   return await cartRepo.setLineQuantity(cart.id, productVariantId, quantity);
 }
 
@@ -98,10 +88,10 @@ async function validateAndCleanCart(userId, sessionId) {
   const cart = userId
     ? await cartRepo.findByUser(userId)
     : await cartRepo.findBySessionId(sessionId);
-  if (!cart) return { removedCount: 0, removedTitles: [] };
+  if (!cart) return { removedCount: 0, removedTitles: [], clampedEventLines: 0 };
 
   const lines = await cartRepo.getLines(cart.id);
-  if (!lines || lines.length === 0) return { removedCount: 0, removedTitles: [] };
+  if (!lines || lines.length === 0) return { removedCount: 0, removedTitles: [], clampedEventLines: 0 };
 
   const removedTitles = [];
   for (const line of lines) {
@@ -114,7 +104,19 @@ async function validateAndCleanCart(userId, sessionId) {
       removedTitles.push(title);
     }
   }
-  return { removedCount: removedTitles.length, removedTitles };
+
+  let clampedEventLines = 0;
+  const linesAfter = await cartRepo.getLines(cart.id);
+  for (const line of linesAfter || []) {
+    const ev = line.ProductVariant?.Event;
+    const q = Number(line.quantity) || 0;
+    if (ev && ev.id && q > 1) {
+      await cartRepo.setLineQuantity(cart.id, line.productVariantId, 1);
+      clampedEventLines += 1;
+    }
+  }
+
+  return { removedCount: removedTitles.length, removedTitles, clampedEventLines };
 }
 
 /**

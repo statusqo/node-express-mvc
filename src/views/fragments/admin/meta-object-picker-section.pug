@@ -1,6 +1,7 @@
 //- Meta object picker component (COMPONENT_STANDARD)
 //- Usage: include this file, then +metaObjectPickerSection({ inputName, attachedMetaObjects, apiUrl, label?, hint? })
 //- attachedMetaObjects: [ { id, name, type, definitionPairs: [ { key, type, value } ], values: { key: value } } ]
+//- Requires +adminDialogShell from fragments/admin/admin-dialog-shell (via layouts/admin components include).
 mixin metaObjectPickerSection(options)
   - const inputName = options.inputName || 'metaObjectIds[]'
   - const attachedMetaObjects = options.attachedMetaObjects || []
@@ -51,11 +52,9 @@ mixin metaObjectPickerSection(options)
           else
             p.admin-form-hint.admin-meta-object-picker-no-definition No definition. Add fields in Meta Objects admin.
     button.admin-btn.admin-meta-object-picker-open(type="button" data-action="open-meta-object-picker") Select meta objects
-    div.admin-meta-object-picker-modal(role="dialog" aria-modal="true" aria-labelledby="meta-object-picker-title" hidden)
-      div.admin-meta-object-picker-modal-overlay(data-action="close-meta-object-picker")
-      div.admin-meta-object-picker-modal-box
-        h2#meta-object-picker-title.admin-meta-object-picker-modal-title Select meta objects
-        div.admin-meta-object-picker-list
-        div.admin-meta-object-picker-modal-actions
-          button.admin-btn.admin-btn-primary.admin-meta-object-picker-add-selected(type="button" data-action="add-selected-meta-objects") Add selected
-          button.admin-btn.admin-meta-object-picker-cancel(type="button" data-action="close-meta-object-picker") Cancel
+    +adminDialogShell({ shellClass: 'admin-meta-object-picker-modal', labelledBy: 'meta-object-picker-title', closeDataAction: 'close-meta-object-picker' })
+      h2#meta-object-picker-title.admin-meta-object-picker-modal-title Select meta objects
+      div.admin-meta-object-picker-list
+      div.admin-meta-object-picker-modal-actions
+        button.admin-btn.admin-btn-primary.admin-meta-object-picker-add-selected(type="button" data-action="add-selected-meta-objects") Add selected
+        button.admin-btn.admin-meta-object-picker-cancel(type="button" data-action="close-meta-object-picker") Cancel

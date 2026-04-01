@@ -11,6 +11,7 @@ html(lang='hr')
       link(rel="stylesheet" href="/public/css/main.css")
       link(rel="stylesheet" href="/public/css/admin-dark.css")
       link(rel="stylesheet" href="/public/css/admin-navbar.css")
+      link(rel="stylesheet" href="/public/css/admin-sidebar-nav.css")
       link(rel="stylesheet" href="/public/css/footer.css")
 
   body
@@ -45,6 +46,8 @@ html(lang='hr')
         div(class="content-wrapper")
             block content
     block scripts
+      script(src="/public/js/admin-sidebar-nav.js")
+      script(src="/public/js/admin-dialog-modal.js")
       script(src="/public/js/admin-media-picker.js")
       script(src="/public/js/admin-meta-object-picker.js")
       script(src="/public/js/flash.js")

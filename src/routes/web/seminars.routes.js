@@ -1,19 +1,10 @@
 const express = require("express");
 const asyncHandler = require("../../utils/asyncHandler");
-const eventTypeProductsController = require("../../controllers/web/eventTypeProducts.controller");
+const seminarsController = require("../../controllers/web/seminars.controller");
 
-const router = express.Router({ mergeParams: true });
+const router = express.Router();
 
-router.use((req, res, next) => {
-  req.typeSlug = "seminar";
-  req.sectionPath = "seminars";
-  next();
-});
-
-router.get("/", asyncHandler(eventTypeProductsController.index));
-router.get("/:slug/register", asyncHandler(eventTypeProductsController.registerForm));
-router.post("/:slug/place-order", asyncHandler(eventTypeProductsController.placeOrder));
-router.get("/:slug/buy", asyncHandler(eventTypeProductsController.redirectBuyToRegister));
-router.get("/:slug", asyncHandler(eventTypeProductsController.show));
+router.get("/", asyncHandler(seminarsController.index));
+router.get("/:slug", asyncHandler(seminarsController.show));
 
 module.exports = router;

@@ -1,6 +1,6 @@
 /**
  * Event register: Stripe Elements, place-order (event), confirmCardPayment, confirm-order (shared).
- * Works for /webinars/:slug/register, /seminars/:slug/register, /classrooms/:slug/register.
+ * Works for /webinars/:slug/register and /classrooms/:slug/register.
  * Supports free sessions (data-is-free="1") — skips Stripe and handles { free: true, orderId } response.
  */
 (function () {

@@ -5,6 +5,7 @@ const { getDefaultGateway } = require("../../gateways");
 const paymentMethodService = require("../../services/paymentMethod.service");
 const { validateCheckout } = require("../../validators/checkout.schema");
 const logger = require("../../config/logger");
+const storeSettingService = require("../../services/storeSetting.service");
 
 function getUserIdAndSession(req) {
   const userId = req.user ? req.user.id : null;
@@ -24,6 +25,15 @@ function cartRequiresAddress(lines) {
 module.exports = {
   async show(req, res) {
     const { userId, sessionId } = getUserIdAndSession(req);
+    const { removedCount, clampedEventLines } = await cartService.validateAndCleanCart(userId, sessionId);
+    if (removedCount > 0) {
+      res.setFlash("error", "Some items in your cart are no longer available and have been removed.");
+    } else if (clampedEventLines > 0) {
+      res.setFlash(
+        "success",
+        "Event seats in your cart were limited to one per session. Add more attendees on the checkout page.",
+      );
+    }
     const { cart, lines } = await cartService.getCartWithLines(userId, sessionId);
     if (!lines || lines.length === 0) {
       res.setFlash("error", "Your cart is empty.");
@@ -51,25 +61,29 @@ module.exports = {
     }
     const requiresAddress = cartRequiresAddress(lines);
 
-    // VAT breakdown for display: group gross totals by rate, derive net and VAT amounts
-    const vatMap = {};
-    for (const line of lines) {
-      const variant = line.ProductVariant || {};
-      const product = variant.Product || {};
-      const priceRow = variant.ProductPrices && variant.ProductPrices[0];
-      const price = line.price != null ? Number(line.price) : (priceRow ? Number(priceRow.amount) : 0);
-      const qty = line.quantity || 1;
-      const gross = price * qty;
-      const rate = product.TaxRate?.percentage != null ? Number(product.TaxRate.percentage) : 25;
-      vatMap[rate] = (vatMap[rate] || 0) + gross;
+    const checkoutVatEnabled = await storeSettingService.isCheckoutVatEnabled();
+
+    let vatSummary = [];
+    if (checkoutVatEnabled) {
+      const vatMap = {};
+      for (const line of lines) {
+        const variant = line.ProductVariant || {};
+        const product = variant.Product || {};
+        const priceRow = variant.ProductPrices && variant.ProductPrices[0];
+        const price = line.price != null ? Number(line.price) : (priceRow ? Number(priceRow.amount) : 0);
+        const qty = line.quantity || 1;
+        const gross = price * qty;
+        const rate = product.TaxRate?.percentage != null ? Number(product.TaxRate.percentage) : 25;
+        vatMap[rate] = (vatMap[rate] || 0) + gross;
+      }
+      vatSummary = Object.entries(vatMap)
+        .sort(([a], [b]) => Number(a) - Number(b))
+        .map(([rate, gross]) => {
+          const r = Number(rate);
+          const net = gross / (1 + r / 100);
+          return { rate: r, net: net, vatAmount: gross - net, gross };
+        });
     }
-    const vatSummary = Object.entries(vatMap)
-      .sort(([a], [b]) => Number(a) - Number(b))
-      .map(([rate, gross]) => {
-        const r = Number(rate);
-        const net = gross / (1 + r / 100);
-        return { rate: r, net: net, vatAmount: gross - net, gross };
-      });
 
     res.render("web/checkout", {
       title: "Checkout",
@@ -85,6 +99,7 @@ module.exports = {
       paymentMethods,
       stripePublishableKey: config.stripe?.publishableKey || "",
       vatSummary,
+      checkoutVatEnabled,
     });
   },
 
@@ -126,6 +141,7 @@ module.exports = {
 
     let order = null;
     try {
+      await cartService.validateAndCleanCart(userId, sessionId);
       const { cart, lines } = await cartService.getCartWithLines(userId, sessionId);
       if (!lines || lines.length === 0) {
         res.setFlash("error", "Your cart is empty or items are no longer available.");
