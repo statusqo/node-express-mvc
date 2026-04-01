@@ -77,55 +77,53 @@ block content
                                         option(value='private' selected=(!user || user.personType !== 'legal')) Private person
                                         option(value='legal' selected=(user && user.personType === 'legal')) Legal person (company)
 
-                                #privateFields
-                                    .da-form-row
-                                        .da-form-group
-                                            label.da-form-label(for='forename') Forename
-                                            input#forename.da-form-input(
-                                                type='text'
-                                                name='forename'
-                                                value=user ? (user.forename || '') : ''
-                                                placeholder='First name'
-                                                autocomplete='given-name'
-                                            )
-                                        .da-form-group
-                                            label.da-form-label(for='surname') Surname
-                                            input#surname.da-form-input(
-                                                type='text'
-                                                name='surname'
-                                                value=user ? (user.surname || '') : ''
-                                                placeholder='Last name'
-                                                autocomplete='family-name'
-                                            )
+                                .da-form-row
                                     .da-form-group
-                                        label.da-form-label(for='mobile') Mobile
-                                        input#mobile.da-form-input(
-                                            type='tel'
-                                            name='mobile'
-                                            value=user ? (user.mobile || '') : ''
-                                            placeholder='+385 91 234 5678'
-                                            autocomplete='tel'
+                                        label.da-form-label(for='forename') Forename
+                                        input#forename.da-form-input(
+                                            type='text'
+                                            name='forename'
+                                            value=user ? (user.forename || '') : ''
+                                            placeholder='First name'
+                                            autocomplete='given-name'
                                         )
+                                    .da-form-group
+                                        label.da-form-label(for='surname') Surname
+                                        input#surname.da-form-input(
+                                            type='text'
+                                            name='surname'
+                                            value=user ? (user.surname || '') : ''
+                                            placeholder='Last name'
+                                            autocomplete='family-name'
+                                        )
+                                .da-form-group
+                                    label.da-form-label(for='mobile') Mobile
+                                    input#mobile.da-form-input(
+                                        type='tel'
+                                        name='mobile'
+                                        value=user ? (user.mobile || '') : ''
+                                        placeholder='+385 91 234 5678'
+                                        autocomplete='tel'
+                                    )
 
-                                #legalFields
-                                    .da-form-group
-                                        label.da-form-label(for='companyName') Company Name
-                                        input#companyName.da-form-input(
-                                            type='text'
-                                            name='companyName'
-                                            value=user ? (user.companyName || '') : ''
-                                            placeholder='Required for legal persons'
-                                        )
-                                    .da-form-group
-                                        label.da-form-label(for='companyOib') OIB (Tax ID)
-                                        input#companyOib.da-form-input(
-                                            type='text'
-                                            name='companyOib'
-                                            value=user ? (user.companyOib || '') : ''
-                                            maxlength='11'
-                                            pattern='\\d{11}'
-                                            placeholder='11-digit Croatian tax ID'
-                                        )
+                                .da-form-group
+                                    label.da-form-label(for='companyName') Company Name
+                                    input#companyName.da-form-input(
+                                        type='text'
+                                        name='companyName'
+                                        value=user ? (user.companyName || '') : ''
+                                        placeholder='Company / organisation name'
+                                    )
+                                .da-form-group
+                                    label.da-form-label(for='companyOib') OIB (Tax ID)
+                                    input#companyOib.da-form-input(
+                                        type='text'
+                                        name='companyOib'
+                                        value=user ? (user.companyOib || '') : ''
+                                        maxlength='11'
+                                        pattern='\\d{11}'
+                                        placeholder='11-digit Croatian tax ID'
+                                    )
 
                             .da-form-section
                                 span.da-form-section-label Permissions

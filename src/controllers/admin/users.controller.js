@@ -38,6 +38,33 @@ async function getUserDetailData(user) {
   return { orders: ordersPlain, addresses: addressesPlain, paymentMethods };
 }
 
+function userPlain(u) {
+  return u.get ? u.get({ plain: true }) : u;
+}
+
+/** Merge POST body into user for re-rendering the edit form after validation errors. */
+function userModelForEditFormErrorFromBody(u, body) {
+  const p = userPlain(u);
+  const merged = { ...p };
+  if (body.email !== undefined) merged.email = body.email;
+  if (body.username !== undefined) merged.username = body.username;
+  merged.isAdmin = body.isAdmin === "on";
+  for (const k of ["forename", "surname", "mobile", "companyName", "companyOib"]) {
+    if (body[k] !== undefined) merged[k] = body[k];
+  }
+  if (body.personType !== undefined) {
+    merged.personType = body.personType === "legal" ? "legal" : "private";
+  }
+  return merged;
+}
+
+/** Re-render user for edit form after duplicate email/username (validation already passed). */
+function userModelForEditFormAfterValidated(u, data) {
+  const p = userPlain(u);
+  const { password: _pw, ...profile } = data;
+  return { ...p, ...profile, id: p.id };
+}
+
 module.exports = {
   async index(req, res) {
     const all = await userService.listUsers();
@@ -154,11 +181,10 @@ module.exports = {
     if (!result.ok) {
       const u = await userService.getUserById(id);
       const { orders, addresses, paymentMethods } = await getUserDetailData(u);
-      const body = req.body;
       return res.status(400).render("admin/users/form", {
         title: "Edit User",
         formTitle: "Edit User",
-        user: { id, email: body.email ?? u.email, username: body.username !== undefined ? body.username : u.username, isAdmin: body.isAdmin === "on" },
+        user: userModelForEditFormErrorFromBody(u, req.body),
         isEdit: true,
         error: result.errors[0].message,
         orders,
@@ -174,7 +200,7 @@ module.exports = {
       return res.status(400).render("admin/users/form", {
         title: "Edit User",
         formTitle: "Edit User",
-        user: { id, email: newEmail, username: newUsername ?? u.username, isAdmin },
+        user: userModelForEditFormAfterValidated(u, result.data),
         isEdit: true,
         error: "A user with this email already exists.",
         orders,
@@ -190,7 +216,7 @@ module.exports = {
         return res.status(400).render("admin/users/form", {
           title: "Edit User",
           formTitle: "Edit User",
-          user: { id, email: newEmail, username: newUsername, isAdmin },
+          user: userModelForEditFormAfterValidated(u, result.data),
           isEdit: true,
           error: "A user with this username already exists.",
           orders,
