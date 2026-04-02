@@ -17,9 +17,11 @@ block content
 
   if order.paymentStatus === "pending"
     p Your order is pending payment.
-    form(action="/checkout/pay/" + order.id method="post" style="display:inline")
-      button(type="submit" style="background:#635bff;color:#fff;padding:0.75rem 1.5rem;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:1rem") Pay with Stripe
-    p(style="margin-top:0.5rem;font-size:0.9rem;color:#666") You will be redirected to Stripe Checkout to complete your payment.
+    p(style="margin-top:0.5rem;font-size:0.9rem;color:#666;max-width:28rem")
+      | Payment is completed from the checkout or registration page using the card form. If you closed the browser before paying, place the order again from your cart or session page.
+      |  If you believe you were charged but the order still shows pending, contact support and quote order ID&nbsp;
+      strong= order.id
+      | .
   else if order.paymentStatus === "paid"
     p(style="color:#4caf50;font-weight:600") ✓ Payment successful!
     if order.sessionId && !order.userId && order.email
@@ -31,9 +33,11 @@ block content
     else
       p(style="margin-top:0.5rem") Thank you for your order.
   else if order.paymentStatus === "failed"
-    p(style="color:#dc3545") Payment failed. Please try again.
-    form(action="/checkout/pay/" + order.id method="post" style="display:inline")
-      button(type="submit" style="background:#635bff;color:#fff;padding:0.75rem 1.5rem;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:1rem") Retry Payment
+    p(style="color:#dc3545") Payment failed.
+    p(style="margin-top:0.5rem;font-size:0.9rem;color:#666;max-width:28rem")
+      | Start a new checkout from your cart or event registration page. If you need help with a failed charge, contact support with order ID&nbsp;
+      strong= order.id
+      | .
   else if order.paymentStatus === "refunded"
     p(style="color:#666") This order has been refunded.
 

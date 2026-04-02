@@ -1,3 +1,4 @@
+const { Op, Sequelize } = require("sequelize");
 const { ProductVariant, Product, ProductPrice, ProductCategory, TaxRate } = require("../models");
 const { DEFAULT_CURRENCY } = require("../config/constants");
 
@@ -57,6 +58,27 @@ module.exports = {
    */
   async destroyPrices(variantId, options = {}) {
     await ProductPrice.destroy({ where: { productVariantId: variantId }, ...options });
+  },
+
+  /**
+   * Decrement quantity by `by` only if current quantity >= `by`. Prevents oversell under concurrency.
+   * @returns {Promise<boolean>} true if exactly one row was updated
+   */
+  async decrementQuantityIfAvailable(variantId, by, options = {}) {
+    const n = Math.floor(Number(by));
+    if (!Number.isFinite(n) || n < 1) return true;
+    const dec = Math.min(n, Number.MAX_SAFE_INTEGER);
+    const [updatedCount] = await ProductVariant.update(
+      { quantity: Sequelize.literal(`quantity - ${dec}`) },
+      {
+        where: {
+          id: variantId,
+          quantity: { [Op.gte]: dec },
+        },
+        ...options,
+      },
+    );
+    return updatedCount === 1;
   },
 
   /**

@@ -226,6 +226,7 @@ module.exports = {
     const { types, categories, taxRates, metaObjects } = await productService.getFormData();
     const metaObjectsWithPairs = withDefinitionPairs(metaObjects);
     const attachedMetaObjects = buildAttachedMetaObjects(metaObjectIds, metaObjectsWithPairs, metaObjectValues);
+    const manageableVariants = await productService.listManageableExtraVariants(req.params.id);
     res.render("admin/products/form", {
       title: "Edit Product",
       uploadsBaseUrl: getUploadsBaseUrl(),
@@ -246,6 +247,7 @@ module.exports = {
       isEdit: true,
       DEFAULT_CURRENCY,
       checkoutVatEnabled,
+      manageableVariants,
     });
   },
 
@@ -258,6 +260,7 @@ module.exports = {
       return res.redirect((req.adminPrefix || "") + "/products");
     }
     const plain = product.get ? product.get({ plain: true }) : product;
+    const manageableVariants = await productService.listManageableExtraVariants(id);
     const existingMetaObjectIds = (plain.metaObjects || []).map((mo) => mo.id);
     const existingMetaObjectValues = {};
     (plain.metaObjects || []).forEach((mo) => {
@@ -286,6 +289,7 @@ module.exports = {
         error: result.errors[0].message,
         DEFAULT_CURRENCY,
         checkoutVatEnabled,
+        manageableVariants,
       });
     }
     const { types, categories, taxRates, metaObjects, media } = await productService.getFormData();
@@ -331,6 +335,7 @@ module.exports = {
         error: metaValidation.errors?.join(" ") || "Invalid meta object values.",
         DEFAULT_CURRENCY,
         checkoutVatEnabled,
+        manageableVariants,
       });
     }
     const updatePayload = {
@@ -351,5 +356,23 @@ module.exports = {
     if (result.deleted) res.setFlash("success", "Product deleted.");
     else res.setFlash("error", result.error || "Product not found.");
     res.redirect((req.adminPrefix || "") + "/products");
+  },
+
+  async addProductVariant(req, res) {
+    const { id } = req.params;
+    const result = await productService.addManageableProductVariant(id, req.body);
+    if (!result.ok) {
+      return res.status(result.status || 400).json({ ok: false, error: result.error });
+    }
+    return res.json({ ok: true, variants: result.variants });
+  },
+
+  async removeProductVariant(req, res) {
+    const { id, variantId } = req.params;
+    const result = await productService.removeManageableProductVariant(id, variantId);
+    if (!result.ok) {
+      return res.status(result.status || 400).json({ ok: false, error: result.error });
+    }
+    return res.json({ ok: true, variants: result.variants });
   },
 };

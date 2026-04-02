@@ -1,4 +1,5 @@
 const registrationRepo = require("../repos/registration.repo");
+const orderAttendeeRepo = require("../repos/orderAttendee.repo");
 const eventService = require("./event.service");
 const eventMeetingRepo = require("../repos/eventMeeting.repo");
 const orderRepo = require("../repos/order.repo");
@@ -101,6 +102,101 @@ module.exports = {
       logger.warn("retryZoomSyncForRegistration failed", { registrationId, eventId, error: err.message });
       return { ok: false, error: err.message || "Zoom sync failed." };
     }
+  },
+
+  /**
+   * Remove the attendee from Zoom only; clears zoomRegistrantId on the registration.
+   * Does not cancel the registration or refund.
+   * @returns {Promise<{ ok: boolean, alreadyRemoved?: boolean, error?: string }>}
+   */
+  async removeZoomFromRegistration(registrationId, eventId) {
+    const registrationRow = await registrationRepo.findById(registrationId);
+    if (!registrationRow) {
+      return { ok: false, error: "Registration not found." };
+    }
+    if (String(registrationRow.eventId) !== String(eventId)) {
+      return { ok: false, error: "Registration does not belong to this event." };
+    }
+
+    if (!registrationRow.zoomRegistrantId) {
+      return { ok: true, alreadyRemoved: true };
+    }
+
+    const eventRow = await eventService.findById(eventId);
+    if (!eventRow || !eventRow.isOnline) {
+      return { ok: false, error: "Event is not an online session; Zoom does not apply." };
+    }
+
+    const meetingRow = await eventMeetingRepo.findByEventId(eventId);
+    if (!meetingRow) {
+      return { ok: false, error: "No meeting linked to this event." };
+    }
+
+    const provider = getMeetingProvider();
+    if (!provider || typeof provider.removeRegistrant !== "function") {
+      return { ok: false, error: "Meeting provider is not configured." };
+    }
+
+    const meetingPlain = meetingRow.get ? meetingRow.get({ plain: true }) : meetingRow;
+    const zoomId = registrationRow.zoomRegistrantId;
+
+    try {
+      await provider.removeRegistrant(meetingPlain, zoomId);
+      logger.info("removeZoomFromRegistration: Zoom registrant removed", { registrationId, eventId, zoomId });
+    } catch (zoomErr) {
+      if (zoomErr.status === 404 || zoomErr.statusCode === 404) {
+        logger.warn("removeZoomFromRegistration: Zoom registrant not found (already removed)", {
+          registrationId,
+          zoomId,
+        });
+      } else {
+        logger.warn("removeZoomFromRegistration failed", { registrationId, eventId, error: zoomErr.message });
+        return { ok: false, error: zoomErr.message || "Could not remove registrant from Zoom." };
+      }
+    }
+
+    await registrationRepo.update(registrationId, { zoomRegistrantId: null });
+    return { ok: true };
+  },
+
+  /**
+   * Update registrant contact/name on Registration and linked OrderAttendee (admin).
+   * Blocked while zoomRegistrantId is set so Zoom stays the source of truth until unlinked.
+   * @param {string} registrationId
+   * @param {string} eventId
+   * @param {{ email: string, forename?: string|null, surname?: string|null }} payload
+   * @returns {Promise<{ ok: boolean, error?: string }>}
+   */
+  async updateRegistrationForAdmin(registrationId, eventId, payload) {
+    const registrationRow = await registrationRepo.findById(registrationId);
+    if (!registrationRow) {
+      return { ok: false, error: "Registration not found." };
+    }
+    if (String(registrationRow.eventId) !== String(eventId)) {
+      return { ok: false, error: "Registration does not belong to this event." };
+    }
+    if (registrationRow.zoomRegistrantId) {
+      return {
+        ok: false,
+        error: "Remove the registrant from Zoom before editing these details.",
+      };
+    }
+
+    const email = String(payload.email || "").trim().toLowerCase();
+    const forename = payload.forename ?? null;
+    const surname = payload.surname ?? null;
+
+    await registrationRepo.update(registrationId, { email, forename, surname });
+
+    if (registrationRow.orderAttendeeId) {
+      const attendee = await orderAttendeeRepo.findById(registrationRow.orderAttendeeId);
+      if (attendee) {
+        await orderAttendeeRepo.update(attendee.id, { email, forename, surname });
+      }
+    }
+
+    logger.info("updateRegistrationForAdmin: registration updated", { registrationId, eventId });
+    return { ok: true };
   },
 
   /**

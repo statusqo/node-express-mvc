@@ -276,17 +276,33 @@ module.exports = {
   /**
    * Create a single variant with one default price for a product (e.g. for event-based offerings).
    */
-  async createVariantWithDefaultPrice(productId, { title = "Default", amount = 0, currency = DEFAULT_CURRENCY, quantity = 0 }, options = {}) {
+  async createVariantWithDefaultPrice(
+    productId,
+    { title = "Default", amount = 0, currency = DEFAULT_CURRENCY, quantity = 0, sku: skuOverride = null, active: activeVal = true } = {},
+    options = {}
+  ) {
     const product = await Product.findByPk(productId, { attributes: ["id", "title"], ...options });
-    const variantCount = await ProductVariant.count({ where: { productId }, ...options });
-    const sku = generateVariantSku(product ? product.title : title, variantCount);
+    let sku;
+    if (skuOverride != null && String(skuOverride).trim() !== "") {
+      sku = String(skuOverride).trim();
+      const dup = await ProductVariant.findOne({ where: { productId, sku }, ...options });
+      if (dup) {
+        const err = new Error("SKU already exists for this product.");
+        err.code = "SKU_CONFLICT";
+        throw err;
+      }
+    } else {
+      const variantCount = await ProductVariant.count({ where: { productId }, ...options });
+      sku = generateVariantSku(product ? product.title : title, variantCount);
+    }
+    const active = activeVal !== false && activeVal !== "off";
     const variant = await ProductVariant.create(
       {
         productId,
         title: String(title).trim() || "Default",
         sku,
         isDefault: false,
-        active: true,
+        active,
         quantity: Number(quantity) >= 0 ? Number(quantity) : 0,
       },
       options

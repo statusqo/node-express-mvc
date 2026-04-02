@@ -137,6 +137,81 @@ block content
                                     option(value='usl' selected=(currentUnit === 'usl')) usl (service)
                                 p.da-form-hint Required for Croatian invoice line items and Stripe e-racuni sync.
 
+                //- ── Variants (extra SKUs; not default, not event-linked) ──
+                if isEdit && product && product.id
+                    #productVariantsSection.da-card.da-card--variants(
+                        data-add-url=(adminPrefix || '') + '/products/' + product.id + '/variants'
+                        data-remove-base=(adminPrefix || '') + '/products/' + product.id + '/variants/'
+                        data-currency=(DEFAULT_CURRENCY || 'EUR')
+                    )
+                        .da-card-header
+                            h2.da-card-title Variants
+                        .da-card-body
+                            p.da-form-hint
+                                | Extra options customers can buy in addition to the default variant in Pricing above.
+                                | Variants used for dated events are managed on the event product pages and do not appear here.
+                            .da-variant-add.da-variant-add--panel
+                                span.da-form-section-label Add variant
+                                .da-form-row.da-variant-add-fields
+                                    .da-form-group
+                                        label.da-form-label(for='newVariantTitle') Title
+                                        input#newVariantTitle.da-form-input(
+                                            type='text'
+                                            name='_noop_title'
+                                            autocomplete='off'
+                                            placeholder='e.g. Large, VIP'
+                                        )
+                                    .da-form-group
+                                        label.da-form-label(for='newVariantPrice') Price
+                                        input#newVariantPrice.da-form-input(
+                                            type='number'
+                                            name='_noop_price'
+                                            step='0.01'
+                                            min='0'
+                                            placeholder='0.00'
+                                        )
+                                    .da-form-group
+                                        label.da-form-label(for='newVariantQty') Quantity
+                                        input#newVariantQty.da-form-input(
+                                            type='number'
+                                            name='_noop_qty'
+                                            min='0'
+                                            value='0'
+                                        )
+                                    .da-form-group
+                                        label.da-form-label(for='newVariantSku') SKU
+                                        input#newVariantSku.da-form-input(
+                                            type='text'
+                                            name='_noop_sku'
+                                            autocomplete='off'
+                                            placeholder='Auto if empty'
+                                        )
+                                .da-form-group
+                                    label.da-checkbox
+                                        input#newVariantActive(type='checkbox')
+                                        | Active
+                                    p.da-form-hint(style='margin-top:0.35rem') Leave unchecked to keep the variant off the storefront until you are ready.
+                                .da-variant-add-actions
+                                    button#addProductVariantBtn.da-btn.da-btn--secondary(type='button') Add variant
+                            p#productVariantsFeedback.da-variant-feedback(aria-live='polite' role='status')
+                            ul#productVariantsList.da-variant-list
+                                each v in (manageableVariants || [])
+                                    li.da-variant-row(data-variant-id=v.id)
+                                        .da-variant-row-main
+                                            span.da-variant-title= v.title
+                                            span.da-variant-meta
+                                                span.da-variant-price= (DEFAULT_CURRENCY || 'EUR') + ' ' + Number(v.priceAmount).toFixed(2)
+                                                span.da-variant-dot  ·
+                                                span.da-variant-sku= v.sku
+                                                span.da-variant-dot  ·
+                                                span.da-variant-qty Qty #{v.quantity}
+                                                if !v.active
+                                                    span.da-variant-badge Inactive
+                                        button.da-btn.da-btn--ghost.da-variant-remove(
+                                            type='button'
+                                            data-variant-id=v.id
+                                        ) Remove
+
                 //- ── Shipping ────────────────────────────────────────
                 .da-card
                     .da-card-header
@@ -227,3 +302,5 @@ block content
 
 block append scripts
     script(src='/public/js/admin-product-form.js')
+    if isEdit && product && product.id
+        script(src='/public/js/admin-product-variants.js')

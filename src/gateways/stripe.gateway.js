@@ -834,21 +834,19 @@ async function handleWebhook(event) {
         const invoiceTransactions = await transactionRepo.findByOrder(orderId);
         const invoiceTx = invoiceTransactions.find((t) => t.gatewayReference === gatewayRef);
 
-        if (invoiceTx) {
-          if (invoiceTx.status === "pending") {
-            await transactionRepo.update(invoiceTx.id, { status: "success" });
+        const finalizeInvoicePaid = async () => {
+          if (invoiceTx) {
+            logger.info("invoice.paid: recording payment success", { orderId, gatewayRef: safeId(gatewayRef) });
+            await orderService.recordPaymentSuccess(invoiceTx.id, invoiceOrder.userId);
+            return;
           }
-          logger.info("invoice.paid: recording payment success", { orderId, gatewayRef: safeId(gatewayRef) });
-          await orderService.recordPaymentSuccess(invoiceTx.id, invoiceOrder.userId);
-        } else {
-          // Fallback: create the transaction record if not already present.
           logger.info("invoice.paid: no transaction found, creating fallback record", { orderId, gatewayRef: safeId(gatewayRef) });
           await orderService.recordPaymentAttempt(
             orderId,
             Number(invoice.amount_paid) / 100,
             (invoice.currency || invoiceOrder.currency).toUpperCase(),
             gatewayRef,
-            { type: "invoice", invoiceId: invoice.id }
+            { type: "invoice", invoiceId: invoice.id },
           );
           const freshTxs = await transactionRepo.findByOrder(orderId);
           const newTx = freshTxs.find((t) => t.gatewayReference === gatewayRef);
@@ -856,6 +854,20 @@ async function handleWebhook(event) {
             logger.info("invoice.paid: recording payment success via fallback", { orderId, gatewayRef: safeId(gatewayRef) });
             await orderService.recordPaymentSuccess(newTx.id, invoiceOrder.userId);
           }
+        };
+
+        try {
+          await finalizeInvoicePaid();
+        } catch (fulfillErr) {
+          if (fulfillErr.code === orderService.INSUFFICIENT_STOCK_AT_FULFILLMENT) {
+            logger.error("invoice.paid: Stripe paid but local stock insufficient — order left pending; manual refund may be required", {
+              orderId,
+              gatewayRef: safeId(gatewayRef),
+              eventId: event.id,
+            });
+            break;
+          }
+          throw fulfillErr;
         }
         break;
       }

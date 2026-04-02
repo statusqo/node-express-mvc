@@ -5,7 +5,9 @@ block content
     - var fmtTime = function(d) { return d ? new Date(d).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}) : ''; }
     - var fullName = [registration.forename, registration.surname].filter(Boolean).join(' ') || '—'
     - var registrantsListUrl = (adminPrefix || '') + '/events/' + event.id + '/registrants'
-    - var retryZoomUrl = (adminPrefix || '') + '/events/' + event.id + '/registrants/' + registration.id + '/retry-zoom'
+    - var updateUrl = (adminPrefix || '') + '/events/' + event.id + '/registrants/' + registration.id + '/update'
+    - var addZoomUrl = (adminPrefix || '') + '/events/' + event.id + '/registrants/' + registration.id + '/retry-zoom'
+    - var removeZoomUrl = (adminPrefix || '') + '/events/' + event.id + '/registrants/' + registration.id + '/remove-zoom'
     - var cancelUrl = (adminPrefix || '') + '/events/' + event.id + '/registrants/' + registration.id + '/cancel'
     - var cancelFormId = 'cancel-reg-form-edit'
     - var cancelMsg = fullName !== '—' ? 'Remove ' + fullName + ' from this event?' : 'Remove this registrant from this event?'
@@ -13,8 +15,11 @@ block content
     - var isRefundableOrder = registration.Order && (registration.Order.paymentStatus === 'paid' || registration.Order.paymentStatus === 'partially_refunded')
     - if (isRefundableOrder) cancelBullets.push('A full or partial Stripe refund will be issued for this seat (this order line’s amount, within the remaining refundable balance)')
     - if (eventRow.isOnline) cancelBullets.push('The attendee will be removed from the Zoom meeting')
-    - var canRetryZoom = eventRow.isOnline && meeting && !registration.zoomRegistrantId
-    - var zoomStatusLabel = registration.zoomRegistrantId ? 'Linked' : (eventRow.isOnline && !meeting ? 'No meeting on event' : !eventRow.isOnline ? 'N/A (in-person)' : 'Not linked — use Retry')
+    - var zoomLinked = !!registration.zoomRegistrantId
+    - var canEditDetails = !zoomLinked
+    - var canAddZoom = eventRow.isOnline && meeting && !registration.zoomRegistrantId
+    - var canRemoveZoom = eventRow.isOnline && meeting && !!registration.zoomRegistrantId
+    - var zoomStatusLabel = zoomLinked ? 'Linked' : (eventRow.isOnline && !meeting ? 'No meeting on event' : !eventRow.isOnline ? 'N/A (in-person)' : 'Not linked — use Add Registrant')
 
     .da-page
         +pageHeader('Edit registrant', fullName)
@@ -28,55 +33,87 @@ block content
                 .da-card
                     .da-card-header
                         h2.da-card-title Registration
-                    .da-card-body
-                        .da-form-section
-                            span.da-form-section-label Details
-                            +readonlyField('Name')
-                                | #{fullName}
-                            +readonlyField('Email')
-                                | #{registration.email || '—'}
-                            +readonlyField('Registered')
-                                | #{fmtDate(registration.createdAt)} #{registration.createdAt ? fmtTime(registration.createdAt) : ''}
-                            +readonlyField('Order')
-                                if registration.orderId
-                                    a.da-order-link(href=(adminPrefix || '') + '/orders/' + registration.orderId + '/edit')
-                                        span.da-cell-mono= registration.orderId.slice(0, 8) + '…'
+                    form#registrantEditForm(method='post' action=updateUrl)
+                        .da-card-body
+                            .da-form-section
+                                span.da-form-section-label Details
+                                if canEditDetails
+                                    .da-form-group
+                                        label.da-form-label(for='regEmail') Email
+                                        input#regEmail.da-form-input(
+                                            type='email'
+                                            name='email'
+                                            value=registration.email || ''
+                                            required
+                                            autocomplete='email'
+                                        )
+                                    .da-form-row
+                                        .da-form-group
+                                            label.da-form-label(for='regForename') Forename
+                                            input#regForename.da-form-input(
+                                                type='text'
+                                                name='forename'
+                                                value=registration.forename || ''
+                                                autocomplete='given-name'
+                                            )
+                                        .da-form-group
+                                            label.da-form-label(for='regSurname') Surname
+                                            input#regSurname.da-form-input(
+                                                type='text'
+                                                name='surname'
+                                                value=registration.surname || ''
+                                                autocomplete='family-name'
+                                            )
                                 else
-                                    span.da-cell-muted —
-                            if registration.Order && registration.Order.paymentStatus
-                                +readonlyField('Order payment')
-                                    - var payClass = ({paid:'success', pending:'warning', failed:'danger', refunded:'info', voided:'neutral'})[registration.Order.paymentStatus] || 'neutral'
-                                    span.da-badge(class='da-badge--' + payClass)= registration.Order.paymentStatus.charAt(0).toUpperCase() + registration.Order.paymentStatus.slice(1)
-                        .da-form-section
-                            span.da-form-section-label Zoom
-                            +readonlyField('Session type')
-                                if eventRow.isOnline
-                                    span.da-badge.da-badge--info Online
-                                else
-                                    span In-person
-                            +readonlyField('Meeting')
-                                if meeting && meeting.zoomMeetingId
-                                    span.da-cell-mono= meeting.zoomMeetingId
-                                else if eventRow.isOnline
-                                    span.da-cell-muted No meeting record
-                                else
-                                    span.da-cell-muted —
-                            +readonlyField('Zoom registrant')
-                                if registration.zoomRegistrantId
-                                    span.da-cell-mono= registration.zoomRegistrantId
-                                else
-                                    span.da-cell-muted= zoomStatusLabel
+                                    +readonlyField('Name')
+                                        | #{fullName}
+                                    +readonlyField('Email')
+                                        | #{registration.email || '—'}
+                                    p.da-refund-empty(style='margin-top:0.75rem;margin-bottom:0')
+                                        | Remove the registrant from Zoom below to edit name and email.
+                                +readonlyField('Registered')
+                                    | #{fmtDate(registration.createdAt)} #{registration.createdAt ? fmtTime(registration.createdAt) : ''}
+                                +readonlyField('Order')
+                                    if registration.orderId
+                                        a.da-order-link(href=(adminPrefix || '') + '/orders/' + registration.orderId + '/edit')
+                                            span.da-cell-mono= registration.orderId.slice(0, 8) + '…'
+                                    else
+                                        span.da-cell-muted —
+                                if registration.Order && registration.Order.paymentStatus
+                                    +readonlyField('Order payment')
+                                        - var payClass = ({paid:'success', pending:'warning', failed:'danger', refunded:'info', voided:'neutral'})[registration.Order.paymentStatus] || 'neutral'
+                                        span.da-badge(class='da-badge--' + payClass)= registration.Order.paymentStatus.charAt(0).toUpperCase() + registration.Order.paymentStatus.slice(1)
+                            .da-form-section
+                                span.da-form-section-label Zoom
+                                +readonlyField('Session type')
+                                    if eventRow.isOnline
+                                        span.da-badge.da-badge--info Online
+                                    else
+                                        span In-person
+                                +readonlyField('Meeting')
+                                    if meeting && meeting.zoomMeetingId
+                                        span.da-cell-mono= meeting.zoomMeetingId
+                                    else if eventRow.isOnline
+                                        span.da-cell-muted No meeting record
+                                    else
+                                        span.da-cell-muted —
+                                +readonlyField('Zoom registrant')
+                                    if registration.zoomRegistrantId
+                                        span.da-cell-mono= registration.zoomRegistrantId
+                                    else
+                                        span.da-cell-muted= zoomStatusLabel
 
-                    .da-card-footer
-                        if canRetryZoom
-                            form(method='post' action=retryZoomUrl style='display:inline')
-                                button.da-btn.da-btn--primary(type='submit') Retry Zoom sync
-                        else if registration.zoomRegistrantId
-                            p.da-refund-empty(style='margin:0') Already synced to Zoom.
-                        else if eventRow.isOnline && !meeting
-                            p.da-refund-empty(style='margin:0') Create a meeting for this event before Zoom sync.
-                        else if !eventRow.isOnline
-                            p.da-refund-empty(style='margin:0') Zoom does not apply to in-person events.
+                        .da-card-footer(style='display:flex;flex-wrap:wrap;gap:0.75rem;align-items:center')
+                            if canEditDetails
+                                button.da-btn.da-btn--primary(type='submit') Save changes
+                            if canAddZoom
+                                button.da-btn.da-btn--primary(type='submit' formaction=addZoomUrl) Add Registrant
+                            if canRemoveZoom
+                                button.da-btn.da-btn--secondary(type='submit' formaction=removeZoomUrl) Remove Registrant
+                            if eventRow.isOnline && !meeting
+                                p.da-refund-empty(style='margin:0') Create a meeting for this event before Zoom actions.
+                            else if !eventRow.isOnline
+                                p.da-refund-empty(style='margin:0') Zoom does not apply to in-person events.
 
                 .da-card
                     .da-card-header

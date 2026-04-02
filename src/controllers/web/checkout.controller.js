@@ -144,8 +144,7 @@ module.exports = {
       await cartService.validateAndCleanCart(userId, sessionId);
       const { cart, lines } = await cartService.getCartWithLines(userId, sessionId);
       if (!lines || lines.length === 0) {
-        res.setFlash("error", "Your cart is empty or items are no longer available.");
-        return res.redirect("/cart");
+        return res.status(400).json({ error: "Your cart is empty or items are no longer available." });
       }
 
       order = await orderService.createOrderFromCart(userId, sessionId, opts);
@@ -163,6 +162,12 @@ module.exports = {
 
       const gateway = getDefaultGateway();
       if (!gateway) {
+        await orderService.cancelOrder(order.id).catch((cancelErr) => {
+          logger.error("Checkout: failed to cancel order (no payment gateway)", {
+            orderId: order.id,
+            error: cancelErr.message,
+          });
+        });
         return res.status(503).json({ error: "Payment system is not configured." });
       }
 
@@ -202,9 +207,12 @@ module.exports = {
         });
       }
       // Cart-level errors (unavailable/sold-out items) — redirect to cart with flash
-      if (!order && (err.message === "One or more items in your cart are no longer available." || err.message === "One or more items in your cart are sold out.")) {
-        res.setFlash("error", err.message);
-        return res.redirect("/cart");
+      if (
+        !order &&
+        (err.message === "One or more items in your cart are no longer available." ||
+          err.message === "One or more items in your cart are sold out.")
+      ) {
+        return res.status(400).json({ error: err.message });
       }
       const status = err.status ?? err.statusCode ?? 500;
       logger.error("Checkout place-order failed", {
@@ -301,8 +309,18 @@ module.exports = {
         stack: err.stack,
       });
       const message =
-        status === 404 ? "Order not found." : status === 400 ? (err.message || "Invalid payment.") : "Could not confirm order.";
+        status === 404
+          ? "Order not found."
+          : status === 409
+            ? err.message ||
+              "Inventory changed while completing your order. If you were charged, contact support with your order reference."
+            : status === 400
+              ? err.message || "Invalid payment."
+              : "Could not confirm order.";
       const payload = { error: message };
+      if (err.code === orderService.INSUFFICIENT_STOCK_AT_FULFILLMENT) {
+        payload.code = err.code;
+      }
       if (process.env.NODE_ENV !== "production" && err.message) {
         payload.detail = err.message;
       }

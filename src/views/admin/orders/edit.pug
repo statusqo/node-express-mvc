@@ -54,7 +54,7 @@ block content
 
                                 //- Payment status (read-only with badge)
                                 +readonlyField('Payment Status')
-                                    - var payClass = ({paid:'success',pending:'warning',failed:'danger',refunded:'info',cancelled:'neutral'})[order.paymentStatus] || 'neutral'
+                                    - var payClass = ({paid:'success',pending:'warning',failed:'danger',refunded:'info',partially_refunded:'info',voided:'neutral',cancelled:'neutral'})[order.paymentStatus] || 'neutral'
                                     if order.paymentStatus
                                         span.da-badge(class='da-badge--' + payClass)= order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)
                                     else
@@ -63,6 +63,12 @@ block content
                                 //- Total (read-only)
                                 +readonlyField('Total')
                                     | #{order.total != null ? Number(order.total).toFixed(2) + ' ' + (order.currency || 'EUR') : '—'}
+
+                                +readonlyField('Refunded to date')
+                                    | #{orderRefundedTotal != null ? Number(orderRefundedTotal).toFixed(2) + ' ' + (order.currency || 'EUR') : '—'}
+
+                                +readonlyField('Remaining refundable')
+                                    | #{orderRemainingRefundable != null ? Number(orderRemainingRefundable).toFixed(2) + ' ' + (order.currency || 'EUR') : '—'}
 
                                 //- Date (read-only)
                                 +readonlyField('Date')
@@ -138,6 +144,27 @@ block content
                                                         td.da-col-created
                                                             span.da-cell-muted= tx.createdAt ? new Date(tx.createdAt).toLocaleString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'}) : '—'
 
+                            //- Must not nest <form> inside #orderEditForm — use formaction so submit targets recovery routes (nested forms break and submit /edit without fulfillmentStatus).
+                            if canRetryFinalize || canRetryPostCommit
+                                .da-form-section
+                                    span.da-form-section-label Checkout recovery
+                                    p.da-form-hint(style='margin-bottom:0.75rem;max-width:36rem')
+                                        | Use these if Stripe charged the customer but the order stayed pending, or if confirmation email or digital fulfillment failed after payment. For Zoom, use the event’s Registrants page and retry per registration.
+                                    if canRetryFinalize
+                                        button.da-btn.da-btn--secondary(
+                                            type='submit'
+                                            formaction=(adminPrefix || '') + '/orders/' + order.id + '/finalize-payment'
+                                            formmethod='post'
+                                            style='margin-right:0.5rem;margin-bottom:0.5rem'
+                                        ) Finalize payment (inventory &amp; registrations)
+                                    if canRetryPostCommit
+                                        button.da-btn.da-btn--secondary(
+                                            type='submit'
+                                            formaction=(adminPrefix || '') + '/orders/' + order.id + '/retry-post-commit'
+                                            formmethod='post'
+                                            style='margin-bottom:0.5rem'
+                                        ) Retry digital fulfillment
+
                             .da-form-section
                                 span.da-form-section-label Fulfillment
 
@@ -167,8 +194,83 @@ block content
                         button.da-btn.da-btn--primary(type='submit' form='orderEditForm') Save Changes
                         a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/orders') Cancel
 
-            //- ── Aside: refund requests ──────────────────────────────
+            //- ── Aside: refund transactions + refund requests ─────────
             .da-form-aside
+
+                .da-card
+                    .da-card-header
+                        h2.da-card-title Refund transactions
+                        if refundTransactions && refundTransactions.length
+                            span.da-count= refundTransactions.length + ' record' + (refundTransactions.length !== 1 ? 's' : '')
+                    .da-card-body
+                        if refundTransactions && refundTransactions.length
+                            each rt in refundTransactions
+                                - var rtStatusClass = ({pending:'warning',succeeded:'success',failed:'danger',cancelled:'neutral'})[rt.status] || 'neutral'
+                                - var rtScopeLabel = ({full_order:'Full order',line_quantity:'Line quantity',event_attendee:'Event attendee'})[rt.scopeType] || (rt.scopeType || '—')
+                                .da-refund-card
+                                    .da-refund-card-header
+                                        span.da-badge(class='da-badge--' + rtStatusClass)= rt.status ? rt.status.charAt(0).toUpperCase() + rt.status.slice(1) : '—'
+                                    p.da-refund-meta
+                                        strong Amount:&nbsp;
+                                        | #{rt.amount != null ? Number(rt.amount).toFixed(2) : '—'} #{rt.currency || order.currency || 'EUR'}
+                                    p.da-refund-meta
+                                        strong Scope:&nbsp;
+                                        | #{rtScopeLabel}
+                                    if rt.reason
+                                        p.da-refund-meta
+                                            strong Reason:&nbsp;
+                                            | #{rt.reason}
+                                    if rt.stripeRefundId
+                                        p.da-refund-meta
+                                            strong Stripe refund:&nbsp;
+                                            span.da-cell-mono= rt.stripeRefundId
+                                    if rt.refundedQuantity != null
+                                        p.da-refund-meta
+                                            strong Quantity:&nbsp;
+                                            | #{rt.refundedQuantity}
+                                    if rt.registrationId
+                                        p.da-refund-meta
+                                            strong Registration:&nbsp;
+                                            span.da-cell-mono= rt.registrationId.slice(0, 8) + '…'
+                                    p.da-refund-meta
+                                        strong Created:&nbsp;
+                                        | #{rt.createdAt ? new Date(rt.createdAt).toLocaleString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'}) : '—'}
+                                    if rt.processedAt
+                                        p.da-refund-meta
+                                            strong Processed:&nbsp;
+                                            | #{new Date(rt.processedAt).toLocaleString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})}
+                        else
+                            p.da-refund-empty No refund transactions for this order.
+
+                - var _refundCur = order.currency || 'EUR'
+                - var _refundedSum = orderRefundedTotal != null ? Number(orderRefundedTotal) : 0
+                - var _remainingSum = orderRemainingRefundable != null ? Number(orderRemainingRefundable) : 0
+                .da-card
+                    .da-card-header
+                        h2.da-card-title Full order refund
+                    .da-card-body
+                        if canFullRefund
+                            p.da-refund-empty(style='margin-top:0')
+                                | Refunds the <strong>remaining</strong> balance on Stripe for this order (
+                                strong #{_remainingSum.toFixed(2)} #{_refundCur}
+                                | ), after #{_refundedSum.toFixed(2)} #{_refundCur} already recorded as refunded.
+                            p.da-refund-empty
+                                | Removes remaining attendees from Zoom where linked, clears registrations, restores stock as for a full refund, and updates payment status when complete. This cannot be undone.
+                            - var fullRefundFormId = 'admin-order-full-refund-form'
+                            - var fullRefundMsg = 'Refund the remaining ' + _remainingSum.toFixed(2) + ' ' + _refundCur + ' and cancel all remaining fulfillment for this order?'
+                            - var fullRefundBullets = ['Stripe refund for the remaining capture balance', 'Remove attendees from Zoom where linked', 'Clear registrations and restore stock per policy', 'Mark the order fully refunded when the ledger matches the original total']
+                            form(id=fullRefundFormId method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/full-refund' style='display:none')
+                            button.da-btn.da-btn--danger(
+                                type='button'
+                                data-confirm-modal
+                                data-confirm-title='Full order refund'
+                                data-confirm-msg=fullRefundMsg
+                                data-confirm-bullets=JSON.stringify(fullRefundBullets)
+                                data-form-id=fullRefundFormId
+                            ) Refund remaining balance
+                        else
+                            p.da-refund-empty(style='margin-top:0')
+                                | No remaining balance to refund from this page, or the order is not in a refundable payment state.
 
                 .da-card
                     .da-card-header

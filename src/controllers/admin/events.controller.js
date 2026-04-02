@@ -1,5 +1,6 @@
 const eventService = require("../../services/event.service");
 const registrationService = require("../../services/registration.service");
+const { validateRegistrantAdminUpdate } = require("../../validators/registrantAdmin.schema");
 
 module.exports = {
   /**
@@ -47,7 +48,33 @@ module.exports = {
   },
 
   /**
+   * POST /admin/events/:eventId/registrants/:registrationId/update
+   */
+  async registrantUpdate(req, res) {
+    const { eventId, registrationId } = req.params;
+    const redirectUrl = (req.adminPrefix || "") + "/events/" + eventId + "/registrants/" + registrationId + "/edit";
+    const parsed = validateRegistrantAdminUpdate(req.body);
+    if (!parsed.ok) {
+      const msg = parsed.errors && parsed.errors[0] ? parsed.errors[0].message : "Invalid details.";
+      res.setFlash("error", msg);
+      return res.redirect(302, redirectUrl);
+    }
+    try {
+      const result = await registrationService.updateRegistrationForAdmin(registrationId, eventId, parsed.data);
+      if (!result.ok) {
+        res.setFlash("error", result.error || "Could not update registrant.");
+      } else {
+        res.setFlash("success", "Registrant details saved.");
+      }
+    } catch (err) {
+      res.setFlash("error", err.message || "Could not update registrant.");
+    }
+    return res.redirect(302, redirectUrl);
+  },
+
+  /**
    * POST /admin/events/:eventId/registrants/:registrationId/retry-zoom
+   * Adds the attendee to the Zoom meeting (admin recovery).
    */
   async registrantRetryZoom(req, res) {
     const { eventId, registrationId } = req.params;
@@ -55,14 +82,36 @@ module.exports = {
     try {
       const result = await registrationService.retryZoomSyncForRegistration(registrationId, eventId);
       if (!result.ok) {
-        res.setFlash("error", result.error || "Zoom sync failed.");
+        res.setFlash("error", result.error || "Could not add registrant to Zoom.");
       } else if (result.alreadySynced) {
         res.setFlash("success", "This registration is already linked to Zoom.");
       } else {
-        res.setFlash("success", "Zoom sync completed.");
+        res.setFlash("success", "Registrant added to Zoom.");
       }
     } catch (err) {
-      res.setFlash("error", err.message || "Zoom sync failed.");
+      res.setFlash("error", err.message || "Could not add registrant to Zoom.");
+    }
+    return res.redirect(302, redirectUrl);
+  },
+
+  /**
+   * POST /admin/events/:eventId/registrants/:registrationId/remove-zoom
+   * Removes the attendee from Zoom only; registration remains active.
+   */
+  async registrantRemoveZoom(req, res) {
+    const { eventId, registrationId } = req.params;
+    const redirectUrl = (req.adminPrefix || "") + "/events/" + eventId + "/registrants/" + registrationId + "/edit";
+    try {
+      const result = await registrationService.removeZoomFromRegistration(registrationId, eventId);
+      if (!result.ok) {
+        res.setFlash("error", result.error || "Could not remove registrant from Zoom.");
+      } else if (result.alreadyRemoved) {
+        res.setFlash("success", "This registration was not linked to Zoom.");
+      } else {
+        res.setFlash("success", "Registrant removed from Zoom. You can edit details or add them again.");
+      }
+    } catch (err) {
+      res.setFlash("error", err.message || "Could not remove registrant from Zoom.");
     }
     return res.redirect(302, redirectUrl);
   },

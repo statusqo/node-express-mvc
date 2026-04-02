@@ -41,6 +41,19 @@ module.exports = {
     });
   },
 
+  /** Variant IDs that are attached to any event row for this product (session / dated offers). */
+  async listProductVariantIdsLinkedToProduct(productId, options = {}) {
+    const rows = await Event.findAll({
+      where: {
+        productId,
+        productVariantId: { [Op.ne]: null },
+      },
+      attributes: ["productVariantId"],
+      ...options,
+    });
+    return rows.map((r) => r.productVariantId).filter(Boolean);
+  },
+
   async create(data, options = {}) {
     return await Event.create(data, options);
   },

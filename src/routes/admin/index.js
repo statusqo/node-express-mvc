@@ -72,8 +72,11 @@ router.get("/orders", asyncHandler(ordersController.index));
 router.get("/refund-requests", asyncHandler(refundRequestsController.index));
 router.get("/orders/:id/edit", asyncHandler(ordersController.editForm));
 router.post("/orders/:id/edit", asyncHandler(ordersController.update));
+router.post("/orders/:id/full-refund", asyncHandler(ordersController.fullRefund));
 router.post("/orders/:id/refund-request/:requestId/approve", asyncHandler(ordersController.approveRefundRequest));
 router.post("/orders/:id/refund-request/:requestId/reject", asyncHandler(ordersController.rejectRefundRequest));
+router.post("/orders/:id/finalize-payment", asyncHandler(ordersController.retryFinalizePayment));
+router.post("/orders/:id/retry-post-commit", asyncHandler(ordersController.retryPostCommitFulfillment));
 // Users CRUD
 router.get("/users", asyncHandler(usersController.index));
 router.get("/users/new", asyncHandler(usersController.newForm));
@@ -89,6 +92,8 @@ router.get("/products/new", asyncHandler(productsController.newForm));
 router.post("/products/new", asyncHandler(productsController.create));
 router.get("/products/:id/edit", asyncHandler(productsController.editForm));
 router.post("/products/:id/edit", asyncHandler(productsController.update));
+router.post("/products/:id/variants", asyncHandler(productsController.addProductVariant));
+router.post("/products/:id/variants/:variantId/delete", asyncHandler(productsController.removeProductVariant));
 router.post("/products/:id/delete", asyncHandler(productsController.delete));
 
 // Events overview — all events across all types, with registrant lists

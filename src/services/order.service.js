@@ -20,6 +20,9 @@ const storeSettingService = require("./storeSetting.service");
 
 const { DEFAULT_CURRENCY } = require("../config/constants");
 
+/** Money comparison tolerance (aligned with refund request flows). */
+const ADMIN_REFUND_MONEY_EPS = 0.0001;
+
 function normalizePerson(value) {
   return value && String(value).trim() ? String(value).trim() : null;
 }
@@ -94,18 +97,30 @@ async function createOrderAttendeesForLine({ orderId, orderLineId, eventId, orde
   await orderAttendeeRepo.bulkCreate(rows, { transaction });
 }
 
-async function createRegistrationsAndSyncZoomForOrder(orderAfter) {
-  const lines = await orderRepo.getLines(orderAfter.id);
-  const provider = getMeetingProvider();
+/** Thrown when Stripe captured but inventory was taken by another checkout (admin may need to refund). */
+const INSUFFICIENT_STOCK_AT_FULFILLMENT = "INSUFFICIENT_STOCK_AT_FULFILLMENT";
+
+function insufficientStockFulfillmentError() {
+  const err = new Error("Not enough stock to complete this order. The item may have just sold out.");
+  err.status = 409;
+  err.code = INSUFFICIENT_STOCK_AT_FULFILLMENT;
+  return err;
+}
+
+/**
+ * Local registration rows for event lines — must run inside the same DB transaction as payment + stock.
+ */
+async function createRegistrationsForPaidOrderInTransaction(orderId, t) {
+  const lines = await orderRepo.getLines(orderId, { transaction: t });
   for (const line of lines || []) {
     if (!line.eventId) continue;
-    const attendees = await orderAttendeeRepo.findAllByOrderLineId(line.id);
+    const attendees = await orderAttendeeRepo.findAllByOrderLineId(line.id, { transaction: t });
     for (const attendee of attendees || []) {
       const [reg, created] = await registrationRepo.findOrCreateByOrderAttendee(
         attendee.id,
         {
           eventId: line.eventId,
-          orderId: orderAfter.id,
+          orderId,
           orderLineId: line.id,
           orderAttendeeId: attendee.id,
           userId: attendee.userId || null,
@@ -113,37 +128,304 @@ async function createRegistrationsAndSyncZoomForOrder(orderAfter) {
           forename: attendee.forename || null,
           surname: attendee.surname || null,
           status: REGISTRATION_STATUS.REGISTERED,
-        }
+        },
+        { transaction: t },
       );
-      logger.info("recordRegistration: registration", {
+      logger.info("finalizePaidOrder: registration", {
         registrationId: reg.id,
         eventId: line.eventId,
-        orderId: orderAfter.id,
+        orderId,
         created,
       });
-      if (provider && reg && !reg.zoomRegistrantId) {
-        const event = await eventRepo.findById(line.eventId);
-        const meeting = event && event.isOnline ? await eventMeetingRepo.findByEventId(line.eventId) : null;
-        if (event && event.isOnline && meeting) {
-          try {
-            const regPlain = reg.get ? reg.get({ plain: true }) : reg;
-            const meetingPlain = meeting.get ? meeting.get({ plain: true }) : meeting;
-            const { zoomRegistrantId } = await provider.addRegistrant(meetingPlain, regPlain);
-            if (zoomRegistrantId) {
-              await registrationRepo.update(reg.id, { zoomRegistrantId });
-            }
-          } catch (zoomErr) {
-            logger.warn("registrationZoomSync failed (non-fatal)", {
-              registrationId: reg.id,
-              eventId: line.eventId,
-              error: zoomErr.message,
-            });
+    }
+  }
+}
+
+/**
+ * After DB commit: Zoom only (retriable; admin can retry). Does not touch inventory or payment state.
+ */
+async function syncZoomForPaidOrder(orderId) {
+  const lines = await orderRepo.getLines(orderId);
+  const provider = getMeetingProvider();
+  if (!provider) return;
+  for (const line of lines || []) {
+    if (!line.eventId) continue;
+    const attendees = await orderAttendeeRepo.findAllByOrderLineId(line.id);
+    for (const attendee of attendees || []) {
+      const reg = await registrationRepo.findByOrderAttendeeId(attendee.id);
+      if (!reg || reg.zoomRegistrantId) continue;
+      const event = await eventRepo.findById(line.eventId);
+      const meeting = event && event.isOnline ? await eventMeetingRepo.findByEventId(line.eventId) : null;
+      if (event && event.isOnline && meeting) {
+        try {
+          const regPlain = reg.get ? reg.get({ plain: true }) : reg;
+          const meetingPlain = meeting.get ? meeting.get({ plain: true }) : meeting;
+          const { zoomRegistrantId } = await provider.addRegistrant(meetingPlain, regPlain);
+          if (zoomRegistrantId) {
+            await registrationRepo.update(reg.id, { zoomRegistrantId });
           }
+        } catch (zoomErr) {
+          logger.warn("registrationZoomSync failed (non-fatal)", {
+            registrationId: reg.id,
+            eventId: line.eventId,
+            error: zoomErr.message,
+          });
         }
       }
     }
   }
-  return lines;
+}
+
+/**
+ * Post-commit after payment: optional Zoom (checkout only), confirmation email, digital delivered when applicable.
+ * @param {string} orderId
+ * @param {{ skipZoom?: boolean }} [options] — set skipZoom true for admin order-level retry (Zoom retry stays on Registration).
+ */
+async function runPostCommitPaidFulfillment(orderId, options = {}) {
+  const skipZoom = Boolean(options.skipZoom);
+  const orderAfter = await orderRepo.findById(orderId);
+  if (!orderAfter || orderAfter.paymentStatus !== PAYMENT_STATUS.PAID) return orderAfter;
+  const lines = await orderRepo.getLines(orderAfter.id);
+
+  if (!skipZoom) {
+    try {
+      await syncZoomForPaidOrder(orderId);
+    } catch (zoomErr) {
+      logger.warn("syncZoomForPaidOrder outer failure (non-fatal)", { orderId, error: zoomErr.message });
+    }
+  }
+
+  if (emailService.sendOrderConfirmationEmail && emailService.isMailConfigured && emailService.isMailConfigured()) {
+    try {
+      const orderPlain = orderAfter.get ? orderAfter.get({ plain: true }) : orderAfter;
+      const linesPlain = (lines || []).map((l) => ({
+        title: l.title,
+        quantity: l.quantity,
+        price: l.price,
+        vatRate: l.vatRate != null ? Number(l.vatRate) : null,
+      }));
+      await emailService.sendOrderConfirmationEmail(orderPlain, linesPlain);
+    } catch (_) {}
+  }
+
+  const allNonPhysical =
+    lines.length > 0 &&
+    lines.every(
+      (line) =>
+        line.ProductVariant &&
+        line.ProductVariant.Product &&
+        line.ProductVariant.Product.isPhysical === false,
+    );
+  if (allNonPhysical) {
+    await orderRepo.update(orderAfter.id, { fulfillmentStatus: FULFILLMENT_STATUS.DELIVERED });
+    return await orderRepo.findById(orderAfter.id);
+  }
+  return orderAfter;
+}
+
+/**
+ * Single transactional unit: conditional stock decrement, payment bookkeeping, cart clear, local registrations.
+ * Zoom (unless skipped) and external email run in runPostCommitPaidFulfillment after commit.
+ *
+ * @param {string} orderId
+ * @param {import('sequelize').Transaction} t
+ * @param {{ paymentTransactionId: string|null, createFreeSuccessTransaction: boolean }} opts
+ * @returns {Promise<{ alreadyDone: boolean }>}
+ */
+async function fulfillPaidOrderWithinTransaction(orderId, t, { paymentTransactionId, createFreeSuccessTransaction }) {
+  const orderInTx = await orderRepo.findById(orderId, { transaction: t, lock: t.LOCK.UPDATE });
+  if (!orderInTx) {
+    const err = new Error("Order not found.");
+    err.status = 404;
+    throw err;
+  }
+  if (orderInTx.paymentStatus === PAYMENT_STATUS.PAID) {
+    return { alreadyDone: true };
+  }
+
+  const lines = await orderRepo.getLines(orderId, { transaction: t });
+  for (const line of lines || []) {
+    if (!line.productVariantId || !(line.quantity > 0)) continue;
+    const ok = await productVariantRepo.decrementQuantityIfAvailable(line.productVariantId, line.quantity, { transaction: t });
+    if (!ok) {
+      throw insufficientStockFulfillmentError();
+    }
+  }
+
+  if (paymentTransactionId) {
+    await transactionRepo.update(paymentTransactionId, { status: TRANSACTION_STATUS.SUCCESS }, { transaction: t });
+  }
+  if (createFreeSuccessTransaction) {
+    await transactionRepo.create(
+      {
+        orderId,
+        amount: 0,
+        currency: orderInTx.currency,
+        status: TRANSACTION_STATUS.SUCCESS,
+        gatewayReference: null,
+        metadata: null,
+      },
+      { transaction: t },
+    );
+  }
+
+  await orderInTx.update({ paymentStatus: PAYMENT_STATUS.PAID }, { transaction: t });
+
+  if (orderInTx.source === ORDER_SOURCE.CART) {
+    const cart = orderInTx.userId
+      ? await cartRepo.findByUser(orderInTx.userId, { transaction: t })
+      : await cartRepo.findBySessionId(orderInTx.sessionId, { transaction: t });
+    if (cart) await cartRepo.clearLines(cart.id, { transaction: t });
+  }
+
+  await createRegistrationsForPaidOrderInTransaction(orderId, t);
+  return { alreadyDone: false };
+}
+
+/**
+ * Option A: single entry to finalize local order state after payment is confirmed (Stripe, webhook, or free).
+ * Runs one DB transaction (stock, txn success, order paid, cart, registrations) then post-commit (Zoom, email, delivered).
+ * Idempotent: if order is already paid, returns immediately without re-running DB or post-commit.
+ *
+ * @param {string} orderId
+ * @param {{ paymentTransactionId?: string|null, freeOrder?: boolean }} gatewayEvidence
+ *   Use exactly one of: `paymentTransactionId` (paid checkout) or `freeOrder: true` (zero-total orders).
+ * @param {{ source?: string }} [meta] — optional log context (e.g. confirm-order, webhook, admin_retry_finalize)
+ * @returns {Promise<object>}
+ */
+async function finalizeOrderAfterPayment(orderId, gatewayEvidence = {}, meta = {}) {
+  const paymentTransactionId =
+    gatewayEvidence.paymentTransactionId != null ? String(gatewayEvidence.paymentTransactionId).trim() : null;
+  const freeOrder = Boolean(gatewayEvidence.freeOrder);
+
+  if (freeOrder && paymentTransactionId) {
+    const err = new Error("Invalid finalize evidence.");
+    err.status = 400;
+    throw err;
+  }
+  if (!freeOrder && !paymentTransactionId) {
+    const err = new Error("Invalid finalize evidence: paymentTransactionId or freeOrder required.");
+    err.status = 400;
+    throw err;
+  }
+
+  const order = await orderRepo.findById(orderId);
+  if (!order) {
+    const err = new Error("Order not found.");
+    err.status = 404;
+    throw err;
+  }
+  if (order.paymentStatus === PAYMENT_STATUS.PAID) {
+    return order;
+  }
+
+  if (freeOrder && Number(order.total) !== 0) {
+    const err = new Error("Order is not free.");
+    err.status = 400;
+    throw err;
+  }
+
+  if (!freeOrder && paymentTransactionId) {
+    const txRow = await transactionRepo.findById(paymentTransactionId);
+    if (!txRow || String(txRow.orderId) !== String(orderId)) {
+      const err = new Error("Transaction not found for this order.");
+      err.status = 404;
+      throw err;
+    }
+  }
+
+  const t = await sequelize.transaction();
+  let alreadyDoneInner = false;
+  try {
+    const r = await fulfillPaidOrderWithinTransaction(orderId, t, {
+      paymentTransactionId: freeOrder ? null : paymentTransactionId,
+      createFreeSuccessTransaction: freeOrder,
+    });
+    alreadyDoneInner = r.alreadyDone;
+    await t.commit();
+    if (!alreadyDoneInner) {
+      logger.info("finalizeOrderAfterPayment: DB finalize committed", {
+        orderId,
+        freeOrder,
+        paymentTransactionId: paymentTransactionId || null,
+        source: meta.source || "(unspecified)",
+      });
+    }
+  } catch (e) {
+    await t.rollback();
+    throw e;
+  }
+
+  if (alreadyDoneInner) {
+    return await orderRepo.findById(orderId);
+  }
+
+  try {
+    return await runPostCommitPaidFulfillment(orderId);
+  } catch (postErr) {
+    logger.error("finalizeOrderAfterPayment: post-commit failed — DB is consistent; Zoom/email may be incomplete", {
+      orderId,
+      source: meta.source || "(unspecified)",
+      error: postErr.message,
+      stack: postErr.stack,
+    });
+    return await orderRepo.findById(orderId);
+  }
+}
+
+/**
+ * Admin recovery: pending order + Stripe (or free). Picks newest pending payment transaction, or free path if total is 0.
+ * @returns {Promise<{ order: object, skipped: boolean, message?: string }>}
+ */
+async function retryFinalizeStaleOrderForAdmin(orderId) {
+  const order = await orderRepo.findById(orderId);
+  if (!order) {
+    const err = new Error("Order not found.");
+    err.status = 404;
+    throw err;
+  }
+  if (order.paymentStatus === PAYMENT_STATUS.PAID) {
+    return { order, skipped: true, message: "Order is already paid." };
+  }
+  if (Number(order.total) === 0) {
+    const finalized = await finalizeOrderAfterPayment(orderId, { freeOrder: true }, { source: "admin_retry_finalize" });
+    return { order: finalized, skipped: false };
+  }
+  const txs = await transactionRepo.findByOrder(orderId);
+  const pending = (txs || []).filter((t) => t.status === TRANSACTION_STATUS.PENDING);
+  if (pending.length === 0) {
+    const err = new Error(
+      "No pending payment transaction to finalize. If the customer was charged in Stripe, create or verify the payment transaction first.",
+    );
+    err.status = 400;
+    throw err;
+  }
+  pending.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const txToUse = pending[0];
+  const finalized = await finalizeOrderAfterPayment(
+    orderId,
+    { paymentTransactionId: txToUse.id },
+    { source: "admin_retry_finalize" },
+  );
+  return { order: finalized, skipped: false };
+}
+
+/**
+ * Admin recovery: re-run post-commit only (Zoom, confirmation email, digital delivered) for an already-paid order.
+ */
+async function retryPostCommitFulfillmentForAdmin(orderId) {
+  const order = await orderRepo.findById(orderId);
+  if (!order) {
+    const err = new Error("Order not found.");
+    err.status = 404;
+    throw err;
+  }
+  if (order.paymentStatus !== PAYMENT_STATUS.PAID) {
+    const err = new Error('Order is not paid; use "Finalize payment" first if checkout left the order pending.');
+    err.status = 400;
+    throw err;
+  }
+  return runPostCommitPaidFulfillment(orderId, { skipZoom: true });
 }
 
 /**
@@ -366,9 +648,10 @@ async function recordPaymentAttempt(orderId, amount, currency, gatewayReference,
 }
 
 /**
- * Mark transaction as success and order as paid.
+ * Mark transaction as success and order as paid (delegates to finalizeOrderAfterPayment).
  */
 async function recordPaymentSuccess(transactionId, userIdFromOrder = null) {
+  void userIdFromOrder;
   const transaction = await transactionRepo.findById(transactionId);
   if (!transaction) {
     const err = new Error("Transaction not found.");
@@ -386,78 +669,16 @@ async function recordPaymentSuccess(transactionId, userIdFromOrder = null) {
     return order;
   }
 
-  // Block 1: commit the payment status change atomically.
-  const t = await sequelize.transaction();
-  try {
-    await transactionRepo.update(transactionId, { status: TRANSACTION_STATUS.SUCCESS }, { transaction: t });
-    const orderInTx = await orderRepo.findById(transaction.orderId, { transaction: t });
-    await orderInTx.update({ paymentStatus: PAYMENT_STATUS.PAID }, { transaction: t });
-    await t.commit();
-    logger.info("recordPaymentSuccess: order marked paid", { orderId: transaction.orderId, transactionId });
-  } catch (e) {
-    await t.rollback();
-    throw e;
-  }
-
-  // Block 2: post-commit fulfillment — runs outside the transaction so a failure here
-  // cannot attempt to roll back an already-committed transaction.
-  // Errors are logged and the caller receives a resolved order rather than a misleading error.
-  try {
-    const orderAfter = await orderRepo.findById(transaction.orderId);
-    const lines = await orderRepo.getLines(orderAfter.id);
-    for (const line of lines || []) {
-      if (!line.productVariantId || !(line.quantity > 0)) continue;
-      await productVariantRepo.decrementQuantityAndClamp(line.productVariantId, line.quantity);
-    }
-
-    if (orderAfter.source === ORDER_SOURCE.CART) {
-      const cart = orderAfter.userId
-        ? await cartRepo.findByUser(orderAfter.userId)
-        : await cartRepo.findBySessionId(orderAfter.sessionId);
-      if (cart) await cartRepo.clearLines(cart.id);
-    }
-
-    await createRegistrationsAndSyncZoomForOrder(orderAfter);
-
-    if (emailService.sendOrderConfirmationEmail && emailService.isMailConfigured && emailService.isMailConfigured()) {
-      try {
-        const orderPlain = orderAfter.get ? orderAfter.get({ plain: true }) : orderAfter;
-        const linesPlain = (lines || []).map((l) => ({ title: l.title, quantity: l.quantity, price: l.price, vatRate: l.vatRate != null ? Number(l.vatRate) : null }));
-        await emailService.sendOrderConfirmationEmail(orderPlain, linesPlain);
-      } catch (_) {
-        // Do not fail order flow on email failure
-      }
-    }
-
-    const allNonPhysical =
-      lines.length > 0 &&
-      lines.every(
-        (line) =>
-          line.ProductVariant &&
-          line.ProductVariant.Product &&
-          line.ProductVariant.Product.isPhysical === false
-      );
-    if (allNonPhysical) {
-      await orderRepo.update(orderAfter.id, { fulfillmentStatus: FULFILLMENT_STATUS.DELIVERED });
-      return await orderRepo.findById(orderAfter.id);
-    }
-    return orderAfter;
-  } catch (postErr) {
-    logger.error("recordPaymentSuccess: post-commit fulfillment failed — order is paid but downstream state may be incomplete", {
-      orderId: transaction.orderId,
-      transactionId,
-      error: postErr.message,
-      stack: postErr.stack,
-    });
-    return await orderRepo.findById(transaction.orderId);
-  }
+  return finalizeOrderAfterPayment(
+    transaction.orderId,
+    { paymentTransactionId: transactionId },
+    { source: "record_payment_success" },
+  );
 }
 
 /**
  * Fulfill a zero-total (free) order without any payment gateway interaction.
- * Marks the order as paid and runs all the same downstream actions as recordPaymentSuccess:
- * variant quantity decrements, cart clearing, event registrations, confirmation email,
- * and auto-fulfillment for non-physical products.
+ * Same DB + post-commit split as recordPaymentSuccess (stock, cart, registrations in one tx; Zoom/email after).
  * @param {string} orderId
  * @returns {Promise<Order>}
  */
@@ -475,76 +696,7 @@ async function fulfillFreeOrder(orderId) {
   }
   if (order.paymentStatus === PAYMENT_STATUS.PAID) return order;
 
-  // Block 1: commit the payment status change atomically.
-  const t = await sequelize.transaction();
-  try {
-    const orderInTx = await orderRepo.findById(orderId, { transaction: t });
-    await orderInTx.update({ paymentStatus: PAYMENT_STATUS.PAID }, { transaction: t });
-    await transactionRepo.create({
-      orderId,
-      amount: 0,
-      currency: order.currency,
-      status: TRANSACTION_STATUS.SUCCESS,
-      gatewayReference: null,
-      metadata: null,
-    }, { transaction: t });
-    await t.commit();
-  } catch (e) {
-    await t.rollback();
-    throw e;
-  }
-
-  // Block 2: post-commit fulfillment — runs outside the transaction so a failure here
-  // cannot attempt to roll back an already-committed transaction.
-  try {
-    const orderAfter = await orderRepo.findById(orderId);
-    const lines = await orderRepo.getLines(orderAfter.id);
-
-    for (const line of lines || []) {
-      if (!line.productVariantId || !(line.quantity > 0)) continue;
-      await productVariantRepo.decrementQuantityAndClamp(line.productVariantId, line.quantity);
-    }
-
-    // Only clear the cart for cart-sourced orders. Event registrations must not wipe
-    // unrelated items the customer may have in their cart.
-    if (orderAfter.source === ORDER_SOURCE.CART) {
-      const cart = orderAfter.userId
-        ? await cartRepo.findByUser(orderAfter.userId)
-        : await cartRepo.findBySessionId(orderAfter.sessionId);
-      if (cart) await cartRepo.clearLines(cart.id);
-    }
-
-    await createRegistrationsAndSyncZoomForOrder(orderAfter);
-
-    if (emailService.sendOrderConfirmationEmail && emailService.isMailConfigured && emailService.isMailConfigured()) {
-      try {
-        const orderPlain = orderAfter.get ? orderAfter.get({ plain: true }) : orderAfter;
-        const linesPlain = (lines || []).map((l) => ({ title: l.title, quantity: l.quantity, price: l.price, vatRate: l.vatRate != null ? Number(l.vatRate) : null }));
-        await emailService.sendOrderConfirmationEmail(orderPlain, linesPlain);
-      } catch (_) {}
-    }
-
-    const allNonPhysical =
-      lines.length > 0 &&
-      lines.every(
-        (line) =>
-          line.ProductVariant &&
-          line.ProductVariant.Product &&
-          line.ProductVariant.Product.isPhysical === false
-      );
-    if (allNonPhysical) {
-      await orderRepo.update(orderAfter.id, { fulfillmentStatus: FULFILLMENT_STATUS.DELIVERED });
-      return await orderRepo.findById(orderAfter.id);
-    }
-    return orderAfter;
-  } catch (postErr) {
-    logger.error("fulfillFreeOrder: post-commit fulfillment failed — order is paid but downstream state may be incomplete", {
-      orderId,
-      error: postErr.message,
-      stack: postErr.stack,
-    });
-    return await orderRepo.findById(orderId);
-  }
+  return finalizeOrderAfterPayment(orderId, { freeOrder: true }, { source: "fulfill_free_order" });
 }
 
 async function cancelOrder(orderId) {
@@ -793,6 +945,162 @@ async function refundOrderForEventCancellation(orderId) {
   }
   logger.info("refundOrderForEventCancellation: refund complete", { orderId });
   return { refunded: true };
+}
+
+/**
+ * Admin: refund all remaining balance on the order (after prior partial refunds), via Stripe when a PaymentIntent exists.
+ * Removes Zoom registrants first, then issues refund, then applies FULL_ORDER effects (registrations, stock, transaction row).
+ * @param {string} orderId
+ * @param {{ processedByUserId?: string|null }} [options]
+ */
+async function refundFullOrderForAdmin(orderId, options = {}) {
+  const processedByUserId = options.processedByUserId != null ? options.processedByUserId : null;
+  const order = await orderRepo.findById(orderId);
+  if (!order) {
+    const err = new Error("Order not found.");
+    err.status = 404;
+    throw err;
+  }
+  if (!isPaymentStatusRefundable(order.paymentStatus)) {
+    const err = new Error("Order is not in a refundable payment state.");
+    err.status = 400;
+    throw err;
+  }
+
+  const remaining = await getRemainingRefundableAmount(orderId);
+  if (remaining === null || remaining <= ADMIN_REFUND_MONEY_EPS) {
+    const err = new Error("No refundable amount remains for this order.");
+    err.status = 400;
+    throw err;
+  }
+
+  logger.info("refundFullOrderForAdmin: starting", { orderId, paymentStatus: order.paymentStatus, remaining });
+
+  const registrations = await registrationRepo.findAllByOrderId(order.id);
+  const provider = getMeetingProvider();
+  for (const reg of registrations || []) {
+    if (!reg.zoomRegistrantId) continue;
+    const meeting = await eventMeetingRepo.findByEventId(reg.eventId);
+    if (!meeting) continue;
+    if (!provider) continue;
+    try {
+      const meetingPlain = meeting.get ? meeting.get({ plain: true }) : meeting;
+      await provider.removeRegistrant(meetingPlain, reg.zoomRegistrantId);
+      logger.info("refundFullOrderForAdmin: Zoom registrant removed", { orderId, registrationId: reg.id });
+    } catch (e) {
+      if (e.status === 404 || e.statusCode === 404) {
+        logger.info("refundFullOrderForAdmin: Zoom registrant already gone (404)", { orderId, registrationId: reg.id });
+      } else {
+        logger.warn("refundFullOrderForAdmin: Zoom removal failed — aborting", { orderId, error: e.message });
+        const err = new Error(`Zoom error: ${e.message}. Refund was not issued — please retry.`);
+        err.status = 502;
+        throw err;
+      }
+    }
+  }
+
+  const paymentIntentId = order.stripePaymentIntentId;
+  const txs = await transactionRepo.findByOrder(order.id);
+  const successTx = txs.find(
+    (t) => t.gatewayReference === paymentIntentId && t.status === TRANSACTION_STATUS.SUCCESS,
+  );
+  const refundTxBase = {
+    orderId: order.id,
+    refundRequestId: null,
+    paymentTransactionId: successTx ? successTx.id : null,
+    paymentIntentId: paymentIntentId || null,
+    amount: remaining,
+    currency: order.currency,
+    scopeType: REFUND_TRANSACTION_SCOPE.FULL_ORDER,
+    refundedQuantity: null,
+    reason: "Admin full order refund",
+  };
+  const refundMetaBase = { zoomRemovedBeforeRefund: true };
+
+  if (!paymentIntentId) {
+    const refundTx = await refundTransactionRepo.create({
+      ...refundTxBase,
+      status: REFUND_TRANSACTION_STATUS.SUCCEEDED,
+      stripeRefundId: null,
+      metadata: JSON.stringify(refundMetaBase),
+      createdByUserId: processedByUserId,
+    });
+    await applyRefundTransactionEffects(refundTx.id);
+    logger.info("refundFullOrderForAdmin: completed without Stripe PI", { orderId });
+    return { refunded: true, remaining, currency: order.currency };
+  }
+
+  const stripeGateway = require("../gateways/stripe.gateway");
+  if (!stripeGateway.isConfigured()) {
+    const err = new Error("Stripe is not configured; cannot issue refund.");
+    err.status = 500;
+    throw err;
+  }
+
+  try {
+    const idempotencyKey = `admin_full_refund_${order.id}_${Math.round(remaining * 100)}`;
+    const refund = await stripeGateway.createRefund({
+      paymentIntentId,
+      amountMinor: Math.round(remaining * 100),
+      reason: "requested_by_customer",
+      metadata: {
+        orderId: String(order.id),
+        scopeType: REFUND_TRANSACTION_SCOPE.FULL_ORDER,
+        source: "admin_full_refund",
+      },
+      idempotencyKey,
+    });
+    const mappedStatus =
+      refund.status === "succeeded"
+        ? REFUND_TRANSACTION_STATUS.SUCCEEDED
+        : refund.status === "failed"
+          ? REFUND_TRANSACTION_STATUS.FAILED
+          : refund.status === "canceled"
+            ? REFUND_TRANSACTION_STATUS.CANCELLED
+            : REFUND_TRANSACTION_STATUS.PENDING;
+    const refundMeta = JSON.stringify({
+      ...refundMetaBase,
+      stripeStatus: refund.status,
+    });
+    let refundTx = await refundTransactionRepo.findByStripeRefundId(refund.id);
+    if (!refundTx) {
+      refundTx = await refundTransactionRepo.create({
+        ...refundTxBase,
+        stripeRefundId: refund.id,
+        status: mappedStatus,
+        metadata: refundMeta,
+        createdByUserId: processedByUserId,
+      });
+    } else {
+      await refundTransactionRepo.update(refundTx.id, {
+        status: mappedStatus,
+        metadata: refundMeta,
+      });
+    }
+    if (refund.status === "succeeded") {
+      await applyRefundTransactionEffects(refundTx.id);
+    }
+    logger.info("refundFullOrderForAdmin: Stripe refund finished", {
+      orderId,
+      refundId: refund.id,
+      status: refund.status,
+    });
+    if (refund.status === "succeeded") {
+      return { refunded: true, remaining, currency: order.currency };
+    }
+    if (refund.status === "pending") {
+      return { refunded: false, pending: true, remaining, currency: order.currency };
+    }
+    const err = new Error(`Stripe refund status: ${refund.status}.`);
+    err.status = 502;
+    throw err;
+  } catch (e) {
+    if (e.status) throw e;
+    logger.error("refundFullOrderForAdmin: Stripe refund failed", { orderId, error: e.message });
+    const err = new Error(e.message || "Stripe refund failed.");
+    err.status = 502;
+    throw err;
+  }
 }
 
 async function getOrderById(orderId, userId, sessionId) {
@@ -1070,7 +1378,7 @@ async function getTransactionsForOrder(orderId) {
 /**
  * Admin order edit: order header + line items + payment transactions (plain objects).
  * @param {string} orderId
- * @returns {Promise<{ order: object, orderLines: object[], transactions: object[] }|null>}
+ * @returns {Promise<{ order: object, orderLines: object[], transactions: object[], refundTransactions: object[], orderRefundedTotal: number, orderRemainingRefundable: number|null, canFullRefund: boolean }|null>}
  */
 async function getAdminOrderEditPayload(orderId) {
   if (!orderId) return null;
@@ -1078,14 +1386,30 @@ async function getAdminOrderEditPayload(orderId) {
   if (!orderRow) return null;
   const lines = await orderRepo.getLines(orderId, {});
   const txs = await transactionRepo.findByOrder(orderId);
+  const refundTxRows = await refundTransactionRepo.findAllByOrderId(orderId);
+  const orderPlain = orderRow.get ? orderRow.get({ plain: true }) : orderRow;
+  const orderRefundedTotal = await getSucceededRefundedTotal(orderId);
+  const orderRemainingRefundable = await getRemainingRefundableAmount(orderId);
+  const canFullRefund =
+    isPaymentStatusRefundable(orderPlain.paymentStatus) &&
+    orderRemainingRefundable != null &&
+    orderRemainingRefundable > ADMIN_REFUND_MONEY_EPS;
   return {
-    order: orderRow.get ? orderRow.get({ plain: true }) : orderRow,
+    order: orderPlain,
     orderLines: (lines || []).map((l) => (l.get ? l.get({ plain: true }) : l)),
     transactions: (txs || []).map((t) => (t.get ? t.get({ plain: true }) : t)),
+    refundTransactions: (refundTxRows || []).map((r) => (r.get ? r.get({ plain: true }) : r)),
+    orderRefundedTotal,
+    orderRemainingRefundable: orderRemainingRefundable != null ? orderRemainingRefundable : 0,
+    canFullRefund,
   };
 }
 
 module.exports = {
+  INSUFFICIENT_STOCK_AT_FULFILLMENT,
+  finalizeOrderAfterPayment,
+  retryFinalizeStaleOrderForAdmin,
+  retryPostCommitFulfillmentForAdmin,
   getCartTotalForPayment,
   createOrderFromCart,
   createOrderFromEvent,
@@ -1100,6 +1424,7 @@ module.exports = {
   recomputeOrderPaymentStatusByRefunds,
   applyRefundTransactionEffects,
   refundOrderForEventCancellation,
+  refundFullOrderForAdmin,
   cancelOrder,
   getOrderById,
   getOrderWithLines,
