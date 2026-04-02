@@ -1,6 +1,7 @@
 const eventService = require("../../services/event.service");
 const registrationService = require("../../services/registration.service");
 const { validateRegistrantAdminUpdate } = require("../../validators/registrantAdmin.schema");
+const { buildEventsTimeline } = require("../../utils/groupEventsTimeline");
 
 module.exports = {
   /**
@@ -14,9 +15,14 @@ module.exports = {
       ? await eventService.findPastForAdmin()
       : await eventService.findUpcomingForAdmin();
 
+    const timeline = buildEventsTimeline(events, { view });
+    const timelineHasToday = timeline.some((d) => d.isToday);
+
     res.render("admin/events/index", {
       title: "Events",
       events,
+      timeline,
+      timelineHasToday,
       view,
     });
   },

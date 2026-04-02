@@ -59,6 +59,21 @@ mixin tableEmpty(message, colspan)
         td(colspan=colspan || 5)
             .da-table-empty= message
 
+//- ── +daSemanticText(label, tone) ─────────────────────────────────────────────
+//- Coloured text only (no badge background or dot). Styles: admin-dark .da-semantic-text
+//- @param {string} label
+//- @param {'success'|'warning'|'danger'|'info'|'neutral'} [tone='neutral']
+mixin daSemanticText(label, tone)
+    - var t = (tone === 'success' || tone === 'warning' || tone === 'danger' || tone === 'info') ? tone : 'neutral'
+    span.da-semantic-text(class='da-semantic-text--' + t)= label
+
+//- ── +daEventStatusText(eventStatus) ───────────────────────────────────────────
+//- Maps Event.eventStatus (active / cancelled / orphaned / …) to semantic tones.
+mixin daEventStatusText(eventStatus)
+    - var tone = ({ active: 'success', cancelled: 'danger', orphaned: 'warning' })[eventStatus] || 'neutral'
+    - var lab = eventStatus ? (eventStatus.charAt(0).toUpperCase() + eventStatus.slice(1)) : '—'
+    span.da-semantic-text(class='da-semantic-text--' + tone)= lab
+
 //- ── +readonlyField(label) ───────────────────────────────────────────────────
 //- Read-only label/value pair. Put the value content in the block.
 mixin readonlyField(label)

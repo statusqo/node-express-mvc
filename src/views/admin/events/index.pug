@@ -1,79 +1,47 @@
 extends ../../layouts/admin
 
+include ../../fragments/admin/events/timeline-components
+
+block append links
+    link(rel='stylesheet' href='/public/css/admin-events-timeline.css')
+
+block append scripts
+    script(src='/public/js/admin-events-timeline.js' defer)
+
 block content
-    .da-page
+    .da-page.da-events-timeline-page
 
         //- ── Page header ─────────────────────────────────────────────
         - var subtitle = (events ? events.length : 0) + ' event' + ((events && events.length !== 1) ? 's' : '')
         +pageHeader('Events', subtitle)
 
-        //- ── View toggle: Upcoming / Past ────────────────────────────
-        .da-view-toggle(role='tablist' aria-label='Event view')
-            a.da-view-toggle__btn(
-                href=(adminPrefix || '') + '/events?view=upcoming'
-                role='tab'
-                aria-selected=(view === 'upcoming' ? 'true' : 'false')
-                class=(view === 'upcoming' ? 'da-view-toggle__btn--active' : '')
-            ) Upcoming
-            a.da-view-toggle__btn(
-                href=(adminPrefix || '') + '/events?view=past'
-                role='tab'
-                aria-selected=(view === 'past' ? 'true' : 'false')
-                class=(view === 'past' ? 'da-view-toggle__btn--active' : '')
-            ) Past
+        //- ── Upcoming / Past + jump to today ─────────────────────────
+        .da-events-view-controls
+            .da-view-toggle(role='tablist' aria-label='Event view')
+                a.da-view-toggle__btn(
+                    href=(adminPrefix || '') + '/events?view=upcoming'
+                    role='tab'
+                    aria-selected=(view === 'upcoming' ? 'true' : 'false')
+                    class=(view === 'upcoming' ? 'da-view-toggle__btn--active' : '')
+                ) Upcoming
+                a.da-view-toggle__btn(
+                    href=(adminPrefix || '') + '/events?view=past'
+                    role='tab'
+                    aria-selected=(view === 'past' ? 'true' : 'false')
+                    class=(view === 'past' ? 'da-view-toggle__btn--active' : '')
+                ) Past
+            if view === 'upcoming' && timelineHasToday
+                button.da-btn.da-btn--secondary.da-events-scroll-today(
+                    type='button'
+                    data-admin-events-scroll-today
+                ) Skoči na danas
 
-        //- ── Events table ────────────────────────────────────────────
-        .da-panel
-            .da-table-scroll
-                table.da-table.da-table--events(role='table' aria-label='Events list')
-                    thead
-                        tr
-                            th(scope='col') Date
-                            th(scope='col') Time
-                            th(scope='col') Product
-                            th(scope='col') Type
-                            th(scope='col') Status
-                            th(scope='col') Registrants
-                            th(scope='col') Location
-                            th(scope='col' style='text-align:right') Actions
-                    tbody
-                        if events && events.length
-                            each ev in events
-                                - var statusClass = ({active:'success', cancelled:'danger', orphaned:'warning'})[ev.eventStatus] || 'neutral'
-                                - var dateParts = ev.startDate ? String(ev.startDate).substring(0, 10).split('-') : null
-                                - var dateFormatted = dateParts && dateParts.length === 3 ? dateParts[2] + '/' + dateParts[1] + '/' + dateParts[0] : '—'
-                                - var timeFormatted = ev.startTime ? String(ev.startTime).substring(0, 5) : '—'
-                                - var typeLabel = ev.Product && ev.Product.ProductType ? ev.Product.ProductType.name : '—'
-                                - var isOnline = ev.isOnline && ev.EventMeeting && ev.EventMeeting.zoomMeetingId
-                                tr
-                                    td
-                                        span.da-cell-muted= dateFormatted
-                                    td
-                                        span.da-cell-muted= timeFormatted
-                                    td
-                                        if ev.Product
-                                            span.da-cell-secondary= ev.Product.title
-                                        else
-                                            span.da-cell-muted —
-                                    td
-                                        span.da-cell-secondary= typeLabel
-                                    td
-                                        span.da-badge(class='da-badge--' + statusClass)= ev.eventStatus ? (ev.eventStatus.charAt(0).toUpperCase() + ev.eventStatus.slice(1)) : '—'
-                                    td
-                                        span.da-cell-secondary= ev.registrationCount != null ? ev.registrationCount : 0
-                                    td
-                                        if ev.isOnline
-                                            span.da-badge.da-badge--info Online
-                                        else if ev.location
-                                            span.da-cell-secondary= ev.location
-                                        else
-                                            span.da-cell-muted —
-                                    td
-                                        .da-cell-actions
-                                            a.da-row-btn.da-row-btn--edit(
-                                                href=(adminPrefix || '') + '/events/' + ev.id + '/registrants'
-                                                aria-label='View registrants for event on ' + dateFormatted
-                                            ) Registrants
-                        else
-                            - var emptyMsg = view === 'past' ? 'No past events found.' : 'No upcoming events found.'
-                            +tableEmpty(emptyMsg, 8)
+        //- ── Timeline or empty ───────────────────────────────────────
+        - var emptyMsg = view === 'past' ? 'No past events found.' : 'No upcoming events found.'
+        if timeline && timeline.length
+            .da-panel.da-events-timeline-panel
+                +eventsTimeline(timeline, adminPrefix)
+        else
+            .da-panel.da-events-timeline-panel
+                .da-events-timeline-empty(role='status')
+                    p.da-events-timeline-empty__text= emptyMsg

@@ -1,0 +1,80 @@
+//- Admin Events page — timeline sections and event cards.
+//- Include from admin/events/index.pug after this file defines mixins.
+
+//- ── +eventsTimelineEventCard(ev, adminPrefix, dateFormatted) ─────────────────
+//- Single interactive event card (not a table row).
+mixin eventsTimelineEventCard(ev, adminPrefix, dateFormatted)
+    - var typeLabel = ev.Product && ev.Product.ProductType ? ev.Product.ProductType.name : '—'
+    - var productTitle = ev.Product ? ev.Product.title : '—'
+    - var regCount = ev.registrationCount != null ? ev.registrationCount : 0
+    - var durationLabel = (ev.durationMinutes != null && ev.durationMinutes !== '') ? (String(ev.durationMinutes) + ' min') : '—'
+    article.da-events-card
+        .da-events-card__inner
+            .da-events-card__strip(role='group' aria-label='Event summary')
+                h3.da-events-card__title= productTitle
+
+                .da-events-card__meta(aria-label='Event details')
+                    span.da-events-card__kv
+                        span.da-events-card__k Type
+                        span.da-events-card__v= typeLabel
+                    span.da-events-card__kv
+                        span.da-events-card__k Status
+                        span.da-events-card__v
+                            +daEventStatusText(ev.eventStatus)
+                    span.da-events-card__kv
+                        span.da-events-card__k Duration
+                        span.da-events-card__v= durationLabel
+                    span.da-events-card__kv
+                        span.da-events-card__k Regs
+                        span.da-events-card__v= regCount
+                    span.da-events-card__kv
+                        span.da-events-card__k Loc.
+                        span.da-events-card__v
+                            if ev.isOnline
+                                +daSemanticText('Online', 'info')
+                            else if ev.location
+                                = ev.location
+                            else
+                                span.da-events-card__meta-muted —
+
+                a.da-row-btn.da-row-btn--edit.da-events-card__reg-link(
+                    href=(adminPrefix || '') + '/events/' + ev.id + '/registrants'
+                    aria-label='View registrants for ' + productTitle + ' on ' + dateFormatted
+                ) Registrants
+
+//- ── +eventsTimelineTimeSlot(timeLabel, events, adminPrefix, dateFormatted) ───
+mixin eventsTimelineTimeSlot(timeLabel, events, adminPrefix, dateFormatted)
+    section.da-events-time-slot(aria-label='Events at ' + timeLabel)
+        h3.da-events-time-heading
+            span.da-events-time-heading__label Time
+            span.da-events-time-heading__value= timeLabel
+        ul.da-events-card-list(role='list')
+            each ev in events
+                li.da-events-card-list__item(role='listitem')
+                    +eventsTimelineEventCard(ev, adminPrefix, dateFormatted)
+
+//- ── +eventsTimelineDateSection(section) ──────────────────────────────────────
+//- section: { sectionId, dateHeading, dateBadge, isToday, timeSlots, dateKey }
+mixin eventsTimelineDateSection(section, adminPrefix)
+    - var dateFormatted = section.dateHeading
+    section.da-events-day(
+        id=section.sectionId
+        class=section.isToday ? 'da-events-day--today' : ''
+        aria-label='Events on ' + dateFormatted
+    )
+        .da-events-day__content
+            header.da-events-day__header
+                h2.da-events-date-heading
+                    span.da-events-date-heading__label Date
+                    span.da-events-date-heading__value= section.dateHeading
+                if section.dateBadge
+                    span.da-events-date-badge= section.dateBadge
+            .da-events-day__slots
+                each slot in section.timeSlots
+                    +eventsTimelineTimeSlot(slot.timeLabel, slot.events, adminPrefix, dateFormatted)
+
+//- ── +eventsTimeline(timeline, adminPrefix) ───────────────────────────────────
+mixin eventsTimeline(timeline, adminPrefix)
+    .da-events-timeline(role='feed' aria-label='Events by date and time')
+        each day in timeline
+            +eventsTimelineDateSection(day, adminPrefix)

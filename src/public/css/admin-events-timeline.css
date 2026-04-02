@@ -1,0 +1,408 @@
+/* Admin Events — date/time timeline (extends admin-dark tokens) */
+
+@media (prefers-reduced-motion: reduce) {
+    .da-events-card {
+        transition: none;
+    }
+
+    .da-events-card:hover {
+        transform: none;
+    }
+}
+
+.da-events-timeline-page {
+    --evt-accent: #2dd4bf;
+    --evt-accent-dim: rgba(45, 212, 191, 0.12);
+    --evt-accent-glow: rgba(45, 212, 191, 0.35);
+    --evt-violet: #a78bfa;
+    --evt-violet-dim: rgba(167, 139, 250, 0.14);
+    /* Day strip = --ds-surface-2; cards lighter so they read as separate tiles */
+    --evt-card-bg: var(--ds-surface-3);
+    --evt-card-border: rgba(255, 255, 255, 0.1);
+    --evt-card-shadow: 0 2px 10px rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+/* ── View toggle row + optional “today” action ───────────────────── */
+.da-events-view-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.da-events-view-controls .da-view-toggle {
+    margin-bottom: 0;
+}
+
+.da-events-scroll-today {
+    flex-shrink: 0;
+    min-height: 44px;
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+
+@media (max-width: 520px) {
+    .da-events-view-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .da-events-view-controls .da-view-toggle {
+        width: 100%;
+        justify-content: stretch;
+        box-sizing: border-box;
+    }
+
+    .da-events-view-controls .da-view-toggle__btn {
+        flex: 1;
+        justify-content: center;
+    }
+
+    .da-events-scroll-today {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* ── Panel wrapping timeline (no outer border — day blocks carry chrome) ─ */
+.da-events-timeline-panel {
+    padding: clamp(1rem, 3vw, 1.5rem);
+    overflow: visible;
+    background: var(--ds-bg);
+    border: none;
+    box-shadow: none;
+}
+
+/* ── Timeline: stack of separate day blocks ──────────────────────── */
+.da-events-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+@media (min-width: 600px) {
+    .da-events-timeline {
+        gap: 1.5rem;
+    }
+}
+
+/* ── Day section — each date is its own card ─────────────────────── */
+.da-events-day {
+    display: block;
+    scroll-margin-top: 5.5rem;
+
+    background: var(--ds-surface-2);
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius-md);
+    padding: clamp(1rem, 2.5vw, 1.35rem) clamp(1rem, 3vw, 1.45rem);
+    box-shadow: var(--ds-shadow-card);
+}
+
+.da-events-day--today {
+    border-color: rgba(45, 212, 191, 0.32);
+    box-shadow:
+        0 0 0 1px rgba(45, 212, 191, 0.1),
+        var(--ds-shadow-card);
+}
+
+.da-events-day__content {
+    min-width: 0;
+}
+
+.da-events-day__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem 1.25rem;
+    margin-bottom: 1.25rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--ds-border);
+}
+
+.da-events-date-heading {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+}
+
+.da-events-date-heading__label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--evt-accent);
+}
+
+.da-events-date-heading__value {
+    font-family: "Manrope", "Inter", system-ui, sans-serif;
+    font-size: clamp(1.35rem, 4.5vw, 2.15rem);
+    font-weight: 800;
+    line-height: 1.15;
+    color: var(--ds-text-1);
+    word-break: break-word;
+}
+
+.da-events-date-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.35rem 0.85rem;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--evt-accent);
+    background: var(--evt-accent-dim);
+    border: 1px solid rgba(45, 212, 191, 0.35);
+    border-radius: 999px;
+}
+
+.da-events-day--today .da-events-date-badge {
+    background: var(--evt-violet-dim);
+    color: var(--evt-violet);
+    border-color: rgba(167, 139, 250, 0.4);
+}
+
+.da-events-day__slots {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(1.5rem, 4vw, 2.25rem);
+}
+
+/* ── Time slot ───────────────────────────────────────────────────── */
+.da-events-time-slot {
+    margin: 0;
+}
+
+.da-events-time-heading {
+    margin: 0 0 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.da-events-time-heading__label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--evt-violet);
+}
+
+.da-events-time-heading__value {
+    font-family: "Manrope", "Inter", system-ui, sans-serif;
+    font-size: clamp(1.1rem, 3.5vw, 1.65rem);
+    font-weight: 700;
+    color: var(--ds-text-1);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Card list ───────────────────────────────────────────────────── */
+.da-events-card-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+}
+
+.da-events-card-list__item {
+    margin: 0;
+    width: 100%;
+    max-width: 100%;
+}
+
+/* ── Event card — lighter than day panel (--ds-surface-3 on --ds-surface-2) ─ */
+.da-events-card {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    height: fit-content;
+    min-height: 0;
+    border-radius: var(--ds-radius-md);
+    background: var(--evt-card-bg);
+    border: 1px solid var(--evt-card-border);
+    box-shadow: var(--evt-card-shadow);
+    cursor: default;
+    transition:
+        transform 0.2s var(--ds-ease),
+        border-color 0.2s var(--ds-ease),
+        box-shadow 0.2s var(--ds-ease);
+}
+
+.da-events-card:hover {
+    cursor: pointer;
+    transform: translateY(-2px);
+    border-color: rgba(45, 212, 191, 0.25);
+    box-shadow:
+        0 12px 36px rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(167, 139, 250, 0.2);
+}
+
+.da-events-card:focus-within {
+    border-color: var(--evt-accent-glow);
+    box-shadow:
+        0 12px 36px rgba(0, 0, 0, 0.45),
+        0 0 0 2px var(--evt-accent-dim);
+}
+
+.da-events-card__inner {
+    padding: clamp(0.65rem, 1.8vw, 0.9rem) clamp(0.85rem, 2.5vw, 1.1rem);
+    max-width: 100%;
+}
+
+/* One horizontal strip: title | inline meta | action */
+.da-events-card__strip {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.75rem 1rem;
+    min-width: 0;
+}
+
+.da-events-card__title {
+    margin: 0;
+    flex: 0 1 11rem;
+    min-width: 0;
+    font-size: clamp(0.9375rem, 2vw, 1.0625rem);
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+    color: var(--ds-text-1);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Fills space between title and button; five equal columns */
+.da-events-card__meta {
+    flex: 1 1 0%;
+    min-width: 0;
+    align-self: stretch;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0;
+    padding: 0.15rem 0;
+}
+
+.da-events-card__kv {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 0.2rem;
+    min-width: 0;
+    min-height: 2.45rem;
+    padding: 0.3rem 0.35rem;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    box-sizing: border-box;
+}
+
+.da-events-card__kv:first-of-type {
+    border-left: none;
+}
+
+.da-events-card__k {
+    width: 100%;
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ds-text-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.da-events-card__v {
+    width: 100%;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--ds-text-1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+}
+
+.da-events-card__v .da-semantic-text {
+    display: inline;
+}
+
+@media (min-width: 720px) {
+    .da-events-card__k {
+        font-size: 10px;
+    }
+
+    .da-events-card__v {
+        font-size: 12px;
+    }
+}
+
+.da-events-card__strip .da-events-card__reg-link.da-row-btn {
+    flex: 0 0 auto;
+    min-height: 34px;
+    padding: 0.32rem 0.85rem;
+}
+
+/* Narrow: title full width; meta (equal cols) + button share next row */
+@media (max-width: 640px) {
+    .da-events-card__strip {
+        flex-wrap: wrap;
+        row-gap: 0.65rem;
+    }
+
+    .da-events-card__title {
+        flex: 1 1 100%;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        white-space: normal;
+    }
+
+    .da-events-card__meta {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    .da-events-card__strip .da-events-card__reg-link.da-row-btn {
+        flex: 0 0 auto;
+    }
+}
+
+.da-events-card__meta-muted {
+    color: var(--ds-text-3);
+    font-weight: 400;
+}
+
+/* ── Empty state ─────────────────────────────────────────────────── */
+.da-events-timeline-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: clamp(2.5rem, 8vw, 4rem) 1.5rem;
+    text-align: center;
+    color: var(--ds-text-3);
+    font-size: 0.9375rem;
+    border: 1px dashed var(--ds-border);
+    border-radius: var(--ds-radius-md);
+    background: var(--ds-surface-2);
+}
+
+.da-events-timeline-empty__text {
+    margin: 0;
+    max-width: 28rem;
+    line-height: 1.6;
+}
+

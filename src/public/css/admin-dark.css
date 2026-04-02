@@ -294,6 +294,24 @@ body:has(.admin-layout) .admin-header-username {
 .da-badge--neutral { background: var(--ds-surface-3);   color: var(--ds-text-3); }
 .da-badge--neutral::before { display: none; }
 
+/* ── Semantic text (no pill, no dot) — inline status / labels ───── */
+.da-semantic-text {
+    display: inline;
+    font-size: inherit;
+    font-weight: 600;
+    line-height: inherit;
+    background: none;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    white-space: nowrap;
+}
+.da-semantic-text--success { color: var(--ds-success); }
+.da-semantic-text--warning { color: var(--ds-warning); }
+.da-semantic-text--danger  { color: var(--ds-danger);  }
+.da-semantic-text--info    { color: var(--ds-info);    }
+.da-semantic-text--neutral { color: var(--ds-text-2); }
+
 /* ── Fulfillment status ───────────────────────────────────────────── */
 .da-fulfillment {
     display: inline-flex;
