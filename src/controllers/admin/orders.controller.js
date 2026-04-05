@@ -87,6 +87,10 @@ module.exports = {
       orderRefundedTotal: payload.orderRefundedTotal,
       orderRemainingRefundable: payload.orderRemainingRefundable,
       canFullRefund: payload.canFullRefund,
+      canCancelOrder: payload.canCancelOrder,
+      canRefundOrder: payload.canRefundOrder,
+      hasActiveRegistrations: payload.hasActiveRegistrations,
+      activeRegistrationCount: payload.activeRegistrationCount,
       refundRequests: refundRequestsPlain,
       validFulfillmentStatuses: FULFILLMENT_STATUS_LIST,
       canRetryFinalize,
@@ -173,7 +177,7 @@ module.exports = {
       return res.redirect((req.adminPrefix || "") + "/orders");
     }
     try {
-      const result = await orderService.refundFullOrderForAdmin(id, { processedByUserId: adminUserId });
+      const result = await orderService.refundFullOrder(id, { processedByUserId: adminUserId });
       if (result.pending) {
         res.setFlash(
           "success",
@@ -217,6 +221,19 @@ module.exports = {
       res.setFlash("error", msg);
     }
     return res.redirect(302, prefix);
+  },
+
+  async cancelOrder(req, res) {
+    const { id } = req.params;
+    const editUrl = (req.adminPrefix || "") + "/orders/" + id + "/edit";
+    try {
+      await orderService.adminCancelOrder(id);
+      res.setFlash("success", "Order marked as cancelled.");
+    } catch (err) {
+      const msg = err.status === 404 ? "Order not found." : err.message || "Could not cancel order.";
+      res.setFlash("error", msg);
+    }
+    return res.redirect(302, editUrl);
   },
 
   async approveRefundRequest(req, res) {

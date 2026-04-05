@@ -2946,3 +2946,30 @@ tr.da-row--pending {
     background: var(--ds-accent);
     color: #fff;
 }
+
+/* ── Alert banner ────────────────────────────────────────────────────────── */
+.da-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.875rem 1rem;
+    border-radius: 8px;
+    font-size: 13.5px;
+    line-height: 1.5;
+    margin-bottom: 1.25rem;
+    border: 1px solid transparent;
+}
+.da-alert__icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    margin-top: 1px;
+}
+.da-alert--warning {
+    background: rgba(245, 158, 11, 0.12);
+    border-color: rgba(245, 158, 11, 0.35);
+    color: #fbbf24;
+}
+.da-alert--warning .da-alert__icon {
+    color: #f59e0b;
+}

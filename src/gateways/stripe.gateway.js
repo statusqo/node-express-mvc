@@ -15,6 +15,7 @@
 
 const Stripe = require("stripe");
 const config = require("../config");
+const { sequelize } = require("../db");
 const orderService = require("../services/order.service");
 const orderRepo = require("../repos/order.repo");
 const orderLineRepo = require("../repos/orderLine.repo");
@@ -26,7 +27,8 @@ const storeSettingService = require("../services/storeSetting.service");
 
 const { normalizeError, toError } = require("./errors");
 const { PAYMENT_STATUS } = require("../constants/order");
-const { REFUND_TRANSACTION_STATUS } = require("../constants/refundTransaction");
+const { TRANSACTION_STATUS } = require("../constants/transaction");
+const { REFUND_TRANSACTION_STATUS, REFUND_TRANSACTION_SCOPE } = require("../constants/refundTransaction");
 
 const GATEWAY_NAME = "stripe";
 const TIMEOUT_MS = 30000;
@@ -755,13 +757,12 @@ async function handleWebhook(event) {
         }
         const order = orders[0];
         const refunds = (charge.refunds && Array.isArray(charge.refunds.data)) ? charge.refunds.data : [];
+        const orderTxs = await transactionRepo.findByOrder(order.id);
+        const successTx = orderTxs.find(
+          (tx) => tx.gatewayReference === paymentIntentId && tx.status === TRANSACTION_STATUS.SUCCESS,
+        );
         for (const refund of refunds) {
           if (!refund || !refund.id) continue;
-          const refundTx = await refundTransactionRepo.findByStripeRefundId(refund.id);
-          if (!refundTx) {
-            logger.warn("charge.refunded: unknown refund id, skipping side effects", { orderId: order.id, refundId: refund.id });
-            continue;
-          }
           const mappedStatus =
             refund.status === "succeeded"
               ? REFUND_TRANSACTION_STATUS.SUCCEEDED
@@ -770,12 +771,36 @@ async function handleWebhook(event) {
                 : refund.status === "canceled"
                   ? REFUND_TRANSACTION_STATUS.CANCELLED
                   : REFUND_TRANSACTION_STATUS.PENDING;
-          await refundTransactionRepo.update(refundTx.id, {
-            status: mappedStatus,
-            metadata: JSON.stringify({ stripeStatus: refund.status }),
-          });
-          if (mappedStatus === REFUND_TRANSACTION_STATUS.SUCCEEDED) {
-            await orderService.applyRefundTransactionEffects(refundTx.id);
+          const refundMeta = JSON.stringify({ stripeStatus: refund.status });
+          let refundTx = await refundTransactionRepo.findByStripeRefundId(refund.id);
+          if (!refundTx) {
+            // Refund originated from Stripe Dashboard — create an audit record.
+            logger.info("charge.refunded: unknown refund, recording as stripe_dashboard refund", { orderId: order.id, refundId: refund.id });
+            await sequelize.transaction(async (t) => {
+              refundTx = await refundTransactionRepo.create({
+                orderId: order.id,
+                paymentTransactionId: successTx ? successTx.id : null,
+                stripeRefundId: refund.id,
+                paymentIntentId,
+                amount: refund.amount != null ? refund.amount / 100 : 0,
+                currency: (refund.currency || order.currency || "eur").toLowerCase(),
+                status: mappedStatus,
+                scopeType: REFUND_TRANSACTION_SCOPE.FULL_ORDER,
+                reason: "Stripe Dashboard refund",
+                metadata: JSON.stringify({ stripeStatus: refund.status, source: "stripe_dashboard" }),
+                createdByUserId: null,
+              }, { transaction: t });
+              if (mappedStatus === REFUND_TRANSACTION_STATUS.SUCCEEDED) {
+                await orderService.applyRefundTransactionEffects(refundTx.id, { transaction: t });
+              }
+            });
+          } else {
+            await sequelize.transaction(async (t) => {
+              await refundTransactionRepo.update(refundTx.id, { status: mappedStatus, metadata: refundMeta }, { transaction: t });
+              if (mappedStatus === REFUND_TRANSACTION_STATUS.SUCCEEDED) {
+                await orderService.applyRefundTransactionEffects(refundTx.id, { transaction: t });
+              }
+            });
           }
         }
         await orderService.recomputeOrderPaymentStatusByRefunds(order.id);
@@ -796,15 +821,17 @@ async function handleWebhook(event) {
               : refund.status === "canceled"
                 ? REFUND_TRANSACTION_STATUS.CANCELLED
                 : REFUND_TRANSACTION_STATUS.PENDING;
-        await refundTransactionRepo.update(refundTx.id, {
-          status: mappedStatus,
-          metadata: JSON.stringify({ stripeStatus: refund.status }),
+        await sequelize.transaction(async (t) => {
+          await refundTransactionRepo.update(refundTx.id, {
+            status: mappedStatus,
+            metadata: JSON.stringify({ stripeStatus: refund.status }),
+          }, { transaction: t });
+          if (mappedStatus === REFUND_TRANSACTION_STATUS.SUCCEEDED) {
+            await orderService.applyRefundTransactionEffects(refundTx.id, { transaction: t });
+          } else if (mappedStatus !== REFUND_TRANSACTION_STATUS.PENDING) {
+            await orderService.recomputeOrderPaymentStatusByRefunds(refundTx.orderId, { transaction: t });
+          }
         });
-        if (mappedStatus === REFUND_TRANSACTION_STATUS.SUCCEEDED) {
-          await orderService.applyRefundTransactionEffects(refundTx.id);
-        } else if (mappedStatus !== REFUND_TRANSACTION_STATUS.PENDING) {
-          await orderService.recomputeOrderPaymentStatusByRefunds(refundTx.orderId);
-        }
         break;
       }
 

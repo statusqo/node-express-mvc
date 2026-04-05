@@ -72,6 +72,7 @@ router.get("/orders", asyncHandler(ordersController.index));
 router.get("/refund-requests", asyncHandler(refundRequestsController.index));
 router.get("/orders/:id/edit", asyncHandler(ordersController.editForm));
 router.post("/orders/:id/edit", asyncHandler(ordersController.update));
+router.post("/orders/:id/cancel", asyncHandler(ordersController.cancelOrder));
 router.post("/orders/:id/full-refund", asyncHandler(ordersController.fullRefund));
 router.post("/orders/:id/refund-request/:requestId/approve", asyncHandler(ordersController.approveRefundRequest));
 router.post("/orders/:id/refund-request/:requestId/reject", asyncHandler(ordersController.rejectRefundRequest));

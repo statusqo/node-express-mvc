@@ -1,3 +1,4 @@
+const { sequelize } = require("../db");
 const registrationRepo = require("../repos/registration.repo");
 const orderAttendeeRepo = require("../repos/orderAttendee.repo");
 const eventService = require("./event.service");
@@ -300,47 +301,53 @@ module.exports = {
           stripeStatus: refund.status,
           zoomRemovedBeforeRefund: true,
         });
-        let refundTx = await refundTransactionRepo.findByStripeRefundId(refund.id);
-        if (!refundTx) {
-          refundTx = await refundTransactionRepo.create({
-            orderId: order.id,
-            paymentTransactionId: successTx ? successTx.id : null,
-            stripeRefundId: refund.id,
-            paymentIntentId: order.stripePaymentIntentId,
-            amount: refundAmount,
-            currency: order.currency,
-            status: mappedStatus,
-            scopeType: REFUND_TRANSACTION_SCOPE.EVENT_ATTENDEE,
-            orderLineId: registration.orderLineId,
-            registrationId: registration.id,
-            orderAttendeeId: registration.orderAttendeeId || null,
-            refundedQuantity: 1,
-            reason: "Admin cancelled event registrant",
-            metadata: refundMeta,
-          });
-        } else {
-          await refundTransactionRepo.update(refundTx.id, {
-            status: mappedStatus,
-            metadata: refundMeta,
-          });
-        }
-        if (refund.status !== "succeeded") {
-          throw new Error("Refund is pending. Please retry in a moment.");
-        }
-        await orderService.applyRefundTransactionEffects(refundTx.id);
+
+        // Write RefundTransaction and apply effects inside a single DB transaction.
+        await sequelize.transaction(async (t) => {
+          let refundTx = await refundTransactionRepo.findByStripeRefundId(refund.id);
+          if (!refundTx) {
+            refundTx = await refundTransactionRepo.create({
+              orderId: order.id,
+              paymentTransactionId: successTx ? successTx.id : null,
+              stripeRefundId: refund.id,
+              paymentIntentId: order.stripePaymentIntentId,
+              amount: refundAmount,
+              currency: order.currency,
+              status: mappedStatus,
+              scopeType: REFUND_TRANSACTION_SCOPE.EVENT_ATTENDEE,
+              orderLineId: registration.orderLineId,
+              registrationId: registration.id,
+              orderAttendeeId: registration.orderAttendeeId || null,
+              refundedQuantity: 1,
+              reason: "Admin cancelled event registrant",
+              metadata: refundMeta,
+            }, { transaction: t });
+          } else {
+            await refundTransactionRepo.update(refundTx.id, { status: mappedStatus, metadata: refundMeta }, { transaction: t });
+          }
+          if (refund.status !== "succeeded") {
+            throw new Error("Refund is pending. Please retry in a moment.");
+          }
+          await orderService.applyRefundTransactionEffects(refundTx.id, { transaction: t });
+        });
+
         handledByRefundTransaction = true;
         logger.info("cancelRegistration: seat refund completed", { registrationId, orderId: order.id, refundId: refund.id });
       } else if (order.paymentStatus === PAYMENT_STATUS.PENDING) {
-        await orderRepo.update(order.id, {
-          paymentStatus: PAYMENT_STATUS.VOIDED,
-          fulfillmentStatus: FULFILLMENT_STATUS.CANCELLED,
+        await sequelize.transaction(async (t) => {
+          await orderRepo.update(order.id, {
+            paymentStatus: PAYMENT_STATUS.VOIDED,
+            fulfillmentStatus: FULFILLMENT_STATUS.CANCELLED,
+          }, { transaction: t });
+          await registrationRepo.destroy(registrationId, { transaction: t });
         });
-        logger.info("cancelRegistration: pending order cancelled", { registrationId, orderId: order.id });
+        handledByRefundTransaction = true;
+        logger.info("cancelRegistration: pending order voided and registration removed", { registrationId, orderId: order.id });
       }
       // Already refunded/cancelled — proceed without further financial action.
     }
 
-    // Step 3: Soft-delete the registration.
+    // Step 3: Soft-delete the registration if not already handled by the refund transaction effects.
     if (!handledByRefundTransaction) {
       await registrationRepo.destroy(registrationId);
       logger.info("cancelRegistration: registration soft-deleted", { registrationId, eventId });
