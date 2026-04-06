@@ -1,3 +1,4 @@
+const { sequelize } = require("../db");
 const paymentMethodRepo = require("../repos/paymentMethod.repo");
 const { getDefaultGateway } = require("../gateways");
 
@@ -28,12 +29,16 @@ async function update(id, userId, data) {
 async function setDefault(id, userId) {
   const pm = await getById(id, userId);
   if (!pm) return null;
-  // Clear other defaults for this user, then set this one (could be done in repo with bulk update)
+  // Clear other defaults for this user, then set this one — both writes in a single transaction.
   const list = await paymentMethodRepo.findByUser(userId);
-  for (const p of list) {
-    if (p.id !== id && p.isDefault) await paymentMethodRepo.update(p.id, { isDefault: false });
-  }
-  return await paymentMethodRepo.update(id, { isDefault: true });
+  let result;
+  await sequelize.transaction(async (t) => {
+    for (const p of list) {
+      if (p.id !== id && p.isDefault) await paymentMethodRepo.update(p.id, { isDefault: false }, { transaction: t });
+    }
+    result = await paymentMethodRepo.update(id, { isDefault: true }, { transaction: t });
+  });
+  return result;
 }
 
 async function remove(id, userId) {

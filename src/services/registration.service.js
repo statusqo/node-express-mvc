@@ -187,14 +187,16 @@ module.exports = {
     const forename = payload.forename ?? null;
     const surname = payload.surname ?? null;
 
-    await registrationRepo.update(registrationId, { email, forename, surname });
+    await sequelize.transaction(async (t) => {
+      await registrationRepo.update(registrationId, { email, forename, surname }, { transaction: t });
 
-    if (registrationRow.orderAttendeeId) {
-      const attendee = await orderAttendeeRepo.findById(registrationRow.orderAttendeeId);
-      if (attendee) {
-        await orderAttendeeRepo.update(attendee.id, { email, forename, surname });
+      if (registrationRow.orderAttendeeId) {
+        const attendee = await orderAttendeeRepo.findById(registrationRow.orderAttendeeId);
+        if (attendee) {
+          await orderAttendeeRepo.update(attendee.id, { email, forename, surname }, { transaction: t });
+        }
       }
-    }
+    });
 
     logger.info("updateRegistrationForAdmin: registration updated", { registrationId, eventId });
     return { ok: true };

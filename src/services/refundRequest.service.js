@@ -54,13 +54,16 @@ async function createRefundRequest(orderId, requestedByUserId, reason = null) {
     throw err;
   }
 
-  const request = await refundRequestRepo.create({
-    orderId,
-    status: PENDING,
-    reason: reason && String(reason).trim() ? String(reason).trim() : null,
-    requestedByUserId: requestedByUserId || null,
+  let request;
+  await sequelize.transaction(async (t) => {
+    request = await refundRequestRepo.create({
+      orderId,
+      status: PENDING,
+      reason: reason && String(reason).trim() ? String(reason).trim() : null,
+      requestedByUserId: requestedByUserId || null,
+    }, { transaction: t });
+    await orderRepo.update(orderId, { fulfillmentStatus: FULFILLMENT_STATUS.REFUND_REQUESTED }, { transaction: t });
   });
-  await orderRepo.update(orderId, { fulfillmentStatus: "refund_requested" });
   logger.info("Refund request created", { requestId: request.id, orderId, requestedByUserId });
   return request;
 }
@@ -237,12 +240,14 @@ async function rejectRefundRequest(requestId, processedByUserId) {
     throw err;
   }
 
-  await refundRequestRepo.update(requestId, {
-    status: REJECTED,
-    processedAt: new Date(),
-    processedByUserId,
+  await sequelize.transaction(async (t) => {
+    await refundRequestRepo.update(requestId, {
+      status: REJECTED,
+      processedAt: new Date(),
+      processedByUserId,
+    }, { transaction: t });
+    await orderRepo.update(request.orderId, { fulfillmentStatus: FULFILLMENT_STATUS.DELIVERED }, { transaction: t });
   });
-  await orderRepo.update(request.orderId, { fulfillmentStatus: FULFILLMENT_STATUS.DELIVERED });
   logger.info("Refund request rejected", { requestId, orderId: request.orderId, processedByUserId });
   return await refundRequestRepo.findById(requestId);
 }

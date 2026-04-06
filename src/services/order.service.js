@@ -924,49 +924,55 @@ async function refundOrderForEventCancellation(orderId) {
   };
 
   if (!paymentIntentId) {
-    const refundTx = await refundTransactionRepo.create({
-      ...refundTxBase,
-      status: REFUND_TRANSACTION_STATUS.SUCCEEDED,
-      stripeRefundId: null,
+    await sequelize.transaction(async (t) => {
+      const refundTx = await refundTransactionRepo.create({
+        ...refundTxBase,
+        status: REFUND_TRANSACTION_STATUS.SUCCEEDED,
+        stripeRefundId: null,
+      }, { transaction: t });
+      await applyRefundTransactionEffects(refundTx.id, { transaction: t });
     });
-    await applyRefundTransactionEffects(refundTx.id);
     logger.info("refundOrderForEventCancellation: marked refunded (no Stripe PI)", { orderId });
     return { refunded: true };
   }
 
+  let refund;
   try {
     // require stripe gateway here to break circular dependency
     const stripeGateway = require("../gateways/stripe.gateway");
     const idempotencyKey = `event_cancel_refund_${order.id}_${Math.round(remaining * 100)}`;
-    const refund = await stripeGateway.createRefund({
+    refund = await stripeGateway.createRefund({
       paymentIntentId,
       amountMinor: Math.round(remaining * 100),
       reason: "requested_by_customer",
       metadata: { orderId: String(order.id), scopeType: REFUND_TRANSACTION_SCOPE.FULL_ORDER },
       idempotencyKey,
     });
+  } catch (e) {
+    logger.error("refundOrderForEventCancellation: Stripe refund failed", { orderId, error: e.message });
+    return { refunded: false, error: e.message || "Stripe refund failed." };
+  }
+
+  const refundMeta = JSON.stringify({ stripeStatus: refund.status });
+  await sequelize.transaction(async (t) => {
     let refundTx = await refundTransactionRepo.findByStripeRefundId(refund.id);
-    const refundMeta = JSON.stringify({ stripeStatus: refund.status });
     if (!refundTx) {
       refundTx = await refundTransactionRepo.create({
         ...refundTxBase,
         stripeRefundId: refund.id,
         status: refund.status === "succeeded" ? REFUND_TRANSACTION_STATUS.SUCCEEDED : REFUND_TRANSACTION_STATUS.PENDING,
         metadata: refundMeta,
-      });
+      }, { transaction: t });
     } else {
       await refundTransactionRepo.update(refundTx.id, {
         status: refund.status === "succeeded" ? REFUND_TRANSACTION_STATUS.SUCCEEDED : REFUND_TRANSACTION_STATUS.PENDING,
         metadata: refundMeta,
-      });
+      }, { transaction: t });
     }
     if (refund.status === "succeeded") {
-      await applyRefundTransactionEffects(refundTx.id);
+      await applyRefundTransactionEffects(refundTx.id, { transaction: t });
     }
-  } catch (e) {
-    logger.error("refundOrderForEventCancellation: Stripe refund failed", { orderId, error: e.message });
-    return { refunded: false, error: e.message || "Stripe refund failed." };
-  }
+  });
   logger.info("refundOrderForEventCancellation: refund complete", { orderId });
   return { refunded: true };
 }

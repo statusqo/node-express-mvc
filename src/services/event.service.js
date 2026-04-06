@@ -433,10 +433,16 @@ module.exports = {
           }
         }
       } else if (order && order.paymentStatus === PAYMENT_STATUS.PENDING) {
-        await orderRepo.update(order.id, {
-          paymentStatus: PAYMENT_STATUS.VOIDED,
-          fulfillmentStatus: FULFILLMENT_STATUS.CANCELLED,
+        await sequelize.transaction(async (t) => {
+          await orderRepo.update(order.id, {
+            paymentStatus: PAYMENT_STATUS.VOIDED,
+            fulfillmentStatus: FULFILLMENT_STATUS.CANCELLED,
+          }, { transaction: t });
+          await registrationRepo.destroy(reg.id, { transaction: t });
         });
+        logger.info("processEventRefundsAndCleanup: registration soft-deleted", { registrationId: reg.id, orderId: reg.orderId });
+        processed++;
+        continue;
       }
       // Already refunded/voided or no order — proceed to soft-delete
 

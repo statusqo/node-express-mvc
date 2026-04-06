@@ -1,6 +1,15 @@
 /**
  * Admin sidebar — nested menu.
  * Inherits scoped --color-sidebar-* from .admin-sidebar (admin-navbar.css), backed by --ds-*.
+ *
+ * Animation model:
+ *   is-open alone      → group is open, sublist visible. No transitions. No animations. Instant.
+ *   is-open + is-animating → group is opening right now. Transitions + stagger animation play.
+ *   is-animating alone → group is closing right now. Close transition plays.
+ *
+ * init() phase 1 restores saved groups with is-open only (silent, no animation).
+ * init() phase 2 opens the active route group with is-animating if it wasn't already open.
+ * User toggle always uses is-animating to gate the animation.
  */
 
 @keyframes admin-nav-subitem-in {
@@ -14,6 +23,8 @@
     }
 }
 
+/* ── Base list ─────────────────────────────────────────────────────────────── */
+
 .admin-nav-root {
     list-style: none;
     padding: 0;
@@ -23,6 +34,8 @@
 .admin-nav-item {
     margin-bottom: 2px;
 }
+
+/* ── Links ─────────────────────────────────────────────────────────────────── */
 
 .admin-nav-link {
     display: block;
@@ -45,7 +58,7 @@
     outline-offset: 2px;
 }
 
-/* Current route — ds accent dim + accent hairline (matches admin-dark affordances) */
+/* Current route */
 .admin-nav-item > .admin-nav-link.is-active {
     background-color: var(--color-sidebar-active-fill);
     color: var(--color-sidebar-text);
@@ -53,40 +66,8 @@
     box-shadow: inset 0 0 0 1px var(--color-sidebar-active-outline);
 }
 
-.admin-nav-row:has(.admin-nav-link--parent.is-active) {
-    background-color: var(--color-sidebar-active-fill);
-    box-shadow: inset 0 0 0 1px var(--color-sidebar-active-outline);
-    border-radius: 4px;
-}
+/* ── Row (parent link + toggle button) ─────────────────────────────────────── */
 
-.admin-nav-row:has(.admin-nav-link--parent.is-active) .admin-nav-link--parent {
-    background-color: transparent;
-    font-weight: 600;
-    box-shadow: none;
-}
-
-.admin-nav-row:has(.admin-nav-link--parent.is-active) .admin-nav-toggle {
-    color: var(--color-sidebar-text-muted);
-}
-
-.admin-nav-sublist .admin-nav-link {
-    padding-left: 1.25rem;
-    font-size: 0.875rem;
-    color: var(--color-sidebar-text-muted);
-}
-
-.admin-nav-sublist .admin-nav-link:hover {
-    color: var(--color-sidebar-text);
-}
-
-.admin-nav-sublist .admin-nav-link.is-active {
-    color: var(--ds-accent-light);
-    font-weight: 600;
-    background-color: var(--color-sidebar-active-fill);
-    box-shadow: inset 0 0 0 1px rgba(76, 94, 255, 0.22);
-}
-
-/* Expandable groups */
 .admin-nav-group {
     margin-bottom: 2px;
 }
@@ -113,6 +94,25 @@
     color: var(--color-sidebar-text);
 }
 
+/* Active parent row highlight */
+.admin-nav-row:has(.admin-nav-link--parent.is-active) {
+    background-color: var(--color-sidebar-active-fill);
+    box-shadow: inset 0 0 0 1px var(--color-sidebar-active-outline);
+    border-radius: 4px;
+}
+
+.admin-nav-row:has(.admin-nav-link--parent.is-active) .admin-nav-link--parent {
+    background-color: transparent;
+    font-weight: 600;
+    box-shadow: none;
+}
+
+.admin-nav-row:has(.admin-nav-link--parent.is-active) .admin-nav-toggle {
+    color: var(--color-sidebar-text-muted);
+}
+
+/* ── Toggle button ─────────────────────────────────────────────────────────── */
+
 .admin-nav-toggle {
     flex: 0 0 2.25rem;
     display: flex;
@@ -138,6 +138,9 @@
     outline-offset: 1px;
 }
 
+/* ── Chevron ───────────────────────────────────────────────────────────────── */
+
+/* Default: pointing right (collapsed). No transition — snaps instantly on page-load restore. */
 .admin-nav-chevron {
     display: block;
     width: 0.5rem;
@@ -145,15 +148,24 @@
     border-right: 1.75px solid currentColor;
     border-bottom: 1.75px solid currentColor;
     transform: rotate(-45deg);
-    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
     margin-top: -2px;
 }
 
+/* Open state: pointing down. Instant when restored on load. */
 .admin-nav-group.is-open .admin-nav-chevron {
     transform: rotate(45deg);
     margin-top: 2px;
 }
 
+/* Animated transition: only when user is actively toggling. */
+.admin-nav-group.is-animating .admin-nav-chevron {
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+                margin-top 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Sublist ───────────────────────────────────────────────────────────────── */
+
+/* Closed state: hidden, no transitions. */
 .admin-nav-sublist {
     list-style: none;
     margin: 0;
@@ -163,13 +175,9 @@
     opacity: 0;
     transform: translateY(-6px);
     pointer-events: none;
-    transition:
-        max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-        opacity 0.3s ease,
-        transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-        padding 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* Open state: visible. Instant when restored on load (no transitions here). */
 .admin-nav-group.is-open > .admin-nav-sublist {
     max-height: min(90vh, 720px);
     opacity: 1;
@@ -178,56 +186,64 @@
     padding: 0.2rem 0 0.35rem 0;
 }
 
-.admin-nav-group.is-open > .admin-nav-sublist > .admin-nav-item {
+/* Transitions gate: only active during a user-triggered toggle (is-animating present). */
+.admin-nav-group.is-animating > .admin-nav-sublist {
+    transition:
+        max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.3s ease,
+        transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+        padding 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Stagger animation: only when opening via user interaction. */
+.admin-nav-group.is-open.is-animating > .admin-nav-sublist > .admin-nav-item {
     animation: admin-nav-subitem-in 0.34s cubic-bezier(0.4, 0, 0.2, 1) backwards;
 }
 
-.admin-nav-group.is-open > .admin-nav-sublist > .admin-nav-item:nth-child(1) {
-    animation-delay: 0.02s;
+.admin-nav-group.is-open.is-animating > .admin-nav-sublist > .admin-nav-item:nth-child(1) { animation-delay: 0.02s; }
+.admin-nav-group.is-open.is-animating > .admin-nav-sublist > .admin-nav-item:nth-child(2) { animation-delay: 0.05s; }
+.admin-nav-group.is-open.is-animating > .admin-nav-sublist > .admin-nav-item:nth-child(3) { animation-delay: 0.08s; }
+.admin-nav-group.is-open.is-animating > .admin-nav-sublist > .admin-nav-item:nth-child(4) { animation-delay: 0.11s; }
+.admin-nav-group.is-open.is-animating > .admin-nav-sublist > .admin-nav-item:nth-child(5) { animation-delay: 0.14s; }
+.admin-nav-group.is-open.is-animating > .admin-nav-sublist > .admin-nav-item:nth-child(6) { animation-delay: 0.17s; }
+.admin-nav-group.is-open.is-animating > .admin-nav-sublist > .admin-nav-item:nth-child(7) { animation-delay: 0.20s; }
+.admin-nav-group.is-open.is-animating > .admin-nav-sublist > .admin-nav-item:nth-child(8) { animation-delay: 0.23s; }
+
+/* ── Sublinks (nested items) ───────────────────────────────────────────────── */
+
+.admin-nav-sublist .admin-nav-link {
+    padding-left: 1.25rem;
+    font-size: 0.875rem;
+    color: var(--color-sidebar-text-muted);
 }
 
-.admin-nav-group.is-open > .admin-nav-sublist > .admin-nav-item:nth-child(2) {
-    animation-delay: 0.05s;
+.admin-nav-sublist .admin-nav-link:hover {
+    color: var(--color-sidebar-text);
 }
 
-.admin-nav-group.is-open > .admin-nav-sublist > .admin-nav-item:nth-child(3) {
-    animation-delay: 0.08s;
-}
-
-.admin-nav-group.is-open > .admin-nav-sublist > .admin-nav-item:nth-child(4) {
-    animation-delay: 0.11s;
-}
-
-.admin-nav-group.is-open > .admin-nav-sublist > .admin-nav-item:nth-child(5) {
-    animation-delay: 0.14s;
-}
-
-.admin-nav-group.is-open > .admin-nav-sublist > .admin-nav-item:nth-child(6) {
-    animation-delay: 0.17s;
-}
-
-.admin-nav-group.is-open > .admin-nav-sublist > .admin-nav-item:nth-child(7) {
-    animation-delay: 0.2s;
-}
-
-.admin-nav-group.is-open > .admin-nav-sublist > .admin-nav-item:nth-child(8) {
-    animation-delay: 0.23s;
+.admin-nav-sublist .admin-nav-link.is-active {
+    color: var(--ds-accent-light);
+    font-weight: 600;
+    background-color: var(--color-sidebar-active-fill);
+    box-shadow: inset 0 0 0 1px rgba(76, 94, 255, 0.22);
 }
 
 .admin-nav-sublist .admin-nav-sublist {
     padding-left: 0.5rem;
 }
 
+/* ── Reduced motion ────────────────────────────────────────────────────────── */
+
 @media (prefers-reduced-motion: reduce) {
-    .admin-nav-sublist {
+    .admin-nav-group.is-animating > .admin-nav-sublist {
         transition: none;
     }
 
-    .admin-nav-chevron {
+    .admin-nav-group.is-animating .admin-nav-chevron {
         transition: none;
     }
 
-    .admin-nav-group.is-open > .admin-nav-sublist > .admin-nav-item {
+    .admin-nav-group.is-open.is-animating > .admin-nav-sublist > .admin-nav-item {
         animation: none;
     }
 }
