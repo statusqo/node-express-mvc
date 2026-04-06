@@ -14,9 +14,11 @@ block content
                 p.da-page-subtitle= (products ? products.length : 0) + ' product' + ((products && products.length !== 1) ? 's' : '')
 
         p.da-events-type-hint
-            | Products are managed under&nbsp;
+            | #{typeLabel} are managed under&nbsp;
             a.da-events-type-hint-link(href=(adminPrefix || '') + '/products') Products
             | . Set product type to&nbsp;
+            strong Event
+            | &nbsp;and category to&nbsp;
             strong= typeLabel
             | &nbsp;to have them appear here.
 
@@ -31,7 +33,8 @@ block content
                         thead
                             tr
                                 th(scope='col') Title
-                                th.da-col-slug(scope='col') Slug
+                                th(scope='col') Type
+                                th(scope='col') Category
                                 th.da-col-price(scope='col') Default Price
                                 th(scope='col' style='text-align:right') Actions
                         tbody
@@ -40,8 +43,10 @@ block content
                                     tr
                                         td
                                             span.da-cell-primary= p.title
-                                        td.da-col-slug
-                                            span.da-cell-mono= p.slug || '—'
+                                        td
+                                            span.da-cell-secondary= p.ProductType ? p.ProductType.name : '—'
+                                        td
+                                            span.da-cell-secondary= p.ProductCategory ? p.ProductCategory.name : '—'
                                         td.da-col-price
                                             span.da-cell-secondary= p.priceAmount != null ? (p.currency || 'USD') + ' ' + Number(p.priceAmount).toFixed(2) : '—'
                                         td
@@ -52,7 +57,7 @@ block content
                                                 ) Events
                             else
                                 tr
-                                    td(colspan='4')
+                                    td(colspan='5')
                                         .da-table-empty
                                             svg(xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true' style='color:var(--ds-text-3)')
                                                 rect(x='3' y='4' width='18' height='18' rx='2' ry='2')

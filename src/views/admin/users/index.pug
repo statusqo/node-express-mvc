@@ -24,6 +24,8 @@ block content
                             tr
                                 th(scope='col') Email
                                 th.da-col-username(scope='col') Username
+                                th(scope='col') Forename
+                                th(scope='col') Surname
                                 th.da-col-created(scope='col') Created
                                 th(scope='col' style='text-align:right') Actions
                         tbody
@@ -34,13 +36,17 @@ block content
                                             span.da-cell-primary= u.email
                                         td.da-col-username
                                             span.da-cell-secondary= u.username || '—'
+                                        td
+                                            span.da-cell-secondary= u.forename || '—'
+                                        td
+                                            span.da-cell-secondary= u.surname || '—'
                                         td.da-col-created
                                             span.da-cell-muted= u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'
                                         td
                                             .da-cell-actions
                                                 a.da-row-btn.da-row-btn--edit(href=(adminPrefix || '') + '/users/' + u.id + '/edit' aria-label='Edit ' + u.email) Edit
                             else
-                                +tableEmpty('No admins yet.', 4)
+                                +tableEmpty('No admins yet.', 6)
 
         //- ── Regular users section ───────────────────────────────────
         .da-section
@@ -55,6 +61,8 @@ block content
                             tr
                                 th(scope='col') Email
                                 th.da-col-username(scope='col') Username
+                                th(scope='col') Forename
+                                th(scope='col') Surname
                                 th.da-col-created(scope='col') Created
                                 th(scope='col' style='text-align:right') Actions
                         tbody
@@ -65,11 +73,15 @@ block content
                                             span.da-cell-primary= u.email
                                         td.da-col-username
                                             span.da-cell-secondary= u.username || '—'
+                                        td
+                                            span.da-cell-secondary= u.forename || '—'
+                                        td
+                                            span.da-cell-secondary= u.surname || '—'
                                         td.da-col-created
                                             span.da-cell-muted= u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'
                                         td
                                             .da-cell-actions
                                                 a.da-row-btn.da-row-btn--edit(href=(adminPrefix || '') + '/users/' + u.id + '/edit' aria-label='Edit ' + u.email) Edit
                             else
-                                +tableEmpty('No users yet.', 4)
+                                +tableEmpty('No users yet.', 6)
 

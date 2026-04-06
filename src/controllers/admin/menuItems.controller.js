@@ -30,6 +30,7 @@ module.exports = {
       }
     }
 
+    res.locals.adminBackUrl = (req.adminPrefix || "") + "/menus";
     res.render("admin/menu-items/index", {
       title: "Menu Items",
       menusList: menus || [],
@@ -119,6 +120,7 @@ module.exports = {
     const parentOptions = (await menuService.findMenuItemsByMenuId(plain.menuId))
       .filter((i) => i.id !== plain.id)
       .map((i) => (i.get ? i.get({ plain: true }) : i));
+    res.locals.adminBackUrl = (req.adminPrefix || "") + "/menu-items" + (menuSlug ? "?menu=" + menuSlug : "");
     res.render("admin/menu-items/form", {
       title: "Edit Menu Item",
       menuItem: plain,

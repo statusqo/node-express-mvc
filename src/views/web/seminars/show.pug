@@ -19,7 +19,7 @@ block content
     if inquiryFail
       p(style="color: red") Please check your details and try again.
 
-    form(action="/api/seminars/inquiry" method="post")
+    form(action="/seminars/inquiry" method="post")
       input(type="text" name="website" autocomplete="off" tabindex="-1" style="position:absolute;left:-9999px;")
       input(type="hidden" name="seminarSlug" value=product.slug)
 

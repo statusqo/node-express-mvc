@@ -20,9 +20,9 @@ module.exports = {
       metaObjectRepo.count(),
       postRepo.count(),
       orderRepo.count(),
-      productRepo.countByTypeSlug("webinar"),
+      productRepo.countByCategorySlug("webinars"),
       productRepo.countByTypeSlug("seminar"),
-      productRepo.countByTypeSlug("classroom"),
+      productRepo.countByCategorySlug("classrooms"),
       refundRequestRepo.countPending(),
     ]);
 

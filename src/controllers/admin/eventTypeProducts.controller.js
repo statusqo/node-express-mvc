@@ -1,7 +1,7 @@
 /**
  * Admin controller for event-type product sections (Webinars, Classrooms).
- * Seminars use src/controllers/admin/seminars.controller.js (product list only).
- * Expects req.eventTypeSlug ('webinar'|'classroom') and req.sectionPath ('webinars'|'classrooms') set by route middleware.
+ * Seminars use src/controllers/admin/seminars.controller.js (product list only, no Zoom).
+ * Expects req.eventCategorySlug ('webinar'|'classroom') and req.sectionPath ('webinars'|'classrooms') set by route middleware.
  * Events page: inline add/edit/delete with single Save.
  */
 const productService = require("../../services/product.service");
@@ -22,13 +22,13 @@ function getTypeLabel(sectionPath) {
 
 module.exports = {
   async index(req, res) {
-    const typeSlug = req.eventTypeSlug;
+    const categorySlug = req.eventCategorySlug;
     const sectionPath = req.sectionPath;
-    if (!typeSlug || !sectionPath) {
+    if (!categorySlug || !sectionPath) {
       res.setFlash("error", "Invalid section.");
       return res.redirect((req.adminPrefix || "") + "/");
     }
-    const products = await productService.findAllByTypeSlug(typeSlug);
+    const products = await productService.findAllByCategorySlug(categorySlug);
     const list = (products || []).map((p) => {
       const plain = toPlain(p);
       const variant = plain.ProductVariants && plain.ProductVariants[0];
@@ -50,20 +50,20 @@ module.exports = {
 
   async eventsPage(req, res) {
     const { productSlug } = req.params;
-    const typeSlug = req.eventTypeSlug;
+    const categorySlug = req.eventCategorySlug;
     const sectionPath = req.sectionPath;
-    if (!typeSlug || !sectionPath) {
+    if (!categorySlug || !sectionPath) {
       res.setFlash("error", "Invalid section.");
       return res.redirect((req.adminPrefix || "") + "/");
     }
-    const product = await productService.findBySlugWithTypeAndDefaultVariant(productSlug);
+    const product = await productService.findBySlugWithTypeAndCategoryAndDefaultVariant(productSlug);
     if (!product) {
       res.setFlash("error", "Product not found.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
     }
     const plain = toPlain(product);
-    const productTypeSlug = plain.ProductType && plain.ProductType.slug;
-    if (productTypeSlug !== typeSlug) {
+    const productCategorySlug = plain.ProductCategory && plain.ProductCategory.slug;
+    if (productCategorySlug !== categorySlug) {
       res.setFlash("error", "Product does not belong to this section.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
     }
@@ -117,18 +117,18 @@ module.exports = {
   async newEventForm(req, res) {
     const { productSlug } = req.params;
     const sectionPath = req.sectionPath;
-    const typeSlug = req.eventTypeSlug;
-    if (!typeSlug || !sectionPath) {
+    const categorySlug = req.eventCategorySlug;
+    if (!categorySlug || !sectionPath) {
       res.setFlash("error", "Invalid section.");
       return res.redirect((req.adminPrefix || "") + "/");
     }
-    const product = await productService.findBySlugWithTypeAndDefaultVariant(productSlug);
+    const product = await productService.findBySlugWithTypeAndCategoryAndDefaultVariant(productSlug);
     if (!product) {
       res.setFlash("error", "Product not found.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
     }
     const plain = toPlain(product);
-    if (plain.ProductType && plain.ProductType.slug !== typeSlug) {
+    if (plain.ProductCategory && plain.ProductCategory.slug !== categorySlug) {
       res.setFlash("error", "Product does not belong to this section.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
     }
@@ -154,13 +154,13 @@ module.exports = {
   async createEvent(req, res) {
     const { productSlug } = req.params;
     const sectionPath = req.sectionPath;
-    const product = await productService.findBySlugWithTypeAndDefaultVariant(productSlug);
+    const product = await productService.findBySlugWithTypeAndCategoryAndDefaultVariant(productSlug);
     if (!product) {
       res.setFlash("error", "Product not found.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
     }
     const plain = toPlain(product);
-    if (plain.ProductType && plain.ProductType.slug !== req.eventTypeSlug) {
+    if (plain.ProductCategory && plain.ProductCategory.slug !== req.eventCategorySlug) {
       res.setFlash("error", "Product does not belong to this section.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
     }
@@ -201,18 +201,18 @@ module.exports = {
   async editEventForm(req, res) {
     const { productSlug, eventId } = req.params;
     const sectionPath = req.sectionPath;
-    const typeSlug = req.eventTypeSlug;
-    if (!typeSlug || !sectionPath) {
+    const categorySlug = req.eventCategorySlug;
+    if (!categorySlug || !sectionPath) {
       res.setFlash("error", "Invalid section.");
       return res.redirect((req.adminPrefix || "") + "/");
     }
-    const product = await productService.findBySlugWithTypeAndDefaultVariant(productSlug);
+    const product = await productService.findBySlugWithTypeAndCategoryAndDefaultVariant(productSlug);
     if (!product) {
       res.setFlash("error", "Product not found.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
     }
     const plain = toPlain(product);
-    if (plain.ProductType && plain.ProductType.slug !== typeSlug) {
+    if (plain.ProductCategory && plain.ProductCategory.slug !== categorySlug) {
       res.setFlash("error", "Product does not belong to this section.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
     }
@@ -257,7 +257,7 @@ module.exports = {
       res.setFlash("error", "Invalid request.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events");
     }
-    const product = await productService.findBySlugWithTypeAndDefaultVariant(productSlug);
+    const product = await productService.findBySlugWithTypeAndCategoryAndDefaultVariant(productSlug);
     if (!product) {
       res.setFlash("error", "Product not found.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
@@ -286,13 +286,13 @@ module.exports = {
   async syncZoom(req, res) {
     const { productSlug } = req.params;
     const sectionPath = req.sectionPath;
-    const product = await productService.findBySlugWithTypeAndDefaultVariant(productSlug);
+    const product = await productService.findBySlugWithTypeAndCategoryAndDefaultVariant(productSlug);
     if (!product) {
       res.setFlash("error", "Product not found.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
     }
     const plain = toPlain(product);
-    if (plain.ProductType && plain.ProductType.slug !== req.eventTypeSlug) {
+    if (plain.ProductCategory && plain.ProductCategory.slug !== req.eventCategorySlug) {
       res.setFlash("error", "Product does not belong to this section.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
     }
@@ -314,13 +314,13 @@ module.exports = {
   async eventsSave(req, res) {
     const { productSlug } = req.params;
     const sectionPath = req.sectionPath;
-    const product = await productService.findBySlugWithTypeAndDefaultVariant(productSlug);
+    const product = await productService.findBySlugWithTypeAndCategoryAndDefaultVariant(productSlug);
     if (!product) {
       res.setFlash("error", "Product not found.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
     }
     const plain = toPlain(product);
-    if (plain.ProductType && plain.ProductType.slug !== req.eventTypeSlug) {
+    if (plain.ProductCategory && plain.ProductCategory.slug !== req.eventCategorySlug) {
       res.setFlash("error", "Product does not belong to this section.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
     }
@@ -369,7 +369,7 @@ module.exports = {
       res.setFlash("error", "Invalid request. Use the Cancel button and confirm.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events");
     }
-    const product = await productService.findBySlugWithTypeAndDefaultVariant(productSlug);
+    const product = await productService.findBySlugWithTypeAndCategoryAndDefaultVariant(productSlug);
     if (!product) {
       res.setFlash("error", "Product not found.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
@@ -405,7 +405,7 @@ module.exports = {
       res.setFlash("error", "Invalid request.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events");
     }
-    const product = await productService.findBySlugWithTypeAndDefaultVariant(productSlug);
+    const product = await productService.findBySlugWithTypeAndCategoryAndDefaultVariant(productSlug);
     if (!product) {
       res.setFlash("error", "Product not found.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
@@ -440,7 +440,7 @@ module.exports = {
       res.setFlash("error", "Invalid request.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events");
     }
-    const product = await productService.findBySlugWithTypeAndDefaultVariant(productSlug);
+    const product = await productService.findBySlugWithTypeAndCategoryAndDefaultVariant(productSlug);
     if (!product) {
       res.setFlash("error", "Product not found.");
       return res.redirect((req.adminPrefix || "") + "/" + sectionPath);

@@ -2,14 +2,17 @@
 
 const crypto = require("crypto");
 
-/** Seeds product_types: Webinar, Service, Classroom. */
+/**
+ * Seeds product_types:
+ * - "event"   — products with scheduled live sessions (webinars, classrooms). Discriminated by ProductCategory.
+ * - "seminar" — seminar products arranged via inquiry; no Zoom workflow.
+ */
 module.exports = {
   async up(queryInterface) {
     const now = new Date();
     const types = [
-      { name: "Webinar", slug: "webinar" },
+      { name: "Event", slug: "event" },
       { name: "Seminar", slug: "seminar" },
-      { name: "Classroom", slug: "classroom" },
     ];
 
     for (const { name, slug } of types) {
@@ -27,7 +30,7 @@ module.exports = {
 
   async down(queryInterface) {
     await queryInterface.bulkDelete("product_types", {
-      slug: ["webinar", "seminar", "classroom"],
+      slug: ["event", "seminar"],
     });
   },
 };

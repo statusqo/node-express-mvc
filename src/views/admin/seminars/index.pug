@@ -28,7 +28,8 @@ block content
                         thead
                             tr
                                 th(scope='col') Title
-                                th.da-col-slug(scope='col') Slug
+                                th(scope='col') Type
+                                th(scope='col') Category
                                 th(scope='col') Default price
                                 th(scope='col' style='text-align:right') Actions
                         tbody
@@ -37,8 +38,10 @@ block content
                                     tr
                                         td
                                             span.da-cell-primary= p.title
-                                        td.da-col-slug
-                                            span.da-cell-mono= p.slug || '—'
+                                        td
+                                            span.da-cell-secondary= p.ProductType ? p.ProductType.name : '—'
+                                        td
+                                            span.da-cell-secondary= p.ProductCategory ? p.ProductCategory.name : '—'
                                         td
                                             span.da-cell-secondary= p.priceAmount != null ? (p.currency || 'USD') + ' ' + Number(p.priceAmount).toFixed(2) : '—'
                                         td
@@ -49,6 +52,6 @@ block content
                                                 ) Edit product
                             else
                                 tr
-                                    td(colspan='4')
+                                    td(colspan='5')
                                         .da-table-empty
                                             span No seminar products yet.

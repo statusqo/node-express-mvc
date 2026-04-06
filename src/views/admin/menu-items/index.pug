@@ -8,27 +8,26 @@ block content
     .da-page
 
         //- ── Page header ─────────────────────────────────────────────
-        - var menuItemsSubtitle = selectedMenu ? selectedMenu.name + ' (' + selectedMenu.slug + ') — ' + (items ? items.length : 0) + ' item' + ((items && items.length !== 1) ? 's' : '') : 'Select a menu to edit its items'
+        - var menuItemsSubtitle = selectedMenu ? selectedMenu.name + ' (' + selectedMenu.slug + ')' : 'Select a menu to edit its items'
         +pageHeader('Menu Items', menuItemsSubtitle)
             if selectedMenu
                 +addBtn((adminPrefix || '') + '/menu-items/new?menu=' + selectedMenu.slug, 'Add Item')
 
         //- ── Menu selector ───────────────────────────────────────────
-        .da-section
-            .da-section-header(style='flex-wrap: wrap; gap: 0.75rem;')
-                h2.da-section-title Menu
-                if menusList && menusList.length
-                    label.da-form-label(for='menu-select' style='margin: 0; font-weight: 500;') Switch menu
-                    select#menu-select.da-form-input(
+        if menusList && menusList.length
+            form.da-filter-bar(method='get' action=(adminPrefix || '') + '/menu-items')
+                .da-filter-head
+                    span.da-filter-head-label Active Menu
+                .da-form-group(style='margin:0; flex:1; min-width:200px; max-width:420px;')
+                    select#menu-select.da-form-select(
                         name='menu'
-                        data-base=(adminPrefix || '')
-                        onchange="window.location.href=this.dataset.base + '/menu-items?menu=' + this.value"
-                        style='max-width: 280px;'
+                        onchange='this.form.submit()'
                     )
                         each m in menusList
                             option(value=m.slug selected=(selectedMenu && selectedMenu.slug === m.slug))= m.name + ' (' + m.slug + ')'
-                else
-                    p.admin-flash.admin-flash-info(style='margin:0') No menus yet. #[a(href=(adminPrefix || '') + '/menus/new') Create a menu] first.
+        else
+            p.admin-flash.admin-flash-info No menus yet.&nbsp;
+                a(href=(adminPrefix || '') + '/menus/new') Create a menu first.
 
         if selectedMenu
             //- ── Items table ─────────────────────────────────────────
@@ -79,7 +78,3 @@ block content
                                 else
                                     +tableEmpty('No items in this menu yet.', 8)
 
-        else if menusList && menusList.length
-            .da-section
-                .da-panel
-                    p.admin-flash.admin-flash-info(style='margin: 0;') Select a menu from the dropdown above to edit its items.

@@ -150,7 +150,8 @@
         initCounters();
         initInventoryBars();
         initSearchShortcut();
-        initAlertDots();
+        // Defer style injection until after sidebar open animation completes (420ms).
+        setTimeout(initAlertDots, 500);
     }
 
     if (document.readyState === 'loading') {

@@ -18,8 +18,8 @@ block content
                     thead
                         tr
                             th(scope='col') Title
-                            th.da-col-slug(scope='col') Slug
                             th(scope='col') Type
+                            th(scope='col') Category
                             th.da-col-price(scope='col') Price
                             th(scope='col') Status
                             th(scope='col' style='text-align:right') Actions
@@ -29,10 +29,10 @@ block content
                                 tr.da-row(data-product-id=p.id)
                                     td
                                         span.da-cell-primary= p.title
-                                    td.da-col-slug
-                                        span.da-cell-mono= p.slug || '—'
                                     td
                                         span.da-cell-secondary= p.ProductType ? p.ProductType.name : '—'
+                                    td
+                                        span.da-cell-secondary= p.ProductCategory ? p.ProductCategory.name : '—'
                                     td.da-col-price
                                         span.da-cell-secondary= p.price != null ? Number(p.price).toFixed(2) + ' ' + (p.currency || 'USD') : '—'
                                     td

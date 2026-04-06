@@ -5,7 +5,7 @@ const eventTypeProductsController = require("../../controllers/admin/eventTypePr
 const router = express.Router({ mergeParams: true });
 
 router.use((req, res, next) => {
-  req.eventTypeSlug = "webinar";
+  req.eventCategorySlug = "webinars";
   req.sectionPath = "webinars";
   next();
 });

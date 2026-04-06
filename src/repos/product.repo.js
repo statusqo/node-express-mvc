@@ -2,6 +2,7 @@ const { Product, ProductVariant, ProductPrice, ProductType, ProductCategory, Tax
 const { DEFAULT_CURRENCY } = require("../config/constants");
 const { WEIGHT_UNIT } = require("../constants/product");
 const productTypeRepo = require("./productType.repo");
+const productCategoryRepo = require("./productCategory.repo");
 const { sequelize } = require("../db");
 const { generateVariantSku } = require("../utils/skuGenerator");
 
@@ -18,6 +19,7 @@ const META_OBJECTS_THROUGH_ATTRIBUTES = ["id", "productId", "metaObjectId", "sor
 const DEFAULT_VARIANT_INCLUDE = [
   { model: ProductVariant, as: "ProductVariants", where: { isDefault: true }, required: false, limit: 1, include: [{ model: ProductPrice, as: "ProductPrices", where: { isDefault: true }, required: false, limit: 1 }] },
   { model: ProductType, as: "ProductType", attributes: ["id", "name", "slug"], required: false },
+  { model: ProductCategory, as: "ProductCategory", attributes: ["id", "name", "slug"], required: false },
   { model: Media, as: "media", through: { attributes: ["sortOrder"] }, required: false },
 ];
 
@@ -177,13 +179,14 @@ module.exports = {
   },
 
   /**
-   * Find product by slug with ProductType and default variant + price (for admin event-type pages).
+   * Find product by slug with ProductType, ProductCategory, and default variant + price (for admin event-type pages).
    */
-  async findBySlugWithTypeAndDefaultVariant(slug, options = {}) {
+  async findBySlugWithTypeAndCategoryAndDefaultVariant(slug, options = {}) {
     return await Product.findOne({
       where: { slug },
       include: options.include || [
         { model: ProductType, as: "ProductType", attributes: ["id", "name", "slug"], required: false },
+        { model: ProductCategory, as: "ProductCategory", attributes: ["id", "name", "slug"], required: false },
         { model: ProductVariant, as: "ProductVariants", where: { isDefault: true }, required: false, limit: 1, include: [{ model: ProductPrice, as: "ProductPrices", where: { isDefault: true }, required: false, limit: 1 }] },
       ],
       ...options,
@@ -197,12 +200,13 @@ module.exports = {
     });
   },
 
-  /** Find active product by slug with ProductType (for public event-type section checks). */
-  async findActiveBySlugWithType(slug, options = {}) {
+  /** Find active product by slug with ProductType, ProductCategory and default variant (for ownership checks in event-type and seminar sections). */
+  async findActiveBySlugWithTypeAndCategory(slug, options = {}) {
     return await Product.findOne({
       where: { slug, active: true },
       include: options.include || [
         { model: ProductType, as: "ProductType", attributes: ["id", "name", "slug"], required: false },
+        { model: ProductCategory, as: "ProductCategory", attributes: ["id", "name", "slug"], required: false },
         { model: TaxRate, as: "TaxRate", attributes: ["percentage"], required: false },
         { model: ProductVariant, as: "ProductVariants", where: { isDefault: true, active: true }, required: false, limit: 1, include: [{ model: ProductPrice, as: "ProductPrices", where: { isDefault: true }, required: false, limit: 1 }] },
       ],
@@ -211,7 +215,8 @@ module.exports = {
   },
 
   /**
-   * Find all products by product type slug (e.g. 'webinar', 'seminar', 'classroom').
+   * Find all products by product type slug (e.g. 'seminar').
+   * Used by seminar controllers which still discriminate on ProductType.
    */
   async findAllByProductTypeSlug(productTypeSlug, options = {}) {
     const productType = await productTypeRepo.findBySlug(productTypeSlug, options);
@@ -220,6 +225,26 @@ module.exports = {
       where: { productTypeId: productType.id },
       include: options.include || [
         { model: ProductType, as: "ProductType", attributes: ["id", "name", "slug"], required: false },
+        { model: ProductCategory, as: "ProductCategory", attributes: ["id", "name", "slug"], required: false },
+        { model: ProductVariant, as: "ProductVariants", where: { isDefault: true }, required: false, limit: 1, include: [{ model: ProductPrice, as: "ProductPrices", where: { isDefault: true }, required: false, limit: 1 }] },
+      ],
+      order: [["title", "ASC"]],
+      ...options,
+    });
+  },
+
+  /**
+   * Find all products by product category slug (e.g. 'webinars', 'classrooms').
+   * Used by event-type controllers that discriminate on ProductCategory.
+   */
+  async findAllByProductCategorySlug(categorySlug, options = {}) {
+    const category = await productCategoryRepo.findBySlug(categorySlug, options);
+    if (!category) return [];
+    return await Product.findAll({
+      where: { productCategoryId: category.id },
+      include: options.include || [
+        { model: ProductType, as: "ProductType", attributes: ["id", "name", "slug"], required: false },
+        { model: ProductCategory, as: "ProductCategory", attributes: ["id", "name", "slug"], required: false },
         { model: ProductVariant, as: "ProductVariants", where: { isDefault: true }, required: false, limit: 1, include: [{ model: ProductPrice, as: "ProductPrices", where: { isDefault: true }, required: false, limit: 1 }] },
       ],
       order: [["title", "ASC"]],
@@ -481,6 +506,13 @@ module.exports = {
   async countByTypeSlug(typeSlug) {
     return await Product.count({
       include: [{ model: ProductType, as: "ProductType", where: { slug: typeSlug }, required: true }],
+      distinct: true,
+    });
+  },
+
+  async countByCategorySlug(categorySlug) {
+    return await Product.count({
+      include: [{ model: ProductCategory, as: "ProductCategory", where: { slug: categorySlug }, required: true }],
       distinct: true,
     });
   },

@@ -1,7 +1,7 @@
 /**
  * Public controller for event-type product sections (Webinars, Classrooms).
- * Seminars use src/controllers/web/seminars.controller.js (catalog + inquiry only).
- * Expects req.typeSlug and req.sectionPath set by route middleware (e.g. typeSlug: 'webinar', sectionPath: 'webinars').
+ * Seminars use src/controllers/web/seminars.controller.js (catalog + inquiry only, no Zoom).
+ * Expects req.categorySlug and req.sectionPath set by route middleware (e.g. categorySlug: 'webinar', sectionPath: 'webinars').
  */
 const productService = require("../../services/product.service");
 const eventService = require("../../services/event.service");
@@ -25,10 +25,10 @@ function getTypeLabel(sectionPath) {
 
 module.exports = {
   async index(req, res) {
-    const typeSlug = req.typeSlug;
+    const categorySlug = req.categorySlug;
     const sectionPath = req.sectionPath;
-    if (!typeSlug || !sectionPath) return res.redirect("/");
-    const products = await productService.findAllByTypeSlug(typeSlug);
+    if (!categorySlug || !sectionPath) return res.redirect("/");
+    const products = await productService.findAllByCategorySlug(categorySlug);
     const list = (products || []).map((p) => {
       const plain = toPlain(p);
       const variant = plain.ProductVariants && plain.ProductVariants[0];
@@ -50,14 +50,14 @@ module.exports = {
   async show(req, res) {
     const { slug } = req.params;
     const sectionPath = req.sectionPath;
-    const product = await productService.findActiveBySlugWithType(slug);
+    const product = await productService.findActiveBySlugWithTypeAndCategory(slug);
     if (!product) {
       res.setFlash("error", "Product not found.");
       return res.redirect("/" + sectionPath);
     }
     const plain = toPlain(product);
-    const productTypeSlug = plain.ProductType && plain.ProductType.slug;
-    if (productTypeSlug !== req.typeSlug) {
+    const productCategorySlug = plain.ProductCategory && plain.ProductCategory.slug;
+    if (productCategorySlug !== req.categorySlug) {
       res.setFlash("error", "Product not found.");
       return res.redirect("/" + sectionPath);
     }
@@ -83,13 +83,13 @@ module.exports = {
       res.setFlash("error", "Please select a session.");
       return res.redirect("/" + sectionPath + "/" + slug);
     }
-    const product = await productService.findActiveBySlugWithType(slug);
+    const product = await productService.findActiveBySlugWithTypeAndCategory(slug);
     if (!product) {
       res.setFlash("error", "Product not found.");
       return res.redirect("/" + sectionPath);
     }
     const plain = toPlain(product);
-    if (plain.ProductType && plain.ProductType.slug !== req.typeSlug) {
+    if (plain.ProductCategory && plain.ProductCategory.slug !== req.categorySlug) {
       res.setFlash("error", "Product not found.");
       return res.redirect("/" + sectionPath);
     }
@@ -151,12 +151,12 @@ module.exports = {
   async placeOrder(req, res) {
     const { slug } = req.params;
     const sectionPath = req.sectionPath;
-    const product = await productService.findActiveBySlugWithType(slug);
+    const product = await productService.findActiveBySlugWithTypeAndCategory(slug);
     if (!product) {
       return res.status(404).json({ error: "Product not found." });
     }
     const plain = toPlain(product);
-    if (plain.ProductType && plain.ProductType.slug !== req.typeSlug) {
+    if (plain.ProductCategory && plain.ProductCategory.slug !== req.categorySlug) {
       return res.status(404).json({ error: "Product not found." });
     }
     const validation = validateEventRegister(req.body || {});

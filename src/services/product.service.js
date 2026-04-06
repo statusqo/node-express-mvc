@@ -35,20 +35,24 @@ module.exports = {
     return await productRepo.findActiveBySlugWithMeta(slug, options);
   },
 
-  async findActiveBySlugWithType(slug, options = {}) {
-    return await productRepo.findActiveBySlugWithType(slug, options);
+  async findActiveBySlugWithTypeAndCategory(slug, options = {}) {
+    return await productRepo.findActiveBySlugWithTypeAndCategory(slug, options);
   },
 
   async findBySlug(slug, options = {}) {
     return await productRepo.findBySlug(slug, options);
   },
 
-  async findBySlugWithTypeAndDefaultVariant(slug, options = {}) {
-    return await productRepo.findBySlugWithTypeAndDefaultVariant(slug, options);
+  async findBySlugWithTypeAndCategoryAndDefaultVariant(slug, options = {}) {
+    return await productRepo.findBySlugWithTypeAndCategoryAndDefaultVariant(slug, options);
   },
 
   async findAllByTypeSlug(productTypeSlug, options = {}) {
     return await productRepo.findAllByProductTypeSlug(productTypeSlug, options);
+  },
+
+  async findAllByCategorySlug(categorySlug, options = {}) {
+    return await productRepo.findAllByProductCategorySlug(categorySlug, options);
   },
 
   async getDefaultVariantWithPrice(productId, options = {}) {

@@ -21,7 +21,8 @@ block content
                                 each cat in productCategories
                                     tr.da-row(data-id=cat.id)
                                         td.da-cell-primary= cat.name
-                                        td= cat.slug
+                                        td
+                                            span.da-cell-mono= cat.slug || '—'
                                         td
                                             if cat.kpdCode
                                                 span.da-badge.da-badge--info= cat.kpdCode
