@@ -31,6 +31,10 @@ block content
                             .da-form-section
                                 span.da-form-section-label Identity
 
+                                if isEdit && user && user.userNumber
+                                    +readonlyField('User Number')
+                                        span.da-cell-mono= '#' + user.userNumber
+
                                 .da-form-group
                                     label.da-form-label(for='username') Username
                                     input#username.da-form-input(
@@ -251,7 +255,7 @@ block content
                                         - var fulClass = ({pending:'warning',processing:'info',shipped:'info',delivered:'success',refund_requested:'danger',refunded:'neutral',cancelled:'danger',returned:'neutral'})[order.fulfillmentStatus] || 'neutral'
                                         tr
                                             td
-                                                span.da-cell-mono= order.id ? order.id.slice(0, 8) + '…' : '—'
+                                                span.da-cell-mono= order.orderNumber ? '#' + order.orderNumber : '—'
                                             td
                                                 if order.paymentStatus
                                                     span.da-badge(class='da-badge--' + payClass)= order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)

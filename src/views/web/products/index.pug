@@ -23,7 +23,7 @@ block content
               p(style="margin:0.5rem 0")= product.description
             if price != null
               span #{Number(price).toFixed(2)} #{DEFAULT_CURRENCY}
-            if product.defaultVariantId
+            if product.defaultVariantId && product.defaultVariantQuantity > 0
               form.js-add-to-cart-form(action="/cart/add" method="post" style="display:inline; margin-left:0.5rem")
                 input(type="hidden" name="productVariantId" value=product.defaultVariantId)
                 input(type="hidden" name="quantity" value="1")

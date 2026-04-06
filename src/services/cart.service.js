@@ -130,6 +130,14 @@ async function clearCart(userId, sessionId) {
   await cartRepo.clearLines(cart.id);
 }
 
+/**
+ * Remove all cart lines referencing a specific variant across all carts.
+ * Called before deleting a variant to avoid FK constraint errors and stale cart state.
+ */
+async function removeVariantFromAllCarts(variantId, options = {}) {
+  return await cartRepo.removeLinesByVariantId(variantId, options);
+}
+
 module.exports = {
   getOrCreateCart,
   getCartWithLines,
@@ -138,4 +146,5 @@ module.exports = {
   setQuantity,
   clearCart,
   validateAndCleanCart,
+  removeVariantFromAllCarts,
 };

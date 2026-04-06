@@ -93,8 +93,6 @@ router.get("/products/new", asyncHandler(productsController.newForm));
 router.post("/products/new", asyncHandler(productsController.create));
 router.get("/products/:id/edit", asyncHandler(productsController.editForm));
 router.post("/products/:id/edit", asyncHandler(productsController.update));
-router.post("/products/:id/variants", asyncHandler(productsController.addProductVariant));
-router.post("/products/:id/variants/:variantId/delete", asyncHandler(productsController.removeProductVariant));
 router.post("/products/:id/delete", asyncHandler(productsController.delete));
 
 // Events overview — all events across all types, with registrant lists

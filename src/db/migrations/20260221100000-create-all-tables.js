@@ -12,6 +12,7 @@ module.exports = {
     // --- users ---
     await queryInterface.createTable("users", {
       id: uuid,
+      userNumber: { type: Sequelize.INTEGER, allowNull: true, unique: true },
       username: { type: Sequelize.STRING, allowNull: true, unique: true },
       email: { type: Sequelize.STRING, allowNull: false, unique: true },
       forename: { type: Sequelize.STRING, allowNull: true },
@@ -253,6 +254,7 @@ module.exports = {
     // --- orders ---
     await queryInterface.createTable("orders", {
       id: uuid,
+      orderNumber: { type: Sequelize.INTEGER, allowNull: true, unique: true },
       userId: { type: Sequelize.UUID, allowNull: true, references: { model: "users", key: "id" }, onUpdate: "CASCADE", onDelete: "SET NULL" },
       sessionId: { type: Sequelize.STRING, allowNull: true },
       forename: { type: Sequelize.STRING, allowNull: true },

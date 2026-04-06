@@ -8,6 +8,11 @@ const Order = sequelize.define("Order", {
     defaultValue: DataTypes.UUIDV4,
     primaryKey: true,
   },
+  orderNumber: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    unique: true,
+  },
   userId: {
     type: DataTypes.UUID,
     allowNull: true,
@@ -134,6 +139,11 @@ const Order = sequelize.define("Order", {
     { fields: ["fulfillmentStatus"] },
     { fields: ["stripePaymentIntentId"] },
   ],
+});
+
+Order.addHook("beforeCreate", async (order, options) => {
+  const max = await Order.max("orderNumber", { transaction: options.transaction });
+  order.orderNumber = (max || 100000) + 1;
 });
 
 module.exports = Order;

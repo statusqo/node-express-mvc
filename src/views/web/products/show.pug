@@ -14,7 +14,7 @@ block content
               span(style="font-size:0.9rem")= m.filename || m.path || 'File'
     if product.description
       div(style="margin:1rem 0")= product.description
-    if price != null
+    if (!variants || !variants.length) && price != null
       p(style="font-size:1.25rem") #{Number(price).toFixed(2)} #{DEFAULT_CURRENCY}
     if product.metaObjects && product.metaObjects.length
       div(style="margin:1rem 0")
@@ -40,9 +40,27 @@ block content
                           a(href=val target="_blank" rel="noopener noreferrer")= val
                         else
                           span= displayVal
-    if productVariantId
-      form.js-add-to-cart-form(action="/cart/add" method="post" style="margin-top:1rem")
-        input(type="hidden" name="productVariantId" value=productVariantId)
-        input(type="hidden" name="quantity" value="1")
-        button(type="submit") Add to cart
+    if variants && variants.length
+      div(style="margin-top:1.5rem")
+        h2(style="font-size:1.1rem; margin-bottom:0.75rem") Options
+        ul(style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:0.5rem")
+          each v in variants
+            li(style="display:flex; align-items:center; gap:1rem; padding:0.75rem; border:1px solid #ddd; border-radius:6px")
+              span(style="font-weight:500; flex:1")= v.title
+              span(style="color:#555; min-width:6rem; text-align:right")= Number(v.priceAmount).toFixed(2) + ' ' + currency
+              if v.quantity > 0
+                form.js-add-to-cart-form(action="/cart/add" method="post")
+                  input(type="hidden" name="productVariantId" value=v.id)
+                  input(type="hidden" name="quantity" value="1")
+                  button(type="submit") Add to cart
+              else
+                span(style="color:#999; font-size:0.9rem") Sold out
+    else if defaultVariantId
+      if defaultVariantQuantity > 0
+        form.js-add-to-cart-form(action="/cart/add" method="post" style="margin-top:1rem")
+          input(type="hidden" name="productVariantId" value=defaultVariantId)
+          input(type="hidden" name="quantity" value="1")
+          button(type="submit") Add to cart
+      else
+        p(style="color:#999; margin-top:1rem") Sold out
   a(href="/products") Back to products

@@ -1,6 +1,7 @@
 const productService = require("../../services/product.service");
 const { validateProduct } = require("../../validators/product.schema");
 const { parseDefinitionPairs, validateMetaObjectValues } = require("../../validators/metaObject.schema");
+const { parseAndValidateSubmittedVariants } = require("../../validators/productVariantAdmin.schema");
 const config = require("../../config");
 const { DEFAULT_CURRENCY } = require("../../config/constants");
 const storeSettingService = require("../../services/storeSetting.service");
@@ -101,6 +102,7 @@ module.exports = {
       taxRates: (taxRates || []).map(toPlain),
       attachedMetaObjects: [],
       attachedMedia: [],
+      manageableVariants: [],
       isEdit: false,
       DEFAULT_CURRENCY,
       checkoutVatEnabled,
@@ -124,6 +126,7 @@ module.exports = {
         attachedMetaObjects,
         attachedMedia: [],
         uploadsBaseUrl: getUploadsBaseUrl(),
+        manageableVariants: [],
         isEdit: false,
         error: result.errors[0].message,
         DEFAULT_CURRENCY,
@@ -164,6 +167,7 @@ module.exports = {
         attachedMetaObjects,
         attachedMedia: [],
         uploadsBaseUrl: getUploadsBaseUrl(),
+        manageableVariants: [],
         isEdit: false,
         error: metaValidation.errors?.join(" ") || "Invalid meta object values.",
         DEFAULT_CURRENCY,
@@ -184,8 +188,29 @@ module.exports = {
         attachedMetaObjects,
         attachedMedia: [],
         uploadsBaseUrl: getUploadsBaseUrl(),
+        manageableVariants: [],
         isEdit: false,
         error: "One or more selected meta objects are invalid.",
+        DEFAULT_CURRENCY,
+        checkoutVatEnabled,
+      });
+    }
+    const variantResult = parseAndValidateSubmittedVariants(req.body.variants);
+    if (!variantResult.ok) {
+      const metaObjectsWithPairs = withDefinitionPairs(metaObjects);
+      const attachedMetaObjects = buildAttachedMetaObjects(ids, metaObjectsWithPairs, req.body.metaObjectValues || {});
+      return res.status(400).render("admin/products/form", {
+        title: "New Product",
+        product: { ...req.body, slug: slugVal, active: req.body.active === "on", metaObjectIds: ids, metaObjectValues: req.body.metaObjectValues || {}, mediaIds: normalizeMediaIds(req.body.mediaIds), currency: DEFAULT_CURRENCY },
+        productTypes: (types || []).map(toPlain),
+        productCategories: (categories || []).map(toPlain),
+        taxRates: (taxRates || []).map(toPlain),
+        attachedMetaObjects,
+        attachedMedia: [],
+        uploadsBaseUrl: getUploadsBaseUrl(),
+        manageableVariants: [],
+        isEdit: false,
+        error: variantResult.error,
         DEFAULT_CURRENCY,
         checkoutVatEnabled,
       });
@@ -196,9 +221,30 @@ module.exports = {
       metaObjectIds: ids,
       metaObjectValues: metaValidation.data,
       mediaIds: normalizeMediaIds(req.body.mediaIds),
+      variants: variantResult.data,
     };
     if (!checkoutVatEnabled) createData.taxRateId = null;
-    await productService.create(createData);
+    try {
+      await productService.create(createData);
+    } catch (e) {
+      const metaObjectsWithPairs = withDefinitionPairs(metaObjects);
+      const attachedMetaObjects = buildAttachedMetaObjects(ids, metaObjectsWithPairs, req.body.metaObjectValues || {});
+      return res.status(400).render("admin/products/form", {
+        title: "New Product",
+        product: { ...req.body, slug: slugVal, active: req.body.active === "on", metaObjectIds: ids, metaObjectValues: req.body.metaObjectValues || {}, mediaIds: normalizeMediaIds(req.body.mediaIds), currency: DEFAULT_CURRENCY },
+        productTypes: (types || []).map(toPlain),
+        productCategories: (categories || []).map(toPlain),
+        taxRates: (taxRates || []).map(toPlain),
+        attachedMetaObjects,
+        attachedMedia: [],
+        uploadsBaseUrl: getUploadsBaseUrl(),
+        manageableVariants: [],
+        isEdit: false,
+        error: e.message || "Could not create product.",
+        DEFAULT_CURRENCY,
+        checkoutVatEnabled,
+      });
+    }
     res.setFlash("success", "Product created.");
     res.redirect((req.adminPrefix || "") + "/products");
   },
@@ -338,15 +384,62 @@ module.exports = {
         manageableVariants,
       });
     }
+    const variantResult = parseAndValidateSubmittedVariants(req.body.variants);
+    if (!variantResult.ok) {
+      const metaObjectsWithPairs = withDefinitionPairs(metaObjects);
+      const attachedMetaObjects = buildAttachedMetaObjects(ids, metaObjectsWithPairs, req.body.metaObjectValues || filteredMetaObjectValues);
+      const mediaIdsOrder = normalizeMediaIds(req.body.mediaIds);
+      const mediaById = new Map((media || []).map((m) => [String(m.id), toPlain(m)]));
+      const attachedMedia = mediaIdsOrder.map((mid) => mediaById.get(String(mid))).filter(Boolean).map(toAttachedMediaItem);
+      return res.status(400).render("admin/products/form", {
+        title: "Edit Product",
+        product: { id, ...req.body, slug: slugVal, active: req.body.active === "on", metaObjectIds: ids, metaObjectValues: req.body.metaObjectValues || filteredMetaObjectValues, mediaIds: mediaIdsOrder, currency: DEFAULT_CURRENCY },
+        productTypes: (types || []).map(toPlain),
+        productCategories: (categories || []).map(toPlain),
+        taxRates: (taxRates || []).map(toPlain),
+        attachedMetaObjects,
+        attachedMedia,
+        uploadsBaseUrl: getUploadsBaseUrl(),
+        isEdit: true,
+        error: variantResult.error,
+        DEFAULT_CURRENCY,
+        checkoutVatEnabled,
+        manageableVariants,
+      });
+    }
     const updatePayload = {
       ...result.data,
       quantity: result.data.quantity,
       metaObjectIds: validIds,
       metaObjectValues: metaValidation.data,
       mediaIds: normalizeMediaIds(req.body.mediaIds),
+      variants: variantResult.data,
     };
     if (!checkoutVatEnabled) updatePayload.taxRateId = null;
-    await productService.update(id, updatePayload);
+    try {
+      await productService.update(id, updatePayload);
+    } catch (e) {
+      const metaObjectsWithPairs = withDefinitionPairs(metaObjects);
+      const attachedMetaObjects = buildAttachedMetaObjects(ids, metaObjectsWithPairs, req.body.metaObjectValues || filteredMetaObjectValues);
+      const mediaIdsOrder = normalizeMediaIds(req.body.mediaIds);
+      const mediaById = new Map((media || []).map((m) => [String(m.id), toPlain(m)]));
+      const attachedMedia = mediaIdsOrder.map((mid) => mediaById.get(String(mid))).filter(Boolean).map(toAttachedMediaItem);
+      return res.status(400).render("admin/products/form", {
+        title: "Edit Product",
+        product: { id, ...req.body, slug: slugVal, active: req.body.active === "on", metaObjectIds: ids, metaObjectValues: req.body.metaObjectValues || filteredMetaObjectValues, mediaIds: mediaIdsOrder, currency: DEFAULT_CURRENCY },
+        productTypes: (types || []).map(toPlain),
+        productCategories: (categories || []).map(toPlain),
+        taxRates: (taxRates || []).map(toPlain),
+        attachedMetaObjects,
+        attachedMedia,
+        uploadsBaseUrl: getUploadsBaseUrl(),
+        isEdit: true,
+        error: e.message || "Could not update product.",
+        DEFAULT_CURRENCY,
+        checkoutVatEnabled,
+        manageableVariants,
+      });
+    }
     res.setFlash("success", "Product updated.");
     res.redirect((req.adminPrefix || "") + "/products");
   },
@@ -358,21 +451,4 @@ module.exports = {
     res.redirect((req.adminPrefix || "") + "/products");
   },
 
-  async addProductVariant(req, res) {
-    const { id } = req.params;
-    const result = await productService.addManageableProductVariant(id, req.body);
-    if (!result.ok) {
-      return res.status(result.status || 400).json({ ok: false, error: result.error });
-    }
-    return res.json({ ok: true, variants: result.variants });
-  },
-
-  async removeProductVariant(req, res) {
-    const { id, variantId } = req.params;
-    const result = await productService.removeManageableProductVariant(id, variantId);
-    if (!result.ok) {
-      return res.status(result.status || 400).json({ ok: false, error: result.error });
-    }
-    return res.json({ ok: true, variants: result.variants });
-  },
 };

@@ -11,7 +11,7 @@ block content
       each order in orders
         li(style="border:1px solid #ddd; padding:1rem; margin-bottom:0.5rem")
           a(href="/orders/" + order.id)
-            strong Order #{order.id.slice(0, 8)}…
+            strong Order ##{order.orderNumber}
           span(style="margin-left:1rem") Payment: #{order.paymentStatus || "—"}
           span(style="margin-left:1rem") Fulfillment: #{order.fulfillmentStatus ? (order.fulfillmentStatus.charAt(0).toUpperCase() + order.fulfillmentStatus.slice(1).replace(/_/g, " ")) : "—"}
           span(style="margin-left:1rem") Total: #{Number(order.total).toFixed(2)} #{order.currency}

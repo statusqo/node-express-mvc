@@ -8,7 +8,7 @@ block content
     .da-page
 
         //- ── Page header ─────────────────────────────────────────────
-        +pageHeader('Edit Order', order.id ? '#' + order.id.slice(0, 8) + '…' : 'Order details')
+        +pageHeader('Edit Order', order.orderNumber ? '#' + order.orderNumber : 'Order details')
             +backBtn((adminPrefix || '') + '/orders', 'Back to Orders')
 
         +formError(error)
@@ -41,8 +41,12 @@ block content
                             .da-form-section
                                 span.da-form-section-label Identity
 
-                                //- Order ID (read-only)
-                                +readonlyField('Order ID')
+                                //- Order number (read-only)
+                                +readonlyField('Order Number')
+                                    span.da-cell-mono= order.orderNumber ? '#' + order.orderNumber : '—'
+
+                                //- Internal UUID (read-only)
+                                +readonlyField('Internal ID')
                                     span.da-cell-mono= order.id || '—'
 
                                 //- Customer (read-only)

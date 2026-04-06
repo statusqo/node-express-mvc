@@ -2,7 +2,7 @@ extends ../../layouts/main
 
 block content
   h1 Order
-  p Order ID: #{order.id}
+  p Order ##{order.orderNumber}
   p Payment: #{order.paymentStatus} · Fulfillment: #{order.fulfillmentStatus}
   p Total: #{Number(order.total).toFixed(2)} #{order.currency}
   p Date: #{order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'}
@@ -19,8 +19,8 @@ block content
     p Your order is pending payment.
     p(style="margin-top:0.5rem;font-size:0.9rem;color:#666;max-width:28rem")
       | Payment is completed from the checkout or registration page using the card form. If you closed the browser before paying, place the order again from your cart or session page.
-      |  If you believe you were charged but the order still shows pending, contact support and quote order ID&nbsp;
-      strong= order.id
+      |  If you believe you were charged but the order still shows pending, contact support and quote order number&nbsp;
+      strong= '#' + order.orderNumber
       | .
   else if order.paymentStatus === "paid"
     p(style="color:#4caf50;font-weight:600") ✓ Payment successful!
@@ -35,8 +35,8 @@ block content
   else if order.paymentStatus === "failed"
     p(style="color:#dc3545") Payment failed.
     p(style="margin-top:0.5rem;font-size:0.9rem;color:#666;max-width:28rem")
-      | Start a new checkout from your cart or event registration page. If you need help with a failed charge, contact support with order ID&nbsp;
-      strong= order.id
+      | Start a new checkout from your cart or event registration page. If you need help with a failed charge, contact support with order number&nbsp;
+      strong= '#' + order.orderNumber
       | .
   else if order.paymentStatus === "refunded"
     p(style="color:#666") This order has been refunded.

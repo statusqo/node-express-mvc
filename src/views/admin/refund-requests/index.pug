@@ -67,9 +67,9 @@ block content
                                             .da-order-cell
                                                 a.da-order-link(
                                                     href=(adminPrefix || '') + '/orders/' + r.Order.id + '/edit'
-                                                    aria-label='View order ' + (r.Order.id ? r.Order.id.slice(0,8) : '')
+                                                    aria-label='View order ' + (r.Order.orderNumber ? '#' + r.Order.orderNumber : r.Order.id.slice(0,8))
                                                 )
-                                                    span.da-cell-mono= r.Order.id ? r.Order.id.slice(0, 8) + '…' : '—'
+                                                    span.da-cell-mono= r.Order.orderNumber ? '#' + r.Order.orderNumber : '—'
                                                 if r.Order.email
                                                     span.da-order-email= r.Order.email
                                         else

@@ -78,7 +78,7 @@ block content
                                 - var fulClass = ({pending:'warning',processing:'info',shipped:'info',delivered:'success',refund_requested:'danger',refunded:'neutral',cancelled:'danger',returned:'neutral'})[order.fulfillmentStatus] || 'neutral'
                                 tr
                                     td
-                                        span.da-cell-mono= order.id ? order.id.slice(0, 8) + '…' : '—'
+                                        span.da-cell-mono= order.orderNumber ? '#' + order.orderNumber : '—'
                                     td.da-col-customer
                                         span.da-cell-secondary= order.email || (order.userId ? 'User #' + order.userId : 'Guest')
                                     td
@@ -99,7 +99,7 @@ block content
                                         .da-cell-actions
                                             a.da-row-btn.da-row-btn--edit(
                                                 href=(adminPrefix || '') + '/orders/' + order.id + '/edit'
-                                                aria-label='Edit order ' + (order.id ? order.id.slice(0, 8) : '')
+                                                aria-label='Edit order ' + (order.orderNumber ? '#' + order.orderNumber : order.id.slice(0, 8))
                                             ) Edit
                         else
                             +tableEmpty('No orders found matching your filters.', 7)

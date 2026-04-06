@@ -14,6 +14,11 @@ const User = sequelize.define("User", {
     defaultValue: DataTypes.UUIDV4,
     primaryKey: true,
   },
+  userNumber: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    unique: true,
+  },
   username: {
     type: DataTypes.STRING,
     allowNull: true, // Must be true for SQLite 'alter' to work on existing tables
@@ -80,6 +85,11 @@ const User = sequelize.define("User", {
     { fields: ['stripeCustomerId'] },
     { fields: ['googleId'], unique: true },
   ],
+});
+
+User.addHook("beforeCreate", async (user, options) => {
+  const max = await User.max("userNumber", { transaction: options.transaction });
+  user.userNumber = (max || 100000) + 1;
 });
 
 module.exports = User;

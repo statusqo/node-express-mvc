@@ -3,6 +3,7 @@
  * Follows Routes → Controllers → Services → Repos → Models architecture.
  */
 const { OrderLine, ProductVariant, ProductPrice } = require("../models");
+const { sequelize } = require("../db");
 const productRepo = require("../repos/product.repo");
 const productTypeRepo = require("../repos/productType.repo");
 const productCategoryRepo = require("../repos/productCategory.repo");
@@ -11,7 +12,7 @@ const metaObjectRepo = require("../repos/metaObject.repo");
 const mediaRepo = require("../repos/media.repo");
 const eventRepo = require("../repos/event.repo");
 const productVariantRepo = require("../repos/productVariant.repo");
-const { validateAddManageableVariant } = require("../validators/productVariantAdmin.schema");
+const cartService = require("./cart.service");
 
 module.exports = {
   async findAll(options = {}) {
@@ -66,11 +67,35 @@ module.exports = {
   },
 
   async create(data, options = {}) {
-    return await productRepo.create(data, options);
+    const { variants, ...productData } = data;
+    const t = options.transaction || (await sequelize.transaction());
+    const ownTransaction = !options.transaction;
+    try {
+      const product = await productRepo.create(productData, { ...options, transaction: t });
+      if (variants && variants.length > 0) {
+        await this.syncManageableVariants(product.id, variants, { transaction: t });
+      }
+      if (ownTransaction) await t.commit();
+      return product;
+    } catch (e) {
+      if (ownTransaction) await t.rollback();
+      throw e;
+    }
   },
 
   async update(id, data, options = {}) {
-    return await productRepo.update(id, data, options);
+    const { variants, ...productData } = data;
+    const t = options.transaction || (await sequelize.transaction());
+    const ownTransaction = !options.transaction;
+    try {
+      const product = await productRepo.update(id, productData, { ...options, transaction: t });
+      await this.syncManageableVariants(id, variants || [], { transaction: t });
+      if (ownTransaction) await t.commit();
+      return product;
+    } catch (e) {
+      if (ownTransaction) await t.rollback();
+      throw e;
+    }
   },
 
   async delete(id, options = {}) {
@@ -104,46 +129,44 @@ module.exports = {
       });
   },
 
-  async addManageableProductVariant(productId, body, options = {}) {
-    const product = await productRepo.findById(productId, options);
-    if (!product) return { ok: false, status: 404, error: "Product not found." };
-    const validation = validateAddManageableVariant(body);
-    if (!validation.ok) return { ok: false, status: 400, error: validation.error };
-    const { title, priceAmount, quantity, sku, active } = validation.data;
-    try {
-      await productRepo.createVariantWithDefaultPrice(
-        productId,
-        { title, amount: priceAmount, quantity, sku: sku || null, active },
-        options
-      );
-    } catch (e) {
-      if (e && e.code === "SKU_CONFLICT") {
-        return { ok: false, status: 400, error: e.message || "SKU already exists for this product." };
-      }
-      throw e;
-    }
-    const variants = await this.listManageableExtraVariants(productId, options);
-    return { ok: true, variants };
-  },
+  /**
+   * Sync manageable (non-default, non-event-linked) variants for a product against a submitted list.
+   * - Existing variants whose ID is absent from the submitted list are deleted (blocked if ordered).
+   * - Submitted entries without an ID are created as new variants.
+   * Must be called within a transaction for atomicity.
+   */
+  async syncManageableVariants(productId, submittedVariants, options = {}) {
+    const existing = await this.listManageableExtraVariants(productId, options);
+    const existingIds = new Set(existing.map((v) => v.id));
 
-  async removeManageableProductVariant(productId, variantId, options = {}) {
-    const variant = await productVariantRepo.findById(variantId, options);
-    if (!variant || String(variant.productId) !== String(productId)) {
-      return { ok: false, status: 404, error: "Variant not found." };
+    const submittedIds = new Set(
+      (submittedVariants || []).map((v) => v.id).filter(Boolean)
+    );
+
+    // Delete existing variants not present in the submitted list
+    for (const v of existing) {
+      if (!submittedIds.has(v.id)) {
+        const orderCount = await OrderLine.count({ where: { productVariantId: v.id }, ...options });
+        if (orderCount > 0) {
+          const err = new Error(`Cannot remove variant "${v.title}": it has been ordered and cannot be deleted.`);
+          err.status = 400;
+          throw err;
+        }
+        await cartService.removeVariantFromAllCarts(v.id, options);
+        await productVariantRepo.destroyPrices(v.id, options);
+        await productVariantRepo.destroy(v.id, options);
+      }
     }
-    if (variant.isDefault) {
-      return { ok: false, status: 400, error: "Cannot remove the default variant." };
+
+    // Create variants that have no ID (new) or an ID not in the current existing set
+    for (const v of (submittedVariants || [])) {
+      if (!v.id || !existingIds.has(v.id)) {
+        await productRepo.createVariantWithDefaultPrice(
+          productId,
+          { title: v.title, amount: v.priceAmount, quantity: v.quantity, sku: v.sku || null, active: v.active },
+          options
+        );
+      }
     }
-    const event = await eventRepo.findByProductVariantId(variantId, options);
-    if (event) {
-      return { ok: false, status: 400, error: "Cannot remove a variant that is linked to an event." };
-    }
-    const orderCount = await OrderLine.count({ where: { productVariantId: variantId }, ...options });
-    if (orderCount > 0) {
-      return { ok: false, status: 400, error: "Cannot remove variant: it has been ordered." };
-    }
-    await productVariantRepo.destroy(variantId, options);
-    const variants = await this.listManageableExtraVariants(productId, options);
-    return { ok: true, variants };
   },
 };

@@ -41,6 +41,7 @@ module.exports = {
       return {
         ...plain,
         defaultVariantId: variant?.id || null,
+        defaultVariantQuantity: variant?.quantity ?? 0,
         price: priceRow ? Number(priceRow.amount) : null,
         currency: DEFAULT_CURRENCY,
         media,
@@ -69,13 +70,16 @@ module.exports = {
       definitionPairs: parseDefinitionPairs(mo.definition),
     }));
     const media = mediaWithUrls(plain.media);
+    const allManageable = await productService.listManageableExtraVariants(plain.id);
+    const variants = allManageable.filter((v) => v.active);
     res.render("web/products/show", {
       title: product.title,
       product: { ...plain, metaObjects: metaObjectsWithTypes, media },
       defaultVariantId: defaultVariant?.id || null,
-      productVariantId: defaultVariant?.id || null,
+      defaultVariantQuantity: defaultVariant?.quantity ?? 0,
       price,
       currency,
+      variants,
       uploadsBaseUrl,
     });
   },
