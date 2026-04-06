@@ -5,10 +5,6 @@ block content
   if products && products.length
     ul(style="list-style:none; padding:0")
       each product in products
-        - const variant = product.ProductVariants && product.ProductVariants[0]
-        - const priceRow = variant && variant.ProductPrices && variant.ProductPrices[0]
-        - const price = priceRow ? Number(priceRow.amount) : null
-        - const defaultVariantId = variant ? variant.id : null
         - const firstMedia = product.media && product.media.length ? product.media[0] : null
         - const isImage = firstMedia && firstMedia.mimeType && firstMedia.mimeType.startsWith('image/')
         li(style="border:1px solid #ddd; padding:1rem; margin-bottom:0.5rem; display:flex; gap:1rem; align-items:flex-start")
@@ -21,8 +17,14 @@ block content
             strong= product.title
             if product.description
               p(style="margin:0.5rem 0")= product.description
-            if price != null
-              span #{Number(price).toFixed(2)} #{DEFAULT_CURRENCY}
+            if product.variantPriceRange
+              - const r = product.variantPriceRange
+              if r.min === r.max
+                span #{Number(r.min).toFixed(2)} #{DEFAULT_CURRENCY}
+              else
+                span #{Number(r.min).toFixed(2)} – #{Number(r.max).toFixed(2)} #{DEFAULT_CURRENCY}
+            else if product.price != null
+              span #{Number(product.price).toFixed(2)} #{DEFAULT_CURRENCY}
             if product.defaultVariantId && product.defaultVariantQuantity > 0
               form.js-add-to-cart-form(action="/cart/add" method="post" style="display:inline; margin-left:0.5rem")
                 input(type="hidden" name="productVariantId" value=product.defaultVariantId)

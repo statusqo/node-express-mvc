@@ -1,5 +1,5 @@
 const { Op, Sequelize } = require("sequelize");
-const { ProductVariant, Product, ProductPrice, ProductCategory, TaxRate } = require("../models");
+const { ProductVariant, Product, ProductPrice, ProductCategory, TaxRate, Event } = require("../models");
 const { DEFAULT_CURRENCY } = require("../config/constants");
 
 module.exports = {
@@ -152,5 +152,60 @@ module.exports = {
       vatRate: pct != null ? Number(pct) : null,
       stripeTaxRateId: txr,
     };
+  },
+
+  /**
+   * Returns a Map<productId, { min, max }> of price ranges for manageable
+   * (non-default, non-event-linked, active) variants across the given product IDs.
+   * Performs two flat queries + in-memory aggregation to stay dialect-agnostic.
+   */
+  async getVariantPriceRangesByProductIds(productIds, options = {}) {
+    if (!productIds || productIds.length === 0) return new Map();
+
+    // 1. Collect all event-linked variant IDs for these products in one query.
+    const eventRows = await Event.findAll({
+      where: {
+        productId: { [Op.in]: productIds },
+        productVariantId: { [Op.ne]: null },
+      },
+      attributes: ["productVariantId"],
+      raw: true,
+      ...options,
+    });
+    const eventLinkedIds = new Set(eventRows.map((r) => r.productVariantId));
+
+    // 2. Fetch all non-default, active variants with their default price.
+    const variants = await ProductVariant.findAll({
+      where: { productId: { [Op.in]: productIds }, isDefault: false, active: true },
+      include: [
+        {
+          model: ProductPrice,
+          as: "ProductPrices",
+          where: { isDefault: true },
+          required: true,
+          attributes: ["amount"],
+        },
+      ],
+      attributes: ["id", "productId"],
+      ...options,
+    });
+
+    // 3. Compute min/max per productId, skipping event-linked variants.
+    const ranges = new Map();
+    for (const v of variants) {
+      if (eventLinkedIds.has(v.id)) continue;
+      const plain = v.get ? v.get({ plain: true }) : v;
+      const priceRow = plain.ProductPrices && plain.ProductPrices[0];
+      if (!priceRow) continue;
+      const amount = Number(priceRow.amount);
+      const pid = plain.productId;
+      const existing = ranges.get(pid);
+      if (!existing) {
+        ranges.set(pid, { min: amount, max: amount });
+      } else {
+        ranges.set(pid, { min: Math.min(existing.min, amount), max: Math.max(existing.max, amount) });
+      }
+    }
+    return ranges;
   },
 };

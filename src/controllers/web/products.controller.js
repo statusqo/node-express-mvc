@@ -33,16 +33,22 @@ module.exports = {
       where: { active: true },
       order: [["title", "ASC"]],
     });
-    const productList = (products || []).map((p) => {
+    const plains = (products || []).map((p) => {
       const plain = toPlain(p);
       const variant = plain.ProductVariants && plain.ProductVariants[0];
       const priceRow = variant?.ProductPrices?.[0];
+      return { plain, variant, priceRow };
+    });
+    const productIds = plains.map(({ plain }) => plain.id).filter(Boolean);
+    const priceRanges = await productService.getVariantPriceRangesByProductIds(productIds);
+    const productList = plains.map(({ plain, variant, priceRow }) => {
       const media = mediaWithUrls(plain.media);
       return {
         ...plain,
         defaultVariantId: variant?.id || null,
         defaultVariantQuantity: variant?.quantity ?? 0,
         price: priceRow ? Number(priceRow.amount) : null,
+        variantPriceRange: priceRanges.get(plain.id) || null,
         currency: DEFAULT_CURRENCY,
         media,
       };

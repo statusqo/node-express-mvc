@@ -55,6 +55,10 @@ module.exports = {
     return await productRepo.getDefaultVariantWithPrice(productId, options);
   },
 
+  async getVariantPriceRangesByProductIds(productIds, options = {}) {
+    return await productVariantRepo.getVariantPriceRangesByProductIds(productIds, options);
+  },
+
   async getFormData() {
     const [types, categories, taxRates, metaObjects, media] = await Promise.all([
       productTypeRepo.findAll(),
