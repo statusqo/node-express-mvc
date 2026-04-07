@@ -1,8 +1,7 @@
 extends ../layouts/admin
 
 block append links
-    link(rel='preconnect' href='https://fonts.googleapis.com')
-    link(rel='preconnect' href='https://fonts.gstatic.com' crossorigin)
+    link(rel='stylesheet' href='/public/css/admin-dark.css')
     link(rel='stylesheet' href='/public/css/dashboard.css')
 
 block append scripts
@@ -11,7 +10,7 @@ block append scripts
 block content
     include ../fragments/admin/dash-components
 
-    .dash-page
+    .da-page
 
         //- ── Search Bar ───────────────────────────────────────────────
         .dash-search-row
@@ -27,165 +26,52 @@ block content
                     aria-label='Search admin panel'
                 )
                 kbd.dash-search-kbd
-                    span ⌘
+                    span Ctrl
                     span K
 
         //- ── KPI Cards ────────────────────────────────────────────────
         .dash-kpi-grid
-            +kpiCard((adminPrefix || '') + '/products',        stats.products,      'Products',        'box',           'accent')
-            +kpiCard((adminPrefix || '') + '/collections',     stats.collections,   'Collections',     'layers',        'info')
-            +kpiCard((adminPrefix || '') + '/orders',          stats.orders,        'Orders',          'shopping-bag',  'success')
-            +kpiCard((adminPrefix || '') + '/users',           stats.users,         'Users',           'users',         'accent')
-            +kpiCard((adminPrefix || '') + '/refund-requests', stats.pendingRefunds,'Pending Refunds', 'refresh',       stats.pendingRefunds > 0 ? 'danger' : 'success')
-            +kpiCard((adminPrefix || '') + '/webinars',        stats.webinars,      'Webinars',        'video',         'info')
-            +kpiCard((adminPrefix || '') + '/seminars',        stats.seminars,      'Seminars',        'presentation',  'warning')
-            +kpiCard((adminPrefix || '') + '/classrooms',      stats.classrooms,    'Courses',         'book',          'accent')
+            +kpiCardDelta((adminPrefix || '') + '/orders',          Math.round(stats.revenueThisMonth || 0),  'Revenue This Month',  'trending-up',  'accent',   stats.revenueDelta,   '€')
+            +kpiCardDelta((adminPrefix || '') + '/orders',          Math.round(stats.netRevenueThisMonth || 0), 'Net Revenue',       'dollar-sign',  'success',  null,                 '€')
+            +kpiCardDelta((adminPrefix || '') + '/orders',          stats.ordersThisMonth || 0,               'Orders This Month',   'shopping-bag', 'info',     stats.ordersDelta)
+            +kpiCardDelta((adminPrefix || '') + '/users',           stats.newUsersThisMonth || 0,             'New Users',           'user-plus',    'warning',  stats.newUsersDelta)
 
-        //- ── Main panels ──────────────────────────────────────────────
-        .dash-panels-grid
-
-            //- Left: Recent Orders
-            section.dash-panel
-                .dash-panel-header
-                    h2.dash-panel-title Recent Orders
-                    a.dash-panel-action(href=(adminPrefix || '') + '/orders') View all →
-                .dash-table-wrapper
-                    table.dash-table(role='table' aria-label='Recent orders')
-                        thead
-                            tr
-                                th(scope='col') Order
-                                th(scope='col') Customer
-                                th(scope='col') Amount
-                                th(scope='col') Status
-                                th(scope='col') Date
-                        tbody
-                            if recentOrders && recentOrders.length
-                                each order in recentOrders
-                                    tr
-                                        td
-                                            a.dash-table-link(href=(adminPrefix || '') + '/orders/' + order.id)
-                                                span.dash-table-id ##{order.id}
-                                        td= order.customerName || order.email || '—'
-                                        td
-                                            span.dash-table-amount $#{(order.total || 0).toFixed(2)}
-                                        td
-                                            +statusBadge(order.status || 'Pending')
-                                        td
-                                            span.dash-table-muted= order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'
-                            else
+        //- ── Actionable Orders ────────────────────────────────────────
+        section.da-panel
+            .dash-panel-header
+                h2.dash-panel-title Requires Action
+                a.dash-panel-action(href=(adminPrefix || '') + '/orders') View all →
+            .da-table-scroll
+                table.da-table(role='table' aria-label='Orders requiring action')
+                    thead
+                        tr
+                            th(scope='col') Order
+                            th(scope='col') Customer
+                            th(scope='col') Total
+                            th(scope='col') Status
+                            th(scope='col') Age
+                            th(scope='col')
+                    tbody
+                        if stats.actionableOrders && stats.actionableOrders.length
+                            each order in stats.actionableOrders
+                                - var ageMs = Date.now() - new Date(order.createdAt).getTime()
+                                - var ageDays = Math.floor(ageMs / 86400000)
+                                - var ageLabel = ageDays === 0 ? 'Today' : ageDays === 1 ? '1 day ago' : ageDays + ' days ago'
+                                - var statusCls = order.fulfillmentStatus === 'refund_requested' ? 'danger' : order.fulfillmentStatus === 'processing' ? 'info' : 'warning'
                                 tr
-                                    td.dash-table-empty(colspan='5')
-                                        | No recent orders to display.&nbsp;
-                                        a(href=(adminPrefix || '') + '/orders' style='color:var(--ds-accent);text-decoration:none') View all orders →
-
-            //- Right column stack
-            .dash-panels-stack
-
-                //- Inventory Summary
-                section.dash-panel
-                    .dash-panel-header
-                        h2.dash-panel-title Inventory
-                        a.dash-panel-action(href=(adminPrefix || '') + '/products') Manage →
-                    .dash-inventory-list
-                        if inventorySummary && inventorySummary.length
-                            each item in inventorySummary
-                                - var pct = Math.min(100, Math.round((item.count / (item.max || 50)) * 100))
-                                - var fillClass = pct < 20 ? 'dash-bar-fill--low' : pct < 50 ? 'dash-bar-fill--medium' : 'dash-bar-fill--high'
-                                .dash-inventory-item
-                                    .dash-inventory-info
-                                        span.dash-inventory-name= item.name
-                                        span.dash-inventory-cat= item.category || 'Product'
-                                    .dash-inventory-right
-                                        span.dash-inventory-count= item.count
-                                        .dash-bar-track
-                                            .dash-bar-fill(class=fillClass data-bar-width=pct style='width:0%')
+                                    td
+                                        a.da-cell-mono(href=(adminPrefix || '') + '/orders/' + order.id) ##{order.orderNumber || order.id.slice(0,8)}
+                                    td.da-cell-primary= order.forename ? (order.forename + ' ' + (order.surname || '')).trim() : (order.email || '—')
+                                    td.da-cell-primary €#{parseFloat(order.total || 0).toFixed(2)}
+                                    td
+                                        span.da-badge(class='da-badge--' + statusCls)= order.fulfillmentStatus.replace('_', ' ')
+                                    td.da-cell-muted= ageLabel
+                                    td
+                                        .da-cell-actions
+                                            a.da-row-btn.da-row-btn--edit(
+                                                href=(adminPrefix || '') + '/orders/' + order.id + '/edit'
+                                                aria-label='Edit order ' + (order.orderNumber ? '#' + order.orderNumber : order.id.slice(0, 8))
+                                            ) Edit
                         else
-                            //- Fallback: reflect stats as inventory rows
-                            .dash-inventory-item
-                                .dash-inventory-info
-                                    span.dash-inventory-name Products
-                                    span.dash-inventory-cat Catalogue
-                                .dash-inventory-right
-                                    span.dash-inventory-count= stats.products
-                                    .dash-bar-track
-                                        .dash-bar-fill.dash-bar-fill--high(data-bar-width='75' style='width:0%')
-                            .dash-inventory-item
-                                .dash-inventory-info
-                                    span.dash-inventory-name Collections
-                                    span.dash-inventory-cat Catalogue
-                                .dash-inventory-right
-                                    span.dash-inventory-count= stats.collections
-                                    .dash-bar-track
-                                        .dash-bar-fill.dash-bar-fill--high(data-bar-width='60' style='width:0%')
-                            .dash-inventory-item
-                                .dash-inventory-info
-                                    span.dash-inventory-name Webinars
-                                    span.dash-inventory-cat Events
-                                .dash-inventory-right
-                                    span.dash-inventory-count= stats.webinars
-                                    .dash-bar-track
-                                        .dash-bar-fill(data-bar-width='45' style='width:0%')
-                            .dash-inventory-item
-                                .dash-inventory-info
-                                    span.dash-inventory-name Seminars
-                                    span.dash-inventory-cat Events
-                                .dash-inventory-right
-                                    span.dash-inventory-count= stats.seminars
-                                    .dash-bar-track
-                                        .dash-bar-fill.dash-bar-fill--medium(data-bar-width='30' style='width:0%')
-                            .dash-inventory-item
-                                .dash-inventory-info
-                                    span.dash-inventory-name Courses
-                                    span.dash-inventory-cat Events
-                                .dash-inventory-right
-                                    span.dash-inventory-count= stats.classrooms
-                                    .dash-bar-track
-                                        .dash-bar-fill(data-bar-width='50' style='width:0%')
-
-                //- Notifications / Alerts Panel
-                section.dash-panel
-                    .dash-panel-header
-                        h2.dash-panel-title Notifications
-                        if alerts && alerts.length
-                            span.dash-badge.dash-badge--pending(aria-label=alerts.length + ' pending notifications')= alerts.length
-                        else if stats.pendingRefunds > 0
-                            span.dash-badge.dash-badge--refund(aria-label=stats.pendingRefunds + ' pending refunds')= stats.pendingRefunds
-                    .dash-alerts-list
-                        if alerts && alerts.length
-                            each alert in alerts
-                                +alertItem(alert.type, alert.message, alert.time, alert.href)
-                        else
-                            //- Derive contextual alerts from available stats
-                            if stats.pendingRefunds > 0
-                                +alertItem('refund', stats.pendingRefunds + ' refund request' + (stats.pendingRefunds !== 1 ? 's' : '') + ' awaiting review', 'Review now →', (adminPrefix || '') + '/refund-requests')
-                            if stats.orders > 0
-                                +alertItem('order', stats.orders + ' total order' + (stats.orders !== 1 ? 's' : '') + ' in the system', 'View orders →', (adminPrefix || '') + '/orders')
-                            if !stats.zoomConnected
-                                +alertItem('warning', 'Zoom integration is not connected', 'Connect now →', (adminPrefix || '') + '/zoom/connect')
-                            if stats.pendingRefunds === 0 && stats.zoomConnected
-                                .dash-alerts-empty
-                                    .dash-alerts-empty-icon(aria-hidden='true')
-                                        svg(xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round')
-                                            path(d='M22 11.08V12a10 10 0 1 1-5.93-9.14')
-                                            polyline(points='22 4 12 14.01 9 11.01')
-                                    span All caught up — no pending actions
-
-        //- ── Integrations ─────────────────────────────────────────────
-        .dash-integrations
-            h3.dash-section-label Integrations
-            .dash-zoom-card
-                .dash-zoom-identity
-                    svg.dash-zoom-svg(viewBox='0 0 40 40' fill='none' aria-hidden='true' focusable='false' role='img')
-                        title Zoom
-                        rect(width='40' height='40' rx='8' fill='#2D8CFF')
-                        rect(x='7' y='13' width='16' height='14' rx='2.5' fill='white')
-                        path(d='M25 19.2l7-4v9.6l-7-4v-1.6z' fill='white')
-                    span.dash-zoom-name Zoom
-                .dash-zoom-status
-                    span.dash-status-dot(class=stats.zoomConnected ? 'dash-status-dot--on' : 'dash-status-dot--off' aria-hidden='true')
-                    span= stats.zoomConnected ? 'Connected' : 'Not connected'
-                .dash-zoom-action
-                    if stats.zoomConnected
-                        a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/zoom/connect') Reconnect
-                    else
-                        a.da-btn.da-btn--primary(href=(adminPrefix || '') + '/zoom/connect') Connect Zoom
+                            tr
+                                td.da-table-empty(colspan='6') No orders pending action.

@@ -79,7 +79,7 @@ module.exports = {
     }
     return await RefundRequest.findAll({
       where: Object.keys(where).length ? where : undefined,
-      include: [{ model: Order, as: "Order", attributes: ["id", "total", "currency", "email", "paymentStatus"] }],
+      include: [{ model: Order, as: "Order", attributes: ["id", "orderNumber", "total", "currency", "email", "paymentStatus"] }],
       order: [["createdAt", "DESC"]],
       ...options,
     });

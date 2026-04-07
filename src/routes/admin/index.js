@@ -30,6 +30,23 @@ router.use((req, res, next) => {
   const prefix = req.baseUrl || "";
   req.adminPrefix = prefix;
   res.locals.adminPrefix = prefix;
+  // Normalised current pathname — used by the sidebar mixin to mark the active link
+  // and open its ancestor group server-side.
+  res.locals.navCurrentPath = prefix + (req.path === "/" ? "" : (req.path || ""));
+
+  // Sidebar accordion open state — written by the browser as a plain cookie whenever
+  // the user toggles a group. Parsed here so the mixin can render is-open server-side,
+  // meaning the HTML always arrives in the correct state with no client-side flash.
+  let sidebarOpenPaths = [];
+  try {
+    const raw = req.headers.cookie || "";
+    const match = raw.match(/(?:^|;\s*)admin_nav_open=([^;]*)/);
+    if (match) {
+      const parsed = JSON.parse(decodeURIComponent(match[1]));
+      if (Array.isArray(parsed)) sidebarOpenPaths = parsed;
+    }
+  } catch (_) {}
+  res.locals.sidebarOpenPaths = sidebarOpenPaths;
   const path = req.path || "";
   const segments = path.split("/").filter(Boolean);
   const isDashboard = segments.length === 0;

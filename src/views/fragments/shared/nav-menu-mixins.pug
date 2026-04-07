@@ -1,25 +1,89 @@
 //- Reusable menu tree (DB MenuItem trees from menu.service buildMenuTree).
-//- Use for admin sidebar, footers, or inline link groups. Pass GET-only trees (POST items handled separately).
 //-
-//- @param items       - array of root nodes with optional .children
-//- @param adminPrefix - e.g. res.locals.adminPrefix or '' for site-relative URLs
+//- Active link and open-group classes are rendered SERVER-SIDE so the HTML arrives
+//- in the correct state on every page — no client-side patching, no flash.
+//-
+//- Two sources determine whether a group is open:
+//-   1. navCurrentPath  — the current URL; opens the active-route group and marks its link.
+//-   2. sidebarOpenPaths — paths stored in the admin_nav_open cookie; written by
+//-                         admin-sidebar-nav.js whenever the user toggles a group.
 
-mixin navMenuBranch(items, adminPrefix, depth)
+-
+  //- Strip a single trailing slash so "/admin/" and "/admin" compare identically.
+  function _sidebarNormPath(p) {
+    if (!p) return '/';
+    return (p.length > 1 && p.endsWith('/')) ? p.slice(0, -1) : p;
+  }
+
+  //-
+  //- True when the link for `itemUrl` matches the current page.
+  //- Uses exact match for the admin root (e.g. /admin) to prevent it from
+  //- falsely matching every sub-path via the prefix rule.
+  //-
+  function _sidebarLinkActive(itemUrl) {
+    var ap  = (typeof adminPrefix    !== 'undefined' && adminPrefix)    ? adminPrefix    : '';
+    var ncp = (typeof navCurrentPath !== 'undefined' && navCurrentPath) ? navCurrentPath : null;
+    if (!ncp) return false;
+    var lp = _sidebarNormPath(ap + itemUrl);
+    var cp = _sidebarNormPath(ncp);
+    if (lp === cp) return true;
+    if (ap && lp === _sidebarNormPath(ap)) return false; // admin root: exact match only
+    return lp !== '/' && cp.startsWith(lp + '/');
+  }
+
+  //- True when any GET descendant of `nodes` is the active route.
+  function _sidebarGroupHasActive(nodes) {
+    if (!nodes || !nodes.length) return false;
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      if (n.method === 'POST') continue;
+      if (_sidebarLinkActive(n.url)) return true;
+      if (n.children && n.children.length && _sidebarGroupHasActive(n.children)) return true;
+    }
+    return false;
+  }
+
+  //-
+  //- True when the user previously opened this group (persisted in the cookie).
+  //- This is how non-active groups stay open across navigations without any
+  //- client-side DOM patching.
+  //-
+  function _sidebarGroupIsOpen(itemUrl) {
+    var sp = (typeof sidebarOpenPaths !== 'undefined' && Array.isArray(sidebarOpenPaths))
+      ? sidebarOpenPaths : [];
+    var ap = (typeof adminPrefix !== 'undefined' && adminPrefix) ? adminPrefix : '';
+    return sp.indexOf(_sidebarNormPath(ap + itemUrl)) !== -1;
+  }
+
+mixin navMenuBranch(items, adminPrefix)
     each item in (items || [])
         if !item.method || item.method === 'GET'
             if item.children && item.children.length
-                li.admin-nav-group(data-nav-group class=(item.cssClass || null))
+                -
+                  var _parentActive = _sidebarLinkActive(item.url);
+                  var _groupOpen    = _parentActive
+                                   || _sidebarGroupHasActive(item.children)
+                                   || _sidebarGroupIsOpen(item.url);
+                  var _groupClass   = [_groupOpen ? 'is-open' : null, item.cssClass || null]
+                                        .filter(Boolean).join(' ') || null;
+                li.admin-nav-group(data-nav-group class=_groupClass)
                     .admin-nav-row
-                        a.admin-nav-link.admin-nav-link--parent(href=(adminPrefix || '') + item.url)= item.label
+                        a.admin-nav-link.admin-nav-link--parent(
+                            href=(adminPrefix || '') + item.url
+                            class=(_parentActive ? 'is-active' : null)
+                        )= item.label
                         button.admin-nav-toggle(
                             type="button"
-                            class="admin-nav-toggle"
-                            aria-expanded="false"
+                            aria-expanded=(_groupOpen ? 'true' : 'false')
                             aria-label="Toggle " + item.label + " submenu"
                         )
                             span.admin-nav-chevron(aria-hidden="true")
                     ul.admin-nav-sublist(role="list")
-                        +navMenuBranch(item.children, adminPrefix, (depth || 0) + 1)
+                        +navMenuBranch(item.children, adminPrefix)
             else
                 li.admin-nav-item(class=(item.cssClass || null))
-                    a.admin-nav-link(href=(adminPrefix || '') + item.url target=item.target || "_self")= item.label
+                    a.admin-nav-link(
+                        href=(adminPrefix || '') + item.url
+                        target=(item.target || "_self")
+                        class=(_sidebarLinkActive(item.url) ? 'is-active' : null)
+                    )= item.label

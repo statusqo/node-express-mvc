@@ -52,7 +52,7 @@ block content
                         if refundRequests && refundRequests.length
                             each r in refundRequests
                                 - var statusClass = ({pending:'warning', approved:'success', rejected:'danger'})[r.status] || 'neutral'
-                                - var refundAmt   = r.status === 'approved' ? (r.Order && r.Order.total != null ? Number(r.Order.total).toFixed(2) + ' ' + (r.Order.currency || 'USD') : '—') : null
+                                - var refundAmt   = r.Order && r.Order.total != null ? Number(r.Order.total).toFixed(2) + ' ' + (r.Order.currency || 'USD') : null
                                 tr(class=r.status === 'pending' ? 'da-row--pending' : '')
                                     //- Status
                                     td

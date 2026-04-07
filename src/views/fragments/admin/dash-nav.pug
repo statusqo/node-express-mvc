@@ -35,69 +35,102 @@ div(class="dash-nav" data-admin-sidebar-nav)
 
     ul(class="dash-menu admin-nav-root" role="list")
         if navTree && navTree.length
-            +navMenuBranch(navTree, adminPrefix, 0)
+            +navMenuBranch(navTree, adminPrefix)
         else
-            //- Minimal fallback if menu not seeded (flat + one nested Settings group)
+            //- Minimal fallback if menu not seeded. Uses the same _sidebarLinkActive /
+            //- _sidebarGroupHasActive helpers defined in nav-menu-mixins.pug so active
+            //- state is also server-rendered correctly here.
             li.admin-nav-item
-                a.admin-nav-link(href=(adminPrefix || '') + "/") Dashboard
+                a.admin-nav-link(
+                    href=(adminPrefix || '') + "/"
+                    class=(_sidebarLinkActive('/') ? 'is-active' : null)
+                ) Dashboard
             li.admin-nav-item
-                a.admin-nav-link(href=(adminPrefix || '') + "/users") Users
-            li.admin-nav-group(data-nav-group)
+                a.admin-nav-link(
+                    href=(adminPrefix || '') + "/users"
+                    class=(_sidebarLinkActive('/users') ? 'is-active' : null)
+                ) Users
+            -
+              var _fbEventsOpen = _sidebarLinkActive('/events') || _sidebarLinkActive('/webinars') || _sidebarLinkActive('/seminars') || _sidebarLinkActive('/classrooms') || _sidebarGroupIsOpen('/events');
+            li.admin-nav-group(data-nav-group class=(_fbEventsOpen ? 'is-open' : null))
                 .admin-nav-row
-                    a.admin-nav-link.admin-nav-link--parent(href=(adminPrefix || '') + "/events") Events
-                    button.admin-nav-toggle(type="button" aria-expanded="false" aria-label="Toggle Events submenu")
+                    a.admin-nav-link.admin-nav-link--parent(
+                        href=(adminPrefix || '') + "/events"
+                        class=(_sidebarLinkActive('/events') ? 'is-active' : null)
+                    ) Events
+                    button.admin-nav-toggle(type="button" aria-expanded=(_fbEventsOpen ? 'true' : 'false') aria-label="Toggle Events submenu")
                         span.admin-nav-chevron(aria-hidden="true")
                 ul.admin-nav-sublist(role="list")
                     li.admin-nav-item
-                        a.admin-nav-link(href=(adminPrefix || '') + "/webinars") Webinars
+                        a.admin-nav-link(href=(adminPrefix || '') + "/webinars" class=(_sidebarLinkActive('/webinars') ? 'is-active' : null)) Webinars
                     li.admin-nav-item
-                        a.admin-nav-link(href=(adminPrefix || '') + "/seminars") Seminars
+                        a.admin-nav-link(href=(adminPrefix || '') + "/seminars" class=(_sidebarLinkActive('/seminars') ? 'is-active' : null)) Seminars
                     li.admin-nav-item
-                        a.admin-nav-link(href=(adminPrefix || '') + "/classrooms") Classrooms
-            li.admin-nav-group(data-nav-group)
+                        a.admin-nav-link(href=(adminPrefix || '') + "/classrooms" class=(_sidebarLinkActive('/classrooms') ? 'is-active' : null)) Classrooms
+            -
+              var _fbProductsOpen = _sidebarLinkActive('/products') || _sidebarLinkActive('/product-types') || _sidebarLinkActive('/product-categories') || _sidebarLinkActive('/tax-rates') || _sidebarLinkActive('/meta-objects') || _sidebarGroupIsOpen('/products');
+            li.admin-nav-group(data-nav-group class=(_fbProductsOpen ? 'is-open' : null))
                 .admin-nav-row
-                    a.admin-nav-link.admin-nav-link--parent(href=(adminPrefix || '') + "/products") Products
-                    button.admin-nav-toggle(type="button" aria-expanded="false" aria-label="Toggle Products submenu")
+                    a.admin-nav-link.admin-nav-link--parent(
+                        href=(adminPrefix || '') + "/products"
+                        class=(_sidebarLinkActive('/products') ? 'is-active' : null)
+                    ) Products
+                    button.admin-nav-toggle(type="button" aria-expanded=(_fbProductsOpen ? 'true' : 'false') aria-label="Toggle Products submenu")
                         span.admin-nav-chevron(aria-hidden="true")
                 ul.admin-nav-sublist(role="list")
                     li.admin-nav-item
-                        a.admin-nav-link(href=(adminPrefix || '') + "/product-types") Product Types
+                        a.admin-nav-link(href=(adminPrefix || '') + "/product-types" class=(_sidebarLinkActive('/product-types') ? 'is-active' : null)) Product Types
                     li.admin-nav-item
-                        a.admin-nav-link(href=(adminPrefix || '') + "/product-categories") Product Categories
+                        a.admin-nav-link(href=(adminPrefix || '') + "/product-categories" class=(_sidebarLinkActive('/product-categories') ? 'is-active' : null)) Product Categories
                     li.admin-nav-item
-                        a.admin-nav-link(href=(adminPrefix || '') + "/tax-rates") Tax Rates
+                        a.admin-nav-link(href=(adminPrefix || '') + "/tax-rates" class=(_sidebarLinkActive('/tax-rates') ? 'is-active' : null)) Tax Rates
                     li.admin-nav-item
-                        a.admin-nav-link(href=(adminPrefix || '') + "/meta-objects") Meta Objects
-            li.admin-nav-group(data-nav-group)
+                        a.admin-nav-link(href=(adminPrefix || '') + "/meta-objects" class=(_sidebarLinkActive('/meta-objects') ? 'is-active' : null)) Meta Objects
+            -
+              var _fbOrdersOpen = _sidebarLinkActive('/orders') || _sidebarLinkActive('/refund-requests') || _sidebarGroupIsOpen('/orders');
+            li.admin-nav-group(data-nav-group class=(_fbOrdersOpen ? 'is-open' : null))
                 .admin-nav-row
-                    a.admin-nav-link.admin-nav-link--parent(href=(adminPrefix || '') + "/orders") Orders
-                    button.admin-nav-toggle(type="button" aria-expanded="false" aria-label="Toggle Orders submenu")
+                    a.admin-nav-link.admin-nav-link--parent(
+                        href=(adminPrefix || '') + "/orders"
+                        class=(_sidebarLinkActive('/orders') ? 'is-active' : null)
+                    ) Orders
+                    button.admin-nav-toggle(type="button" aria-expanded=(_fbOrdersOpen ? 'true' : 'false') aria-label="Toggle Orders submenu")
                         span.admin-nav-chevron(aria-hidden="true")
                 ul.admin-nav-sublist(role="list")
                     li.admin-nav-item
-                        a.admin-nav-link(href=(adminPrefix || '') + "/refund-requests") Refund Requests
+                        a.admin-nav-link(href=(adminPrefix || '') + "/refund-requests" class=(_sidebarLinkActive('/refund-requests') ? 'is-active' : null)) Refund Requests
             li.admin-nav-item
-                a.admin-nav-link(href=(adminPrefix || '') + "/collections") Collections
+                a.admin-nav-link(href=(adminPrefix || '') + "/collections" class=(_sidebarLinkActive('/collections') ? 'is-active' : null)) Collections
             li.admin-nav-item
-                a.admin-nav-link(href=(adminPrefix || '') + "/media") Media
+                a.admin-nav-link(href=(adminPrefix || '') + "/media" class=(_sidebarLinkActive('/media') ? 'is-active' : null)) Media
             li.admin-nav-item
-                a.admin-nav-link(href=(adminPrefix || '') + "/blog") Blog
-            li.admin-nav-group(data-nav-group)
+                a.admin-nav-link(href=(adminPrefix || '') + "/blog" class=(_sidebarLinkActive('/blog') ? 'is-active' : null)) Blog
+            -
+              var _fbMenusOpen = _sidebarLinkActive('/menus') || _sidebarLinkActive('/menu-items') || _sidebarGroupIsOpen('/menus');
+            li.admin-nav-group(data-nav-group class=(_fbMenusOpen ? 'is-open' : null))
                 .admin-nav-row
-                    a.admin-nav-link.admin-nav-link--parent(href=(adminPrefix || '') + "/menus") Menus
-                    button.admin-nav-toggle(type="button" aria-expanded="false" aria-label="Toggle Menus submenu")
+                    a.admin-nav-link.admin-nav-link--parent(
+                        href=(adminPrefix || '') + "/menus"
+                        class=(_sidebarLinkActive('/menus') ? 'is-active' : null)
+                    ) Menus
+                    button.admin-nav-toggle(type="button" aria-expanded=(_fbMenusOpen ? 'true' : 'false') aria-label="Toggle Menus submenu")
                         span.admin-nav-chevron(aria-hidden="true")
                 ul.admin-nav-sublist(role="list")
                     li.admin-nav-item
-                        a.admin-nav-link(href=(adminPrefix || '') + "/menu-items") Menu Items
-            li.admin-nav-group(data-nav-group)
+                        a.admin-nav-link(href=(adminPrefix || '') + "/menu-items" class=(_sidebarLinkActive('/menu-items') ? 'is-active' : null)) Menu Items
+            -
+              var _fbSettingsOpen = _sidebarLinkActive('/settings') || _sidebarLinkActive('/zoom/connect') || _sidebarGroupIsOpen('/settings');
+            li.admin-nav-group(data-nav-group class=(_fbSettingsOpen ? 'is-open' : null))
                 .admin-nav-row
-                    a.admin-nav-link.admin-nav-link--parent(href=(adminPrefix || '') + "/settings") Settings
-                    button.admin-nav-toggle(type="button" aria-expanded="false" aria-label="Toggle Settings submenu")
+                    a.admin-nav-link.admin-nav-link--parent(
+                        href=(adminPrefix || '') + "/settings"
+                        class=(_sidebarLinkActive('/settings') ? 'is-active' : null)
+                    ) Settings
+                    button.admin-nav-toggle(type="button" aria-expanded=(_fbSettingsOpen ? 'true' : 'false') aria-label="Toggle Settings submenu")
                         span.admin-nav-chevron(aria-hidden="true")
                 ul.admin-nav-sublist(role="list")
                     li.admin-nav-item
-                        a.admin-nav-link(href=(adminPrefix || '') + "/zoom/connect") Connect Zoom
+                        a.admin-nav-link(href=(adminPrefix || '') + "/zoom/connect" class=(_sidebarLinkActive('/zoom/connect') ? 'is-active' : null)) Connect Zoom
 
     if postItemsCollected && postItemsCollected.length
         div(class="dash-footer")
