@@ -15,7 +15,7 @@ block content
 
         //- ── Active registrations warning banner ─────────────────────
         if hasActiveRegistrations
-            - var bannerMsg = (order.fulfillmentStatus === 'cancelled' || order.fulfillmentStatus === 'refunded') ? 'This order has ' + activeRegistrationCount + ' active event registration' + (activeRegistrationCount !== 1 ? 's' : '') + ' that still need to be cancelled. Please cancel each one individually from the event registrant page.' : 'This order contains ' + activeRegistrationCount + ' active event registration' + (activeRegistrationCount !== 1 ? 's' : '') + '. After cancelling and refunding this order, cancel each registration individually from the event registrant page.'
+            - var bannerMsg = 'This order has ' + activeRegistrationCount + ' event registration' + (activeRegistrationCount !== 1 ? 's' : '') + '. Use Cancel & Refund Order to remove Zoom access, refund the remaining balance, and clear registrations (or cancel seats individually from the event registrant page first if you need partial refunds only).'
             .da-alert.da-alert--warning(role='alert')
                 span.da-alert__icon
                     svg(width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
@@ -208,17 +208,6 @@ block content
                     .da-card-footer
                         button.da-btn.da-btn--primary(type='submit' form='orderEditForm') Save Changes
                         a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/orders') Back
-                        if canCancelOrder
-                            - var cancelOrderFormId = 'admin-order-cancel-form'
-                            form(id=cancelOrderFormId method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/cancel' style='display:none')
-                            button.da-btn.da-btn--danger(
-                                type='button'
-                                data-confirm-modal
-                                data-confirm-title='Cancel Order'
-                                data-confirm-msg='Mark this order as cancelled? No refund will be issued. Use the Refund Order button afterward to return funds to the customer.'
-                                data-form-id=cancelOrderFormId
-                                style='margin-left:0.5rem'
-                            ) Cancel Order
 
             //- ── Aside: refund transactions + refund requests ─────────
             .da-form-aside
@@ -268,39 +257,6 @@ block content
                         else
                             p.da-refund-empty No refund transactions for this order.
 
-                - var _refundCur = order.currency || 'EUR'
-                - var _refundedSum = orderRefundedTotal != null ? Number(orderRefundedTotal) : 0
-                - var _remainingSum = orderRemainingRefundable != null ? Number(orderRemainingRefundable) : 0
-                .da-card
-                    .da-card-header
-                        h2.da-card-title Refund order
-                    .da-card-body
-                        if canRefundOrder
-                            p.da-refund-empty(style='margin-top:0')
-                                | Issues a Stripe refund for the <strong>remaining</strong> balance (
-                                strong #{_remainingSum.toFixed(2)} #{_refundCur}
-                                | ), after #{_refundedSum.toFixed(2)} #{_refundCur} already recorded as refunded.
-                            p.da-refund-empty
-                                | Registrations and Zoom access are not affected — cancel each registration individually from the event registrant page. This cannot be undone.
-                            - var fullRefundFormId = 'admin-order-full-refund-form'
-                            - var fullRefundMsg = 'Issue a Stripe refund for the remaining ' + _remainingSum.toFixed(2) + ' ' + _refundCur + '? Registrations will not be cancelled automatically — do that separately.'
-                            - var fullRefundBullets = ['Stripe refund for the remaining capture balance', 'Payment status updated when Stripe confirms', 'Registrations and Zoom access are NOT removed — cancel them separately']
-                            form(id=fullRefundFormId method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/full-refund' style='display:none')
-                            button.da-btn.da-btn--danger(
-                                type='button'
-                                data-confirm-modal
-                                data-confirm-title='Refund order'
-                                data-confirm-msg=fullRefundMsg
-                                data-confirm-bullets=JSON.stringify(fullRefundBullets)
-                                data-form-id=fullRefundFormId
-                            ) Refund order
-                        else if canFullRefund
-                            p.da-refund-empty(style='margin-top:0')
-                                | Cancel the order first before issuing a refund.
-                        else
-                            p.da-refund-empty(style='margin-top:0')
-                                | No remaining balance to refund, or the order is not in a refundable payment state.
-
                 .da-card
                     .da-card-header
                         h2.da-card-title Refund Requests
@@ -308,6 +264,12 @@ block content
                             span.da-count= refundRequests.length + ' request' + (refundRequests.length !== 1 ? 's' : '')
                     .da-card-body
                         if refundRequests && refundRequests.length
+                            if orderHasEventLines
+                                - var approveConfirmMsg = 'Issue a Stripe refund for the remaining balance and complete this request. This order includes event lines: Zoom registrants are removed first, then Stripe refunds; registrations are cleared and inventory restored when the refund succeeds.'
+                                - var approveConfirmBullets = JSON.stringify(['Remove Zoom access for online events (before Stripe)', 'Stripe refund for the remaining capture balance', 'Clear registrations and restore inventory when Stripe confirms'])
+                            else
+                                - var approveConfirmMsg = 'Issue a Stripe refund for the remaining balance and complete this request. Inventory and order records update when the refund succeeds.'
+                                - var approveConfirmBullets = JSON.stringify(['Stripe refund for the remaining capture balance', 'Inventory and order updated when the refund completes'])
                             each r in refundRequests
                                 - var rClass = ({pending:'warning',approved:'success',rejected:'danger'})[r.status] || 'neutral'
                                 .da-refund-card
@@ -340,7 +302,8 @@ block content
                                                     type='button'
                                                     data-confirm-modal
                                                     data-confirm-title='Approve Refund'
-                                                    data-confirm-msg='This will issue a Stripe refund for the remaining balance and mark the order as refunded. Registrations and Zoom access are not affected — cancel them separately. This cannot be undone.'
+                                                    data-confirm-msg=approveConfirmMsg
+                                                    data-confirm-bullets=approveConfirmBullets
                                                     data-form-id=approveFormId
                                                 ) Approve
 
@@ -356,3 +319,38 @@ block content
                                                 ) Reject
                         else
                             p.da-refund-empty No refund requests for this order.
+
+                - var _refundCur = order.currency || 'EUR'
+                - var _refundedSum = orderRefundedTotal != null ? Number(orderRefundedTotal) : 0
+                - var _remainingSum = orderRemainingRefundable != null ? Number(orderRemainingRefundable) : 0
+                .da-card
+                    .da-card-header
+                        h2.da-card-title Danger Zone
+                    .da-card-body
+                        if canCancelAndRefundOrder
+                            p.da-refund-empty(style='margin-top:0')
+                                | Refunds the <strong>remaining</strong> balance (
+                                strong #{_remainingSum.toFixed(2)} #{_refundCur}
+                                | ) after #{_refundedSum.toFixed(2)} #{_refundCur} already recorded as refunded.
+                            - var cancelRefundFormId = 'admin-order-cancel-refund-form'
+                            - var cancelRefundMsg = 'Cancel and refund ' + _remainingSum.toFixed(2) + ' ' + _refundCur + '? This cannot be undone.'
+                            if orderHasEventLines
+                                - var cancelRefundBullets = ['Remove Zoom access for online events (before Stripe)', 'Stripe refund for the remaining capture balance', 'Clear registrations and restore inventory when Stripe confirms']
+                            else
+                                - var cancelRefundBullets = ['Stripe refund for the remaining capture balance', 'Inventory and order updated when the refund completes']
+                            div(style='display:flex;justify-content:center;margin:0;padding:0')
+                                form(id=cancelRefundFormId method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/cancel-and-refund' style='display:none')
+                                button.da-btn.da-btn--danger(
+                                    type='button'
+                                    data-confirm-modal
+                                    data-confirm-title='Cancel & Refund Order'
+                                    data-confirm-msg=cancelRefundMsg
+                                    data-confirm-bullets=JSON.stringify(cancelRefundBullets)
+                                    data-form-id=cancelRefundFormId
+                                ) Cancel &amp; Refund Order
+                        else if canFullRefund
+                            p.da-refund-empty(style='margin-top:0')
+                                | Order is eligible for a refund but cannot use this action (e.g. fulfillment already refunded or no remaining balance).
+                        else
+                            p.da-refund-empty(style='margin-top:0')
+                                | No remaining balance to refund, or the order is not in a refundable payment state.

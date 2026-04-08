@@ -111,7 +111,9 @@ async function getRefundRequestStatusByOrderIds(orderIds) {
 }
 
 /**
- * Approve a refund request: call Stripe createRefund, update RefundRequest, transaction, and order.
+ * Approve a refund request: remove Zoom, Stripe refund (or local no-PI refund), then one DB transaction.
+ * RefundRequest is marked approved only when the refund succeeds (or no-PI path); if Stripe returns pending,
+ * the request stays pending so admin can retry Approve; webhooks complete approval when Stripe succeeds.
  * @param {string} requestId
  * @param {string} processedByUserId
  */
@@ -148,19 +150,49 @@ async function approveRefundRequest(requestId, processedByUserId) {
   }
 
   const paymentIntentId = order.stripePaymentIntentId;
+  const transactions = await transactionRepo.findByOrder(order.id);
+  const successTx = paymentIntentId
+    ? transactions.find((tx) => tx.gatewayReference === paymentIntentId && tx.status === TRANSACTION_STATUS.SUCCESS)
+    : null;
+
+  logger.info("Refund approval started", { requestId, orderId: order.id, paymentIntentId: paymentIntentId || null, remaining });
+
+  await orderService.removeZoomForAllOrderRegistrations(order.id);
+
+  // No PaymentIntent — free / local refund only (same pattern as cancel & refund order).
   if (!paymentIntentId) {
-    const err = new Error("Order has no payment intent; cannot refund.");
-    err.status = 400;
+    await sequelize.transaction(async (t) => {
+      const refundTx = await refundTransactionRepo.create(
+        {
+          orderId: order.id,
+          refundRequestId: request.id,
+          paymentTransactionId: successTx ? successTx.id : null,
+          paymentIntentId: null,
+          amount: remaining,
+          currency: order.currency,
+          status: REFUND_TRANSACTION_STATUS.SUCCEEDED,
+          scopeType: REFUND_TRANSACTION_SCOPE.FULL_ORDER,
+          reason: request.reason || null,
+          metadata: JSON.stringify({ source: "refund_request", noPaymentIntent: true }),
+          stripeRefundId: null,
+          createdByUserId: processedByUserId || null,
+        },
+        { transaction: t },
+      );
+      await orderService.applyRefundTransactionEffects(refundTx.id, { transaction: t });
+      await orderService.markRefundRequestApprovedIfPendingAfterEffects(refundTx.id, { transaction: t });
+    });
+    logger.info("approveRefundRequest: completed without Stripe PI", { requestId, orderId: order.id });
+    return await refundRequestRepo.findById(requestId);
+  }
+
+  if (!stripeGateway.isConfigured()) {
+    const err = new Error("Stripe is not configured; cannot issue refund.");
+    err.status = 500;
     throw err;
   }
 
-  logger.info("Refund approval started", { requestId, orderId: order.id, paymentIntentId, remaining });
-
-  // Call Stripe OUTSIDE the DB transaction — external API calls must not hold a connection open.
-  // Registration and Zoom removal are handled separately by the admin via the per-registration cancellation flow.
   logger.info("Issuing Stripe refund for refund approval", { orderId: order.id, paymentIntentId, remaining });
-  const transactions = await transactionRepo.findByOrder(order.id);
-  const successTx = transactions.find((tx) => tx.gatewayReference === paymentIntentId && tx.status === TRANSACTION_STATUS.SUCCESS);
 
   let refund;
   try {
@@ -188,7 +220,6 @@ async function approveRefundRequest(requestId, processedByUserId) {
     refund.status === "succeeded" ? REFUND_TRANSACTION_STATUS.SUCCEEDED : REFUND_TRANSACTION_STATUS.PENDING;
   const refundMeta = JSON.stringify({ stripeStatus: refund.status });
 
-  // Write RefundTransaction, apply effects, and mark request approved — all in one DB transaction.
   await sequelize.transaction(async (t) => {
     let refundTx = await refundTransactionRepo.findByStripeRefundId(refund.id);
     if (!refundTx) {
@@ -211,13 +242,8 @@ async function approveRefundRequest(requestId, processedByUserId) {
     }
     if (refund.status === "succeeded") {
       await orderService.applyRefundTransactionEffects(refundTx.id, { transaction: t });
+      await orderService.markRefundRequestApprovedIfPendingAfterEffects(refundTx.id, { transaction: t });
     }
-    await refundRequestRepo.update(requestId, {
-      status: APPROVED,
-      processedAt: new Date(),
-      processedByUserId,
-      stripeRefundId: refund.id,
-    }, { transaction: t });
   });
 
   logger.info("Refund approval complete", { requestId, orderId: order.id, refundStatus: refund.status });

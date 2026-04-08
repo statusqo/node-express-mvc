@@ -792,6 +792,7 @@ async function handleWebhook(event) {
               }, { transaction: t });
               if (mappedStatus === REFUND_TRANSACTION_STATUS.SUCCEEDED) {
                 await orderService.applyRefundTransactionEffects(refundTx.id, { transaction: t });
+                await orderService.markRefundRequestApprovedIfPendingAfterEffects(refundTx.id, { transaction: t });
               }
             });
           } else {
@@ -799,6 +800,7 @@ async function handleWebhook(event) {
               await refundTransactionRepo.update(refundTx.id, { status: mappedStatus, metadata: refundMeta }, { transaction: t });
               if (mappedStatus === REFUND_TRANSACTION_STATUS.SUCCEEDED) {
                 await orderService.applyRefundTransactionEffects(refundTx.id, { transaction: t });
+                await orderService.markRefundRequestApprovedIfPendingAfterEffects(refundTx.id, { transaction: t });
               }
             });
           }
@@ -828,6 +830,7 @@ async function handleWebhook(event) {
           }, { transaction: t });
           if (mappedStatus === REFUND_TRANSACTION_STATUS.SUCCEEDED) {
             await orderService.applyRefundTransactionEffects(refundTx.id, { transaction: t });
+            await orderService.markRefundRequestApprovedIfPendingAfterEffects(refundTx.id, { transaction: t });
           } else if (mappedStatus !== REFUND_TRANSACTION_STATUS.PENDING) {
             await orderService.recomputeOrderPaymentStatusByRefunds(refundTx.orderId, { transaction: t });
           }

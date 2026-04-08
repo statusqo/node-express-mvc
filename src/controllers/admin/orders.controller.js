@@ -87,10 +87,10 @@ module.exports = {
       orderRefundedTotal: payload.orderRefundedTotal,
       orderRemainingRefundable: payload.orderRemainingRefundable,
       canFullRefund: payload.canFullRefund,
-      canCancelOrder: payload.canCancelOrder,
-      canRefundOrder: payload.canRefundOrder,
+      canCancelAndRefundOrder: payload.canCancelAndRefundOrder,
       hasActiveRegistrations: payload.hasActiveRegistrations,
       activeRegistrationCount: payload.activeRegistrationCount,
+      orderHasEventLines: payload.orderHasEventLines,
       refundRequests: refundRequestsPlain,
       validFulfillmentStatuses: FULFILLMENT_STATUS_LIST,
       canRetryFinalize,
@@ -126,6 +126,10 @@ module.exports = {
         orderRefundedTotal: payload.orderRefundedTotal,
         orderRemainingRefundable: payload.orderRemainingRefundable,
         canFullRefund: payload.canFullRefund,
+        canCancelAndRefundOrder: payload.canCancelAndRefundOrder,
+        hasActiveRegistrations: payload.hasActiveRegistrations,
+        activeRegistrationCount: payload.activeRegistrationCount,
+        orderHasEventLines: payload.orderHasEventLines,
         refundRequests: refundRequestsPlain,
         validFulfillmentStatuses: FULFILLMENT_STATUS_LIST,
         canRetryFinalize,
@@ -159,6 +163,10 @@ module.exports = {
         orderRefundedTotal: payload ? payload.orderRefundedTotal : 0,
         orderRemainingRefundable: payload ? payload.orderRemainingRefundable : 0,
         canFullRefund: payload ? payload.canFullRefund : false,
+        canCancelAndRefundOrder: payload ? payload.canCancelAndRefundOrder : false,
+        hasActiveRegistrations: payload ? payload.hasActiveRegistrations : false,
+        activeRegistrationCount: payload ? payload.activeRegistrationCount : 0,
+        orderHasEventLines: payload ? payload.orderHasEventLines : false,
         refundRequests: refundRequestsPlain,
         validFulfillmentStatuses: FULFILLMENT_STATUS_LIST,
         canRetryFinalize,
@@ -168,7 +176,7 @@ module.exports = {
     }
   },
 
-  async fullRefund(req, res) {
+  async cancelAndRefundOrder(req, res) {
     const { id } = req.params;
     const editUrl = (req.adminPrefix || "") + "/orders/" + id + "/edit";
     const adminUserId = req.user && req.user.id;
@@ -177,21 +185,21 @@ module.exports = {
       return res.redirect((req.adminPrefix || "") + "/orders");
     }
     try {
-      const result = await orderService.refundFullOrder(id, { processedByUserId: adminUserId });
+      const result = await orderService.cancelAndRefundOrderForAdmin(id, { processedByUserId: adminUserId });
       if (result.pending) {
         res.setFlash(
           "success",
-          "Refund submitted to Stripe. When it completes, the order will update automatically.",
+          "Refund submitted to Stripe. When it completes, inventory and registrations will update automatically.",
         );
       } else {
         const cur = result.currency || "EUR";
         res.setFlash(
           "success",
-          `Full refund of ${Number(result.remaining).toFixed(2)} ${cur} processed.`,
+          `Cancel and refund completed: ${Number(result.remaining).toFixed(2)} ${cur} refunded.`,
         );
       }
     } catch (err) {
-      const msg = err.status === 404 ? "Order not found." : err.message || "Could not refund order.";
+      const msg = err.status === 404 ? "Order not found." : err.message || "Could not cancel and refund order.";
       res.setFlash("error", msg);
     }
     return res.redirect(302, editUrl);
@@ -223,19 +231,6 @@ module.exports = {
     return res.redirect(302, prefix);
   },
 
-  async cancelOrder(req, res) {
-    const { id } = req.params;
-    const editUrl = (req.adminPrefix || "") + "/orders/" + id + "/edit";
-    try {
-      await orderService.adminCancelOrder(id);
-      res.setFlash("success", "Order marked as cancelled.");
-    } catch (err) {
-      const msg = err.status === 404 ? "Order not found." : err.message || "Could not cancel order.";
-      res.setFlash("error", msg);
-    }
-    return res.redirect(302, editUrl);
-  },
-
   async approveRefundRequest(req, res) {
     const { id: orderId, requestId } = req.params;
     const prefix = (req.adminPrefix || "") + "/orders/" + orderId + "/edit";
@@ -245,8 +240,16 @@ module.exports = {
       return res.redirect((req.adminPrefix || "") + "/orders");
     }
     try {
-      await refundRequestService.approveRefundRequest(requestId, adminUserId);
-      res.setFlash("success", "Refund approved.");
+      const result = await refundRequestService.approveRefundRequest(requestId, adminUserId);
+      const reqStatus = result && (result.get ? result.get("status") : result.status);
+      if (reqStatus === "pending") {
+        res.setFlash(
+          "success",
+          "Refund submitted to Stripe. The request completes when Stripe confirms; you can retry Approve or wait for automatic processing.",
+        );
+      } else {
+        res.setFlash("success", "Refund approved.");
+      }
     } catch (err) {
       const msg = err.status === 404 ? "Refund request not found." : err.message || "Could not approve refund.";
       res.setFlash("error", msg);

@@ -9,10 +9,12 @@ const orderAttendeeRepo = require("../repos/orderAttendee.repo");
 const userRepo = require("../repos/user.repo");
 const transactionRepo = require("../repos/transaction.repo");
 const refundTransactionRepo = require("../repos/refundTransaction.repo");
+const refundRequestRepo = require("../repos/refundRequest.repo");
 const registrationRepo = require("../repos/registration.repo");
 const eventMeetingRepo = require("../repos/eventMeeting.repo");
 const { PAYMENT_STATUS, FULFILLMENT_STATUS, FULFILLMENT_STATUS_LIST, TRANSACTION_STATUS, REGISTRATION_STATUS, ORDER_SOURCE } = require("../constants");
 const { REFUND_TRANSACTION_STATUS, REFUND_TRANSACTION_SCOPE } = require("../constants/refundTransaction");
+const { REFUND_REQUEST_STATUS } = require("../constants/refundRequest");
 const { getMeetingProvider } = require("../gateways/meeting.interface");
 const emailService = require("./email.service");
 const storeSettingService = require("./storeSetting.service");
@@ -704,36 +706,64 @@ async function cancelOrder(orderId) {
 }
 
 /**
- * Admin: mark an order as cancelled (state transition only — no money moves).
- * Issues no Stripe refund and does not touch registrations or Zoom.
- * The admin follows up with refundFullOrder() to return funds, then cancels
- * individual registrations separately via the per-registration cancellation flow.
+ * Remove Zoom registrants for all registrations on this order (online events only).
+ * Call before Stripe refund. Zoom gateway treats 404 as already removed.
+ * Clears zoomRegistrantId after each successful API response.
  * @param {string} orderId
  */
-async function adminCancelOrder(orderId) {
-  const TERMINAL_FULFILLMENT = [FULFILLMENT_STATUS.CANCELLED, FULFILLMENT_STATUS.REFUNDED];
+async function removeZoomForAllOrderRegistrations(orderId) {
+  const registrations = await registrationRepo.findAllByOrderId(orderId);
+  const provider = getMeetingProvider();
+  for (const reg of registrations || []) {
+    if (!reg.zoomRegistrantId) continue;
+    const event = await eventRepo.findById(reg.eventId);
+    if (!event || !event.isOnline) continue;
+    const meeting = await eventMeetingRepo.findByEventId(reg.eventId);
+    if (!meeting) {
+      const err = new Error(
+        "Cannot remove Zoom access: no meeting linked to this event. Fix the event meeting, then retry.",
+      );
+      err.status = 409;
+      throw err;
+    }
+    if (!provider) {
+      const err = new Error("Zoom is not configured; cannot remove Zoom registrants before refund.");
+      err.status = 503;
+      throw err;
+    }
+    const meetingPlain = meeting.get ? meeting.get({ plain: true }) : meeting;
+    try {
+      await provider.removeRegistrant(meetingPlain, reg.zoomRegistrantId);
+    } catch (zoomErr) {
+      logger.error("removeZoomForAllOrderRegistrations: Zoom API error", {
+        orderId,
+        registrationId: reg.id,
+        error: zoomErr.message,
+      });
+      const err = new Error(zoomErr.message || "Zoom error while removing registrant. Refund aborted — please retry.");
+      err.status = zoomErr.status && zoomErr.status >= 400 ? zoomErr.status : 502;
+      throw err;
+    }
+    await registrationRepo.update(reg.id, { zoomRegistrantId: null });
+  }
+}
 
-  return await sequelize.transaction(async (t) => {
-    const order = await orderRepo.findById(orderId, { transaction: t });
-    if (!order) {
-      const err = new Error("Order not found.");
-      err.status = 404;
-      throw err;
+/**
+ * Sum units already refunded (stock restored) per line from prior succeeded partial refunds.
+ */
+async function sumUnitsRestoredByPriorPartialRefunds(orderId, orderLineId, txOpt) {
+  const rows = await refundTransactionRepo.findAllSucceededByOrderId(orderId, txOpt);
+  let sum = 0;
+  for (const r of rows || []) {
+    if (String(r.orderLineId) !== String(orderLineId)) continue;
+    if (
+      r.scopeType === REFUND_TRANSACTION_SCOPE.EVENT_ATTENDEE ||
+      r.scopeType === REFUND_TRANSACTION_SCOPE.LINE_QUANTITY
+    ) {
+      sum += Number(r.refundedQuantity) || 0;
     }
-    if (TERMINAL_FULFILLMENT.includes(order.fulfillmentStatus)) {
-      const err = new Error(`Order fulfillment is already '${order.fulfillmentStatus}' and cannot be cancelled.`);
-      err.status = 400;
-      throw err;
-    }
-    if (order.paymentStatus === PAYMENT_STATUS.VOIDED) {
-      const err = new Error("Order is already voided.");
-      err.status = 400;
-      throw err;
-    }
-    await orderRepo.update(orderId, { fulfillmentStatus: FULFILLMENT_STATUS.CANCELLED }, { transaction: t });
-    logger.info("adminCancelOrder: order marked cancelled", { orderId });
-    return { cancelled: true };
-  });
+  }
+  return sum;
 }
 
 async function recordPaymentFailed(transactionId) {
@@ -850,11 +880,23 @@ async function applyRefundTransactionEffects(refundTxId, options = {}) {
   if (refundTx.processedAt) return { applied: true };
 
   if (refundTx.scopeType === REFUND_TRANSACTION_SCOPE.FULL_ORDER) {
-    // Mark the original payment transaction as refunded.
-    // Registration removal and stock restoration are handled separately by the admin
-    // via the per-registration cancellation flow (cancelRegistration).
     if (refundTx.paymentTransactionId) {
       await transactionRepo.update(refundTx.paymentTransactionId, { status: TRANSACTION_STATUS.REFUNDED }, txOpt);
+    }
+    // Every line with a variant (event or not): restore remaining units after prior partial refunds.
+    const lines = await orderRepo.getLines(refundTx.orderId, txOpt);
+    for (const line of lines || []) {
+      if (!line.productVariantId || !(line.quantity > 0)) continue;
+      const priorUnits = await sumUnitsRestoredByPriorPartialRefunds(refundTx.orderId, line.id, txOpt);
+      const lineQty = Number(line.quantity) || 0;
+      const toRestore = Math.max(0, lineQty - priorUnits);
+      if (toRestore > 0) {
+        await productVariantRepo.incrementQuantity(line.productVariantId, toRestore, txOpt);
+      }
+    }
+    const registrations = await registrationRepo.findAllByOrderId(refundTx.orderId, txOpt);
+    for (const reg of registrations || []) {
+      await registrationRepo.destroy(reg.id, txOpt);
     }
   } else if (refundTx.scopeType === REFUND_TRANSACTION_SCOPE.LINE_QUANTITY) {
     const line = refundTx.orderLineId ? await orderLineRepo.findById(refundTx.orderLineId, txOpt) : null;
@@ -887,6 +929,183 @@ async function applyRefundTransactionEffects(refundTxId, options = {}) {
   await refundTransactionRepo.update(refundTx.id, { processedAt: new Date() }, txOpt);
   await recomputeOrderPaymentStatusByRefunds(refundTx.orderId, txOpt);
   return { applied: true };
+}
+
+/**
+ * After applyRefundTransactionEffects for a succeeded full-order refund, mark linked RefundRequest approved if still pending.
+ * Used by refund-request approval and Stripe webhooks so approval aligns with Stripe success + inventory/registrations.
+ */
+async function markRefundRequestApprovedIfPendingAfterEffects(refundTxId, options = {}) {
+  const t = options.transaction || null;
+  const txOpt = t ? { transaction: t } : {};
+  const refundTx = await refundTransactionRepo.findById(refundTxId, txOpt);
+  if (!refundTx || !refundTx.refundRequestId) return;
+  const req = await refundRequestRepo.findById(refundTx.refundRequestId, txOpt);
+  if (!req || req.status !== REFUND_REQUEST_STATUS.PENDING) return;
+  await refundRequestRepo.update(refundTx.refundRequestId, {
+    status: REFUND_REQUEST_STATUS.APPROVED,
+    processedAt: new Date(),
+    processedByUserId: refundTx.createdByUserId || null,
+    stripeRefundId: refundTx.stripeRefundId || null,
+  }, txOpt);
+}
+
+/**
+ * Refund only the seats for a cancelled event on a multi-event order (Stripe partial refund(s) + LINE_QUANTITY effects).
+ * Groups registrations by order line; one Stripe refund per line when multiple lines apply. Does not destroy registrations
+ * (caller removes them after). Requires remaining refundable balance to cover the full seat total for this event.
+ * @param {string} orderId
+ * @param {string} eventId
+ * @returns {Promise<{ refunded: boolean, error?: string }>}
+ */
+async function refundCancelledEventPortionForOrder(orderId, eventId) {
+  const order = await orderRepo.findById(orderId);
+  if (!order) return { refunded: false, error: "Order not found." };
+  if (!isPaymentStatusRefundable(order.paymentStatus)) {
+    return { refunded: false, error: "Order is not in a refundable payment state." };
+  }
+
+  const allRegs = await registrationRepo.findAllByOrderId(orderId);
+  const eventRegs = (allRegs || []).filter((r) => String(r.eventId) === String(eventId));
+  if (eventRegs.length === 0) {
+    return { refunded: true };
+  }
+
+  const byLine = new Map();
+  for (const r of eventRegs) {
+    const k = r.orderLineId;
+    if (!byLine.has(k)) byLine.set(k, []);
+    byLine.get(k).push(r);
+  }
+
+  const lineGroups = [];
+  for (const [orderLineId, lineRegs] of byLine) {
+    const line = await orderLineRepo.findById(orderLineId);
+    if (!line) continue;
+    const unit = toMoneyNumber(line.price);
+    const n = lineRegs.length;
+    const want = unit * n;
+    if (want <= ADMIN_REFUND_MONEY_EPS) continue;
+    lineGroups.push({ line, n, want });
+  }
+
+  if (lineGroups.length === 0) {
+    return { refunded: true };
+  }
+
+  const remainingBudget = await getRemainingRefundableAmount(orderId);
+  if (remainingBudget === null || remainingBudget <= ADMIN_REFUND_MONEY_EPS) {
+    return { refunded: false, error: "No refundable amount remaining." };
+  }
+
+  const totalWant = lineGroups.reduce((s, g) => s + g.want, 0);
+  if (totalWant - remainingBudget > ADMIN_REFUND_MONEY_EPS) {
+    return {
+      refunded: false,
+      error:
+        "Remaining refundable balance is less than the total for this event's seats on this order. Resolve manually or adjust refunds.",
+    };
+  }
+
+  const paymentIntentId = order.stripePaymentIntentId;
+  const transactions = await transactionRepo.findByOrder(order.id);
+  const successTx = paymentIntentId
+    ? transactions.find((t) => t.gatewayReference === paymentIntentId && t.status === TRANSACTION_STATUS.SUCCESS)
+    : null;
+
+  const stripeGateway = require("../gateways/stripe.gateway");
+
+  const buildRefundTxPayload = (g) => ({
+    orderId: order.id,
+    refundRequestId: null,
+    paymentTransactionId: successTx ? successTx.id : null,
+    paymentIntentId: paymentIntentId || null,
+    amount: toMoneyNumber(g.want),
+    currency: order.currency,
+    scopeType: REFUND_TRANSACTION_SCOPE.LINE_QUANTITY,
+    orderLineId: g.line.id,
+    registrationId: null,
+    orderAttendeeId: null,
+    refundedQuantity: g.n,
+    reason: "Event cancellation refund (seats for cancelled event)",
+  });
+
+  if (!paymentIntentId) {
+    await sequelize.transaction(async (t) => {
+      for (const g of lineGroups) {
+        const refundTx = await refundTransactionRepo.create(
+          {
+            ...buildRefundTxPayload(g),
+            status: REFUND_TRANSACTION_STATUS.SUCCEEDED,
+            stripeRefundId: null,
+          },
+          { transaction: t },
+        );
+        await applyRefundTransactionEffects(refundTx.id, { transaction: t });
+      }
+    });
+    logger.info("refundCancelledEventPortionForOrder: completed without Stripe PI", { orderId, eventId });
+    return { refunded: true };
+  }
+
+  for (const g of lineGroups) {
+    const amountMinor = Math.round(g.want * 100);
+    let refund;
+    try {
+      const idempotencyKey = `event_cancel_partial_${order.id}_${eventId}_${g.line.id}_${amountMinor}`;
+      refund = await stripeGateway.createRefund({
+        paymentIntentId,
+        amountMinor,
+        reason: "requested_by_customer",
+        metadata: {
+          orderId: String(order.id),
+          eventId: String(eventId),
+          orderLineId: String(g.line.id),
+          scopeType: REFUND_TRANSACTION_SCOPE.LINE_QUANTITY,
+        },
+        idempotencyKey,
+      });
+    } catch (e) {
+      logger.error("refundCancelledEventPortionForOrder: Stripe refund failed", {
+        orderId,
+        eventId,
+        orderLineId: g.line.id,
+        error: e.message,
+      });
+      return { refunded: false, error: e.message || "Stripe refund failed." };
+    }
+
+    const refundMeta = JSON.stringify({ stripeStatus: refund.status });
+    await sequelize.transaction(async (t) => {
+      let refundTx = await refundTransactionRepo.findByStripeRefundId(refund.id);
+      if (!refundTx) {
+        refundTx = await refundTransactionRepo.create(
+          {
+            ...buildRefundTxPayload(g),
+            stripeRefundId: refund.id,
+            status: refund.status === "succeeded" ? REFUND_TRANSACTION_STATUS.SUCCEEDED : REFUND_TRANSACTION_STATUS.PENDING,
+            metadata: refundMeta,
+          },
+          { transaction: t },
+        );
+      } else {
+        await refundTransactionRepo.update(
+          refundTx.id,
+          {
+            status: refund.status === "succeeded" ? REFUND_TRANSACTION_STATUS.SUCCEEDED : REFUND_TRANSACTION_STATUS.PENDING,
+            metadata: refundMeta,
+          },
+          { transaction: t },
+        );
+      }
+      if (refund.status === "succeeded") {
+        await applyRefundTransactionEffects(refundTx.id, { transaction: t });
+      }
+    });
+  }
+
+  logger.info("refundCancelledEventPortionForOrder: complete", { orderId, eventId });
+  return { refunded: true };
 }
 
 /**
@@ -978,13 +1197,13 @@ async function refundOrderForEventCancellation(orderId) {
 }
 
 /**
- * Admin: refund all remaining balance on the order (after any prior partial refunds), via Stripe when a PaymentIntent exists.
- * Does not touch registrations or Zoom — those are handled separately via the per-registration cancellation flow.
- * DB writes are wrapped in a Sequelize transaction; the Stripe call happens outside so no DB connection is held open.
+ * Admin: cancel & refund — remove Zoom access, refund remaining balance via Stripe, then one DB transaction
+ * to record RefundTransaction and apply full-order effects (inventory, registrations, payment Transaction).
+ * Stripe is called outside the DB transaction. Zoom is called before Stripe so money is not returned while Zoom access remains.
  * @param {string} orderId
  * @param {{ processedByUserId?: string|null }} [options]
  */
-async function refundFullOrder(orderId, options = {}) {
+async function cancelAndRefundOrderForAdmin(orderId, options = {}) {
   const processedByUserId = options.processedByUserId != null ? options.processedByUserId : null;
   const order = await orderRepo.findById(orderId);
   if (!order) {
@@ -1005,7 +1224,9 @@ async function refundFullOrder(orderId, options = {}) {
     throw err;
   }
 
-  logger.info("refundFullOrder: starting", { orderId, paymentStatus: order.paymentStatus, remaining });
+  logger.info("cancelAndRefundOrderForAdmin: starting", { orderId, paymentStatus: order.paymentStatus, remaining });
+
+  await removeZoomForAllOrderRegistrations(orderId);
 
   const paymentIntentId = order.stripePaymentIntentId;
   const txs = await transactionRepo.findByOrder(order.id);
@@ -1021,10 +1242,10 @@ async function refundFullOrder(orderId, options = {}) {
     currency: order.currency,
     scopeType: REFUND_TRANSACTION_SCOPE.FULL_ORDER,
     refundedQuantity: null,
-    reason: "Admin full order refund",
+    reason: "Admin cancel and refund order",
   };
 
-  // No Stripe PaymentIntent — free order or manual payment. Mark refunded immediately.
+  // No Stripe PaymentIntent — mark refunded immediately in one DB transaction.
   if (!paymentIntentId) {
     await sequelize.transaction(async (t) => {
       const refundTx = await refundTransactionRepo.create(
@@ -1033,7 +1254,7 @@ async function refundFullOrder(orderId, options = {}) {
       );
       await applyRefundTransactionEffects(refundTx.id, { transaction: t });
     });
-    logger.info("refundFullOrder: completed without Stripe PI", { orderId });
+    logger.info("cancelAndRefundOrderForAdmin: completed without Stripe PI", { orderId });
     return { refunded: true, remaining, currency: order.currency };
   }
 
@@ -1044,10 +1265,9 @@ async function refundFullOrder(orderId, options = {}) {
     throw err;
   }
 
-  // Call Stripe OUTSIDE the DB transaction — external API calls must not hold a connection open.
   let refund;
   try {
-    const idempotencyKey = `admin_full_refund_${order.id}_${Math.round(remaining * 100)}`;
+    const idempotencyKey = `admin_cancel_refund_${order.id}_${Math.round(remaining * 100)}`;
     refund = await stripeGateway.createRefund({
       paymentIntentId,
       amountMinor: Math.round(remaining * 100),
@@ -1055,20 +1275,19 @@ async function refundFullOrder(orderId, options = {}) {
       metadata: {
         orderId: String(order.id),
         scopeType: REFUND_TRANSACTION_SCOPE.FULL_ORDER,
-        source: "admin_full_refund",
+        source: "admin_cancel_refund",
       },
       idempotencyKey,
     });
   } catch (e) {
-    logger.error("refundFullOrder: Stripe refund failed", { orderId, error: e.message });
+    logger.error("cancelAndRefundOrderForAdmin: Stripe refund failed", { orderId, error: e.message });
     const err = new Error(e.message || "Stripe refund failed.");
     err.status = 502;
     throw err;
   }
 
-  // Stripe returned a failed/canceled status — do not record anything, admin can retry.
   if (refund.status === "failed" || refund.status === "canceled") {
-    const err = new Error(`Stripe refund status: ${refund.status}. No changes were recorded — please retry.`);
+    const err = new Error(`Stripe refund status: ${refund.status}. No database changes were recorded — please retry.`);
     err.status = 502;
     throw err;
   }
@@ -1077,8 +1296,6 @@ async function refundFullOrder(orderId, options = {}) {
     refund.status === "succeeded" ? REFUND_TRANSACTION_STATUS.SUCCEEDED : REFUND_TRANSACTION_STATUS.PENDING;
   const refundMeta = JSON.stringify({ stripeStatus: refund.status });
 
-  // Write RefundTransaction and apply effects inside a single DB transaction.
-  // If this commit fails, Stripe retries the webhook (idempotency key prevents double-charge on admin retry too).
   await sequelize.transaction(async (t) => {
     let refundTx = await refundTransactionRepo.findByStripeRefundId(refund.id);
     if (!refundTx) {
@@ -1094,7 +1311,7 @@ async function refundFullOrder(orderId, options = {}) {
     }
   });
 
-  logger.info("refundFullOrder: Stripe refund recorded", { orderId, refundId: refund.id, status: refund.status });
+  logger.info("cancelAndRefundOrderForAdmin: Stripe refund recorded", { orderId, refundId: refund.id, status: refund.status });
 
   if (refund.status === "succeeded") {
     return { refunded: true, remaining, currency: order.currency };
@@ -1377,7 +1594,7 @@ async function getTransactionsForOrder(orderId) {
 /**
  * Admin order edit: order header + line items + payment transactions (plain objects).
  * @param {string} orderId
- * @returns {Promise<{ order: object, orderLines: object[], transactions: object[], refundTransactions: object[], orderRefundedTotal: number, orderRemainingRefundable: number|null, canFullRefund: boolean }|null>}
+ * @returns {Promise<{ order: object, orderLines: object[], transactions: object[], refundTransactions: object[], orderRefundedTotal: number, orderRemainingRefundable: number|null, canFullRefund: boolean, canCancelAndRefundOrder: boolean, hasActiveRegistrations: boolean, activeRegistrationCount: number }|null>}
  */
 async function getAdminOrderEditPayload(orderId) {
   if (!orderId) return null;
@@ -1390,22 +1607,17 @@ async function getAdminOrderEditPayload(orderId) {
   const orderRefundedTotal = await getSucceededRefundedTotal(orderId);
   const orderRemainingRefundable = await getRemainingRefundableAmount(orderId);
 
-  const TERMINAL_FULFILLMENT = [FULFILLMENT_STATUS.CANCELLED, FULFILLMENT_STATUS.REFUNDED];
   const hasRefundableBalance =
     orderRemainingRefundable != null && orderRemainingRefundable > ADMIN_REFUND_MONEY_EPS;
 
-  // canCancelOrder: order is not yet in a terminal fulfillment state and not voided
-  const canCancelOrder =
-    !TERMINAL_FULFILLMENT.includes(orderPlain.fulfillmentStatus) &&
-    orderPlain.paymentStatus !== PAYMENT_STATUS.VOIDED;
-
-  // canRefundOrder: order is cancelled and has remaining refundable balance
-  const canRefundOrder =
-    orderPlain.fulfillmentStatus === FULFILLMENT_STATUS.CANCELLED &&
+  /** Single admin action: Zoom removal + Stripe refund + DB effects (does not require prior cancel). */
+  const canCancelAndRefundOrder =
     isPaymentStatusRefundable(orderPlain.paymentStatus) &&
-    hasRefundableBalance;
+    hasRefundableBalance &&
+    orderPlain.paymentStatus !== PAYMENT_STATUS.VOIDED &&
+    orderPlain.fulfillmentStatus !== FULFILLMENT_STATUS.REFUNDED;
 
-  // canFullRefund kept for backwards compat (used by approveRefundRequest UI path)
+  // canFullRefund: used by approve refund request UI (remaining balance while paid/partially refunded)
   const canFullRefund =
     isPaymentStatusRefundable(orderPlain.paymentStatus) && hasRefundableBalance;
 
@@ -1414,18 +1626,21 @@ async function getAdminOrderEditPayload(orderId) {
   const hasActiveRegistrations = Array.isArray(activeRegistrations) && activeRegistrations.length > 0;
   const activeRegistrationCount = hasActiveRegistrations ? activeRegistrations.length : 0;
 
+  const orderLinesPlain = (lines || []).map((l) => (l.get ? l.get({ plain: true }) : l));
+  const orderHasEventLines = orderLinesPlain.some((l) => l.eventId != null && String(l.eventId).trim() !== "");
+
   return {
     order: orderPlain,
-    orderLines: (lines || []).map((l) => (l.get ? l.get({ plain: true }) : l)),
+    orderLines: orderLinesPlain,
     transactions: (txs || []).map((t) => (t.get ? t.get({ plain: true }) : t)),
     refundTransactions: (refundTxRows || []).map((r) => (r.get ? r.get({ plain: true }) : r)),
     orderRefundedTotal,
     orderRemainingRefundable: orderRemainingRefundable != null ? orderRemainingRefundable : 0,
     canFullRefund,
-    canCancelOrder,
-    canRefundOrder,
+    canCancelAndRefundOrder,
     hasActiveRegistrations,
     activeRegistrationCount,
+    orderHasEventLines,
   };
 }
 
@@ -1447,10 +1662,12 @@ module.exports = {
   isPaymentStatusRefundable,
   recomputeOrderPaymentStatusByRefunds,
   applyRefundTransactionEffects,
+  markRefundRequestApprovedIfPendingAfterEffects,
+  removeZoomForAllOrderRegistrations,
+  refundCancelledEventPortionForOrder,
   refundOrderForEventCancellation,
-  refundFullOrder,
+  cancelAndRefundOrderForAdmin,
   cancelOrder,
-  adminCancelOrder,
   getOrderById,
   getOrderWithLines,
   linkPaymentIntentToOrder,

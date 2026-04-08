@@ -389,8 +389,8 @@ module.exports = {
   /**
    * Flow 2 — Process refunds and clean up registrations for a cancelled event.
    * Only runs when event is cancelled. Processes remaining (non-soft-deleted) registrations.
-   * Per-registration: refund paid orders via Stripe (bails on failure), void pending orders.
-   * Soft-deletes each registration only after its order is successfully handled.
+   * Refunds each paid order at most once: only seats for this event (partial refund + LINE_QUANTITY), not the full order.
+   * Then voids pending orders per registration and soft-deletes each registration.
    * Idempotent: re-running picks up only unprocessed registrations.
    * @param {string} eventId
    * @returns {Promise<{ ok: boolean, processed: number, total: number, error?: string }>}
@@ -407,32 +407,40 @@ module.exports = {
     const total = registrations.length;
     if (total === 0) return { ok: true, processed: 0, total: 0 };
 
+    const orderIdsForRefund = [...new Set(registrations.map((r) => r.orderId).filter(Boolean))];
+    for (const oid of orderIdsForRefund) {
+      const order = await orderRepo.findById(oid);
+      if (order && orderService.isPaymentStatusRefundable(order.paymentStatus)) {
+        const remaining = await orderService.getRemainingRefundableAmount(order.id);
+        if (remaining !== null && remaining > 0.0001) {
+          const result = await orderService.refundCancelledEventPortionForOrder(order.id, eventId);
+          if (!result.refunded) {
+            return { ok: false, processed: 0, total, error: result.error || "Stripe refund failed." };
+          }
+          const afterRemaining = await orderService.getRemainingRefundableAmount(order.id);
+          if (afterRemaining !== null && afterRemaining <= 0.0001) {
+            const pendingRefundRequest = await refundRequestRepo.findPendingByOrder(order.id);
+            if (pendingRefundRequest) {
+              await refundRequestRepo.update(pendingRefundRequest.id, {
+                status: REFUND_REQUEST_STATUS.APPROVED,
+                processedAt: new Date(),
+                processedByUserId: null,
+              });
+              logger.info("processEventRefundsAndCleanup: auto-approved refund request after order fully refunded", {
+                orderId: order.id,
+                refundRequestId: pendingRefundRequest.id,
+              });
+            }
+          }
+        }
+      }
+    }
+
     let processed = 0;
     for (const reg of registrations) {
       const order = reg.orderId ? await orderRepo.findById(reg.orderId) : null;
 
-      if (order && orderService.isPaymentStatusRefundable(order.paymentStatus)) {
-        const remaining = await orderService.getRemainingRefundableAmount(order.id);
-        if (remaining !== null && remaining > 0.0001) {
-          const result = await orderService.refundOrderForEventCancellation(order.id);
-          if (!result.refunded) {
-            return { ok: false, processed, total, error: result.error || "Stripe refund failed." };
-          }
-          // Auto-close any pending RefundRequest for this order — refund was already issued via event cancellation.
-          const pendingRefundRequest = await refundRequestRepo.findPendingByOrder(order.id);
-          if (pendingRefundRequest) {
-            await refundRequestRepo.update(pendingRefundRequest.id, {
-              status: REFUND_REQUEST_STATUS.APPROVED,
-              processedAt: new Date(),
-              processedByUserId: null,
-            });
-            logger.info("processEventRefundsAndCleanup: auto-approved orphaned refund request", {
-              orderId: order.id,
-              refundRequestId: pendingRefundRequest.id,
-            });
-          }
-        }
-      } else if (order && order.paymentStatus === PAYMENT_STATUS.PENDING) {
+      if (order && order.paymentStatus === PAYMENT_STATUS.PENDING) {
         await sequelize.transaction(async (t) => {
           await orderRepo.update(order.id, {
             paymentStatus: PAYMENT_STATUS.VOIDED,
