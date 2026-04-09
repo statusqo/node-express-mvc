@@ -208,10 +208,10 @@ module.exports = {
    *   1. Validate registration belongs to the given event.
    *   2. Remove from Zoom (non-fatal for 404; non-404 aborts the flow).
    *   3. Issue Stripe refund / void for paid orders; cancel pending orders.
-   *   4. Soft-delete the registration.
+   *   4. Soft-delete the registration (or leave it until refund succeeds if Stripe is pending — webhooks / retry finalize).
    * @param {string} registrationId
    * @param {string} eventId
-   * @returns {Promise<{ cancelled: boolean, error?: string }>}
+   * @returns {Promise<{ cancelled: boolean, pending?: boolean, error?: string }>}
    */
   async cancelRegistration(registrationId, eventId) {
     const registration = await registrationRepo.findByIdWithOrder(registrationId);
@@ -259,10 +259,14 @@ module.exports = {
     // Step 2: Handle the associated order.
     const order = registration.Order;
     let handledByRefundTransaction = false;
+    let refundPending = false;
     if (order) {
       if (orderService.isPaymentStatusRefundable(order.paymentStatus)) {
         if (!order.stripePaymentIntentId) {
           throw new Error("Order has no payment intent; cannot issue a seat refund.");
+        }
+        if (!stripeGateway.isConfigured()) {
+          throw new Error("Stripe is not configured; cannot issue refund.");
         }
         const orderLine = await orderLineRepo.findById(registration.orderLineId);
         if (!orderLine) {
@@ -280,17 +284,30 @@ module.exports = {
         const successTx = transactions.find(
           (t) => t.gatewayReference === order.stripePaymentIntentId && t.status === TRANSACTION_STATUS.SUCCESS
         );
-        const refund = await stripeGateway.createRefund({
-          paymentIntentId: order.stripePaymentIntentId,
-          amountMinor: Math.round(refundAmount * 100),
-          reason: "requested_by_customer",
-          metadata: {
-            orderId: String(order.id),
-            registrationId: String(registration.id),
-            scopeType: REFUND_TRANSACTION_SCOPE.EVENT_ATTENDEE,
-          },
-          idempotencyKey: `registration_refund_${registration.id}`,
-        });
+        let refund;
+        try {
+          refund = await stripeGateway.createRefund({
+            paymentIntentId: order.stripePaymentIntentId,
+            amountMinor: Math.round(refundAmount * 100),
+            reason: "requested_by_customer",
+            metadata: {
+              orderId: String(order.id),
+              registrationId: String(registration.id),
+              scopeType: REFUND_TRANSACTION_SCOPE.EVENT_ATTENDEE,
+            },
+            idempotencyKey: `registration_refund_${registration.id}`,
+          });
+        } catch (e) {
+          logger.error("cancelRegistration: Stripe refund failed", { registrationId, orderId: order.id, error: e.message });
+          throw new Error(e.message || "Stripe refund failed.");
+        }
+
+        if (refund.status === "failed" || refund.status === "canceled") {
+          throw new Error(
+            `Stripe refund status: ${refund.status}. No database changes were recorded — please retry.`,
+          );
+        }
+
         const mappedStatus =
           refund.status === "succeeded"
             ? REFUND_TRANSACTION_STATUS.SUCCEEDED
@@ -304,9 +321,9 @@ module.exports = {
           zoomRemovedBeforeRefund: true,
         });
 
-        // Write RefundTransaction and apply effects inside a single DB transaction.
+        // Record RefundTransaction (pending or succeeded); apply effects only when Stripe succeeded — same pattern as admin cancel & refund / approve refund request.
         await sequelize.transaction(async (t) => {
-          let refundTx = await refundTransactionRepo.findByStripeRefundId(refund.id);
+          let refundTx = await refundTransactionRepo.findByStripeRefundId(refund.id, { transaction: t });
           if (!refundTx) {
             refundTx = await refundTransactionRepo.create({
               orderId: order.id,
@@ -327,14 +344,22 @@ module.exports = {
           } else {
             await refundTransactionRepo.update(refundTx.id, { status: mappedStatus, metadata: refundMeta }, { transaction: t });
           }
-          if (refund.status !== "succeeded") {
-            throw new Error("Refund is pending. Please retry in a moment.");
+          if (refund.status === "succeeded") {
+            await orderService.applyRefundTransactionEffects(refundTx.id, { transaction: t });
           }
-          await orderService.applyRefundTransactionEffects(refundTx.id, { transaction: t });
         });
 
-        handledByRefundTransaction = true;
-        logger.info("cancelRegistration: seat refund completed", { registrationId, orderId: order.id, refundId: refund.id });
+        if (refund.status === "succeeded") {
+          handledByRefundTransaction = true;
+          logger.info("cancelRegistration: seat refund completed", { registrationId, orderId: order.id, refundId: refund.id });
+        } else {
+          refundPending = true;
+          logger.info("cancelRegistration: seat refund pending — registration will complete when Stripe succeeds", {
+            registrationId,
+            orderId: order.id,
+            refundId: refund.id,
+          });
+        }
       } else if (order.paymentStatus === PAYMENT_STATUS.PENDING) {
         await sequelize.transaction(async (t) => {
           await orderRepo.update(order.id, {
@@ -347,6 +372,10 @@ module.exports = {
         logger.info("cancelRegistration: pending order voided and registration removed", { registrationId, orderId: order.id });
       }
       // Already refunded/cancelled — proceed without further financial action.
+    }
+
+    if (refundPending) {
+      return { cancelled: false, pending: true };
     }
 
     // Step 3: Soft-delete the registration if not already handled by the refund transaction effects.

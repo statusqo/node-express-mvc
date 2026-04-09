@@ -131,6 +131,13 @@ module.exports = {
     const registrantsUrl = (req.adminPrefix || "") + "/events/" + eventId + "/registrants";
     try {
       const result = await registrationService.cancelRegistration(registrationId, eventId);
+      if (result.pending) {
+        res.setFlash(
+          "success",
+          "Refund initiated. The registration will be removed when Stripe confirms the refund. You can retry this action or wait for the webhook.",
+        );
+        return res.redirect(registrantsUrl);
+      }
       if (!result.cancelled) {
         res.setFlash("error", result.error || "Could not cancel registration.");
         return res.redirect(registrantsUrl);
