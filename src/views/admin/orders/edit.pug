@@ -116,20 +116,58 @@ block content
                                                     th(scope='col') Event
                                             tbody
                                                 each line in orderLines
-                                                    - var evId = line.eventId
-                                                    tr
-                                                        td= line.title || '—'
+                                                    - var isEventLine = line.eventId != null && String(line.eventId).trim() !== ''
+                                                    - var lineAttendees = isEventLine ? (attendeesByLine[line.id] || []) : []
+                                                    - var hasAttendees = lineAttendees.length > 0
+                                                    - var lineRowClass = line.fullyRefunded ? 'da-row--refunded' : ''
+                                                    tr(class=lineRowClass)
+                                                        td
+                                                            = line.title || '—'
+                                                            if !isEventLine && line.partiallyRefunded
+                                                                span.da-refund-pill #{line.refundedQty} of #{line.quantity} refunded
+                                                            if isEventLine && hasAttendees
+                                                                button.da-expand-btn(
+                                                                    type='button'
+                                                                    data-expand-line=line.id
+                                                                    aria-expanded='false'
+                                                                    aria-label='Toggle attendees'
+                                                                )
+                                                                    svg(width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                                                                        polyline(points='6 9 12 15 18 9')
+                                                                    = lineAttendees.length + ' attendee' + (lineAttendees.length !== 1 ? 's' : '')
                                                         td= line.quantity != null ? line.quantity : '—'
                                                         td= line.price != null ? Number(line.price).toFixed(2) + ' ' + (order.currency || 'EUR') : '—'
                                                         td
                                                             span.da-cell-mono= line.sku || '—'
                                                         td
-                                                            if evId
+                                                            if isEventLine
                                                                 a.da-row-btn.da-row-btn--edit(
-                                                                    href=(adminPrefix || '') + '/events/' + evId + '/registrants'
+                                                                    href=(adminPrefix || '') + '/events/' + line.eventId + '/registrants'
                                                                 ) Registrants
                                                             else
                                                                 span.da-cell-muted —
+                                                    if isEventLine && hasAttendees
+                                                        each attendee in lineAttendees
+                                                            - var attName = ((attendee.forename || '') + ' ' + (attendee.surname || '')).trim()
+                                                            - var attClass = 'da-attendee-row' + (attendee.refunded ? ' da-row--refunded' : '')
+                                                            tr(class=attClass data-attendee-line=line.id style='display:none')
+                                                                td(colspan='5')
+                                                                    span.da-attendee-name= attName || '—'
+                                                                    if attendee.email
+                                                                        span.da-attendee-email= attendee.email
+                                                                    if attendee.refunded
+                                                                        span.da-badge.da-badge--danger(style='margin-left:0.75rem;font-size:11px') Refunded
+
+                                    if fullOrderRefunds && fullOrderRefunds.length
+                                        each fr in fullOrderRefunds
+                                            .da-full-refund-notice
+                                                svg(width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                                                    circle(cx='12' cy='12' r='10')
+                                                    line(x1='12' y1='8' x2='12' y2='12')
+                                                    line(x1='12' y1='16' x2='12.01' y2='16')
+                                                | Full order refund —&nbsp;
+                                                strong #{Number(fr.amount).toFixed(2)} #{fr.currency || order.currency || 'EUR'}
+                                                | &nbsp;issued on #{new Date(fr.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'})}
                                 else
                                     p.da-refund-empty No line items for this order.
 
@@ -347,3 +385,19 @@ block content
                         else
                             p.da-refund-empty(style='margin-top:0')
                                 | No remaining balance to refund, or the order is not in a refundable payment state.
+
+block append scripts
+    script.
+        (function () {
+            document.querySelectorAll('.da-expand-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var lineId = btn.getAttribute('data-expand-line');
+                    var expanded = btn.getAttribute('aria-expanded') === 'true';
+                    var rows = document.querySelectorAll('tr[data-attendee-line="' + lineId + '"]');
+                    rows.forEach(function (row) {
+                        row.style.display = expanded ? 'none' : 'table-row';
+                    });
+                    btn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+                });
+            });
+        }());

@@ -1650,8 +1650,58 @@ async function getAdminOrderEditPayload(orderId) {
   const hasActiveRegistrations = Array.isArray(activeRegistrations) && activeRegistrations.length > 0;
   const activeRegistrationCount = hasActiveRegistrations ? activeRegistrations.length : 0;
 
-  const orderLinesPlain = (lines || []).map((l) => (l.get ? l.get({ plain: true }) : l));
+  // ── Build refund annotations ─────────────────────────────────────────────
+  // Only succeeded transactions count toward visual state.
+  const succeededRefundTxs = (refundTxRows || []).filter(
+    (r) => r.status === REFUND_TRANSACTION_STATUS.SUCCEEDED,
+  );
+
+  // Per-line refund totals (line_quantity scope).
+  const lineRefundSummary = {};
+  // Attendee IDs that have been individually refunded (event_attendee scope).
+  const refundedAttendeeIds = new Set();
+  // Full-order refunds (no line / attendee association).
+  const fullOrderRefunds = [];
+
+  for (const rt of succeededRefundTxs) {
+    if (rt.scopeType === REFUND_TRANSACTION_SCOPE.EVENT_ATTENDEE && rt.orderAttendeeId) {
+      refundedAttendeeIds.add(rt.orderAttendeeId);
+    } else if (rt.scopeType === REFUND_TRANSACTION_SCOPE.LINE_QUANTITY && rt.orderLineId) {
+      if (!lineRefundSummary[rt.orderLineId]) {
+        lineRefundSummary[rt.orderLineId] = { refundedQty: 0, refundedAmount: 0 };
+      }
+      lineRefundSummary[rt.orderLineId].refundedQty += Number(rt.refundedQuantity || 0);
+      lineRefundSummary[rt.orderLineId].refundedAmount += Number(rt.amount || 0);
+    } else if (rt.scopeType === REFUND_TRANSACTION_SCOPE.FULL_ORDER) {
+      fullOrderRefunds.push(rt.get ? rt.get({ plain: true }) : rt);
+    }
+  }
+
+  // Annotate each order line with its refund state.
+  const orderLinesPlain = (lines || []).map((l) => {
+    const plain = l.get ? l.get({ plain: true }) : l;
+    const summary = lineRefundSummary[plain.id];
+    const refundedQty = summary ? summary.refundedQty : 0;
+    const qty = Number(plain.quantity) || 1;
+    return {
+      ...plain,
+      refundedQty,
+      fullyRefunded: refundedQty >= qty,
+      partiallyRefunded: refundedQty > 0 && refundedQty < qty,
+    };
+  });
+
   const orderHasEventLines = orderLinesPlain.some((l) => l.eventId != null && String(l.eventId).trim() !== "");
+
+  // Fetch attendees for event lines and annotate each with its refunded flag.
+  const attendeeRows = await orderAttendeeRepo.findAllByOrderId(orderId);
+  const attendeesByLine = {};
+  for (const a of attendeeRows) {
+    const plain = a.get ? a.get({ plain: true }) : a;
+    if (!attendeesByLine[plain.orderLineId]) attendeesByLine[plain.orderLineId] = [];
+    attendeesByLine[plain.orderLineId].push({ ...plain, refunded: refundedAttendeeIds.has(plain.id) });
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   const orderDiscountRow = await orderDiscountRepo.findByOrder(orderId);
   const orderDiscount = orderDiscountRow
@@ -1661,6 +1711,8 @@ async function getAdminOrderEditPayload(orderId) {
   return {
     order: orderPlain,
     orderLines: orderLinesPlain,
+    attendeesByLine,
+    fullOrderRefunds,
     transactions: (txs || []).map((t) => (t.get ? t.get({ plain: true }) : t)),
     refundTransactions: (refundTxRows || []).map((r) => (r.get ? r.get({ plain: true }) : r)),
     orderRefundedTotal,
