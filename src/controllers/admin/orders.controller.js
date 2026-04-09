@@ -77,7 +77,8 @@ module.exports = {
     const pendingTx = txs.find((t) => t.status === "pending");
     const canRetryFinalize =
       order.paymentStatus === "pending" && (pendingTx != null || Number(order.total) === 0);
-    const canRetryPostCommit = order.paymentStatus === "paid";
+    const canRetryPostCommit =
+      order.paymentStatus === "paid" && order.fulfillmentStatus === "pending";
     res.render("admin/orders/edit", {
       title: "Edit Order",
       order: payload.order,
@@ -91,6 +92,7 @@ module.exports = {
       hasActiveRegistrations: payload.hasActiveRegistrations,
       activeRegistrationCount: payload.activeRegistrationCount,
       orderHasEventLines: payload.orderHasEventLines,
+      orderDiscount: payload.orderDiscount || null,
       refundRequests: refundRequestsPlain,
       validFulfillmentStatuses: FULFILLMENT_STATUS_LIST,
       canRetryFinalize,
@@ -116,7 +118,8 @@ module.exports = {
       const pendingTx = txs.find((t) => t.status === "pending");
       const canRetryFinalize =
         order.paymentStatus === "pending" && (pendingTx != null || Number(order.total) === 0);
-      const canRetryPostCommit = order.paymentStatus === "paid";
+      const canRetryPostCommit =
+        order.paymentStatus === "paid" && order.fulfillmentStatus === "pending";
       return res.status(400).render("admin/orders/edit", {
         title: "Edit Order",
         order: payload.order,
@@ -130,6 +133,7 @@ module.exports = {
         hasActiveRegistrations: payload.hasActiveRegistrations,
         activeRegistrationCount: payload.activeRegistrationCount,
         orderHasEventLines: payload.orderHasEventLines,
+        orderDiscount: payload.orderDiscount || null,
         refundRequests: refundRequestsPlain,
         validFulfillmentStatuses: FULFILLMENT_STATUS_LIST,
         canRetryFinalize,
@@ -153,7 +157,9 @@ module.exports = {
         ? payload.order.paymentStatus === "pending" &&
           ((payload.transactions || []).some((t) => t.status === "pending") || Number(payload.order.total) === 0)
         : false;
-      const canRetryPostCommit = payload ? payload.order.paymentStatus === "paid" : false;
+      const canRetryPostCommit = payload
+        ? payload.order.paymentStatus === "paid" && payload.order.fulfillmentStatus === "pending"
+        : false;
       return res.status(status).render("admin/orders/edit", {
         title: "Edit Order",
         order: orderPlain,
@@ -167,6 +173,7 @@ module.exports = {
         hasActiveRegistrations: payload ? payload.hasActiveRegistrations : false,
         activeRegistrationCount: payload ? payload.activeRegistrationCount : 0,
         orderHasEventLines: payload ? payload.orderHasEventLines : false,
+        orderDiscount: payload ? payload.orderDiscount || null : null,
         refundRequests: refundRequestsPlain,
         validFulfillmentStatuses: FULFILLMENT_STATUS_LIST,
         canRetryFinalize,

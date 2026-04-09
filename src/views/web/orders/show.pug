@@ -15,6 +15,17 @@ block content
       - const title = line.title || (product && product.title) || variant.title || ''
       li(style="padding:0.5rem 0")= title + " × " + (line.quantity || 1) + " @ " + Number(line.price).toFixed(2) + " = " + (Number(line.price) * (line.quantity || 1)).toFixed(2)
 
+  if orderDiscount
+    p(style="margin-top:0.5rem; color:#2a7a2a; font-size:0.95rem")
+      | Discount applied&nbsp;
+      strong= orderDiscount.code
+      | &nbsp;(
+      if orderDiscount.type === 'percentage'
+        = Number(orderDiscount.value) + '% off'
+      else
+        = '€' + Number(orderDiscount.value).toFixed(2) + ' off'
+      | )&nbsp;−€#{Number(orderDiscount.amountDeducted).toFixed(2)}
+
   if order.paymentStatus === "pending"
     p Your order is pending payment.
     p(style="margin-top:0.5rem;font-size:0.9rem;color:#666;max-width:28rem")

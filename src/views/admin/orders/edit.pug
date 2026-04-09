@@ -159,26 +159,30 @@ block content
                                                         td.da-col-created
                                                             span.da-cell-muted= tx.createdAt ? new Date(tx.createdAt).toLocaleString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'}) : '—'
 
-                            //- Must not nest <form> inside #orderEditForm — use formaction so submit targets recovery routes (nested forms break and submit /edit without fulfillmentStatus).
-                            if canRetryFinalize || canRetryPostCommit
+                            if orderDiscount
                                 .da-form-section
-                                    span.da-form-section-label Checkout recovery
-                                    p.da-form-hint(style='margin-bottom:0.75rem;max-width:36rem')
-                                        | Use these if Stripe charged the customer but the order stayed pending, or if confirmation email or digital fulfillment failed after payment. For Zoom, use the event’s Registrants page and retry per registration.
-                                    if canRetryFinalize
-                                        button.da-btn.da-btn--secondary(
-                                            type='submit'
-                                            formaction=(adminPrefix || '') + '/orders/' + order.id + '/finalize-payment'
-                                            formmethod='post'
-                                            style='margin-right:0.5rem;margin-bottom:0.5rem'
-                                        ) Finalize payment (inventory &amp; registrations)
-                                    if canRetryPostCommit
-                                        button.da-btn.da-btn--secondary(
-                                            type='submit'
-                                            formaction=(adminPrefix || '') + '/orders/' + order.id + '/retry-post-commit'
-                                            formmethod='post'
-                                            style='margin-bottom:0.5rem'
-                                        ) Retry digital fulfillment
+                                    span.da-form-section-label Discount applied
+                                    .da-detail-list(style='margin-top:0.5rem')
+                                        .da-detail-item
+                                            span.da-detail-label Code
+                                            span.da-detail-line
+                                                code(style='font-size:0.9rem;letter-spacing:0.04em')= orderDiscount.code
+                                        .da-detail-item
+                                            span.da-detail-label Type &amp; value
+                                            span.da-detail-line= orderDiscount.type === 'percentage' ? Number(orderDiscount.value) + '% off' : '€' + Number(orderDiscount.value).toFixed(2) + ' off'
+                                        .da-detail-item
+                                            span.da-detail-label Applies to
+                                            span.da-detail-line
+                                                if orderDiscount.applicableTo === 'events'
+                                                    span.da-badge.da-badge--info Events only
+                                                else if orderDiscount.applicableTo === 'products'
+                                                    span.da-badge.da-badge--neutral Products only
+                                                else
+                                                    span All products &amp; events
+                                        .da-detail-item
+                                            span.da-detail-label Amount deducted
+                                            span.da-detail-line(style='font-weight:600;color:var(--ds-success,#22C55E)')
+                                                | −€#{Number(orderDiscount.amountDeducted).toFixed(2)}
 
                             .da-form-section
                                 span.da-form-section-label Fulfillment
@@ -212,50 +216,39 @@ block content
             //- ── Aside: refund transactions + refund requests ─────────
             .da-form-aside
 
-                .da-card
-                    .da-card-header
-                        h2.da-card-title Refund transactions
-                        if refundTransactions && refundTransactions.length
-                            span.da-count= refundTransactions.length + ' record' + (refundTransactions.length !== 1 ? 's' : '')
+                - var _hasActions = canRetryFinalize || canRetryPostCommit
+                .da-card(style=_hasActions ? 'border-color:var(--ds-warning,#F59E0B)' : '')
+                    .da-card-header(style=_hasActions ? 'background:rgba(245,158,11,0.08)' : '')
+                        h2.da-card-title(style=_hasActions ? 'color:var(--ds-warning,#F59E0B)' : '') Actions
                     .da-card-body
-                        if refundTransactions && refundTransactions.length
-                            each rt in refundTransactions
-                                - var rtStatusClass = ({pending:'warning',succeeded:'success',failed:'danger',cancelled:'neutral'})[rt.status] || 'neutral'
-                                - var rtScopeLabel = ({full_order:'Full order',line_quantity:'Line quantity',event_attendee:'Event attendee'})[rt.scopeType] || (rt.scopeType || '—')
-                                .da-refund-card
-                                    .da-refund-card-header
-                                        span.da-badge(class='da-badge--' + rtStatusClass)= rt.status ? rt.status.charAt(0).toUpperCase() + rt.status.slice(1) : '—'
-                                    p.da-refund-meta
-                                        strong Amount:&nbsp;
-                                        | #{rt.amount != null ? Number(rt.amount).toFixed(2) : '—'} #{rt.currency || order.currency || 'EUR'}
-                                    p.da-refund-meta
-                                        strong Scope:&nbsp;
-                                        | #{rtScopeLabel}
-                                    if rt.reason
-                                        p.da-refund-meta
-                                            strong Reason:&nbsp;
-                                            | #{rt.reason}
-                                    if rt.stripeRefundId
-                                        p.da-refund-meta
-                                            strong Stripe refund:&nbsp;
-                                            span.da-cell-mono= rt.stripeRefundId
-                                    if rt.refundedQuantity != null
-                                        p.da-refund-meta
-                                            strong Quantity:&nbsp;
-                                            | #{rt.refundedQuantity}
-                                    if rt.registrationId
-                                        p.da-refund-meta
-                                            strong Registration:&nbsp;
-                                            span.da-cell-mono= rt.registrationId.slice(0, 8) + '…'
-                                    p.da-refund-meta
-                                        strong Created:&nbsp;
-                                        | #{rt.createdAt ? new Date(rt.createdAt).toLocaleString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'}) : '—'}
-                                    if rt.processedAt
-                                        p.da-refund-meta
-                                            strong Processed:&nbsp;
-                                            | #{new Date(rt.processedAt).toLocaleString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})}
-                        else
-                            p.da-refund-empty No refund transactions for this order.
+                        if canRetryFinalize
+                            p.da-form-hint(style='margin-bottom:0.75rem')
+                                | Stripe charged the customer but the order stayed pending. Finalising will update inventory, create registrations, and mark the order as paid.
+                            - var finalizeFormId = 'finalize-payment-form-' + order.id
+                            form(id=finalizeFormId method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/finalize-payment')
+                                button.da-btn.da-btn--secondary(
+                                    type='button'
+                                    data-confirm-modal
+                                    data-confirm-title='Finalize Payment'
+                                    data-confirm-msg='Mark this order as paid and run inventory and registration fulfillment. Only use this if you have confirmed the customer was charged in Stripe.'
+                                    data-form-id=finalizeFormId
+                                    style='width:100%;margin-bottom:' + (canRetryPostCommit ? '1rem' : '0')
+                                ) Finalize payment
+                        if canRetryPostCommit
+                            p.da-form-hint(style='margin-bottom:0.75rem')
+                                | Confirmation email or digital fulfillment (Zoom) did not complete after payment. For Zoom, retry per registration from the event Registrants page.
+                            - var postCommitFormId = 'retry-post-commit-form-' + order.id
+                            form(id=postCommitFormId method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/retry-post-commit')
+                                button.da-btn.da-btn--secondary(
+                                    type='button'
+                                    data-confirm-modal
+                                    data-confirm-title='Retry Digital Fulfillment'
+                                    data-confirm-msg='Re-send the confirmation email and re-run digital fulfillment for this order. Safe to run more than once.'
+                                    data-form-id=postCommitFormId
+                                    style='width:100%'
+                                ) Retry digital fulfillment
+                        if !canRetryFinalize && !canRetryPostCommit
+                            p.da-refund-empty(style='margin-top:0') No actions to perform for this order.
 
                 .da-card
                     .da-card-header

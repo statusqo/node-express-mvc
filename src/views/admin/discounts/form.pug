@@ -1,0 +1,146 @@
+extends ../../layouts/admin
+
+block content
+    .da-page
+
+        +pageHeader(isEdit ? 'Edit Discount' : 'New Discount', isEdit ? (discount && discount.code) : 'Create a new discount code')
+            +backBtn((adminPrefix || '') + '/discounts', 'Back to Discounts')
+
+        +formError(error)
+
+        form(method='post' action=isEdit ? (adminPrefix || '') + '/discounts/' + discount.id + '/edit' : (adminPrefix || '') + '/discounts/new')
+            .da-card
+                .da-card-header
+                    h2.da-card-title Details
+                .da-card-body
+                    .da-form-grid
+                        .da-form-main
+                            .da-form-group
+                                label.da-form-label(for='code')
+                                    | Code
+                                    span.req *
+                                - var codeReadonly = isEdit && discount && discount.usedCount > 0
+                                input#code.da-form-input(
+                                    type='text'
+                                    name='code'
+                                    required
+                                    value=discount ? (discount.code || '') : ''
+                                    placeholder='e.g. SUMMER20'
+                                    style='text-transform:uppercase'
+                                    readonly=codeReadonly ? true : undefined
+                                )
+                                if codeReadonly
+                                    p.da-form-hint Code cannot be changed after use.
+
+                            .da-form-group
+                                label.da-form-label(for='type')
+                                    | Type
+                                    span.req *
+                                select#type.da-form-select(name='type' required)
+                                    - var currentType = discount ? discount.type : ''
+                                    option(value='percentage' selected=(currentType === 'percentage')) Percentage (%)
+                                    option(value='fixed_amount' selected=(currentType === 'fixed_amount')) Fixed amount (€)
+
+                            .da-form-group
+                                label.da-form-label(for='value')
+                                    | Value
+                                    span.req *
+                                input#value.da-form-input(
+                                    type='number'
+                                    name='value'
+                                    required
+                                    min='0.01'
+                                    step='0.01'
+                                    value=discount && discount.value != null ? Number(discount.value) : ''
+                                    placeholder='e.g. 20'
+                                )
+                                p.da-form-hint Enter a percentage (0–100) or a fixed EUR amount.
+
+                            .da-form-group
+                                label.da-form-label(for='minOrderAmount') Minimum order amount (€)
+                                input#minOrderAmount.da-form-input(
+                                    type='number'
+                                    name='minOrderAmount'
+                                    min='0'
+                                    step='0.01'
+                                    value=discount && discount.minOrderAmount != null ? Number(discount.minOrderAmount) : ''
+                                    placeholder='Leave blank for no minimum'
+                                )
+
+                            .da-form-group
+                                label.da-form-label(for='maxUses') Max uses
+                                input#maxUses.da-form-input(
+                                    type='number'
+                                    name='maxUses'
+                                    min='1'
+                                    step='1'
+                                    value=discount && discount.maxUses != null ? Number(discount.maxUses) : ''
+                                    placeholder='Leave blank for unlimited'
+                                )
+                                if isEdit && discount
+                                    p.da-form-hint Used #{discount.usedCount || 0} time(s) so far.
+
+                        .da-form-aside
+                            .da-form-group
+                                label.da-form-label(for='validFrom') Valid from
+                                input#validFrom.da-form-input(
+                                    type='datetime-local'
+                                    name='validFrom'
+                                    value=discount && discount.validFrom ? discount.validFrom.toString().slice(0,16) : ''
+                                )
+
+                            .da-form-group
+                                label.da-form-label(for='validUntil') Valid until
+                                input#validUntil.da-form-input(
+                                    type='datetime-local'
+                                    name='validUntil'
+                                    value=discount && discount.validUntil ? discount.validUntil.toString().slice(0,16) : ''
+                                )
+
+                            .da-form-group
+                                label.da-form-label(for='applicableTo')
+                                    | Applies to
+                                    span.req *
+                                select#applicableTo.da-form-select(name='applicableTo' required)
+                                    - var currentAppliesTo = discount ? (discount.applicableTo || 'all') : 'all'
+                                    option(value='all'      selected=(currentAppliesTo === 'all'))      All products &amp; events
+                                    option(value='events'   selected=(currentAppliesTo === 'events'))   Events only
+                                    option(value='products' selected=(currentAppliesTo === 'products')) Products only (non-event)
+                                p.da-form-hint
+                                    | &ldquo;Events only&rdquo; applies the discount exclusively to event registration lines. &ldquo;Products only&rdquo; excludes event registrations.
+
+                            .da-form-group
+                                label.da-form-label Active
+                                label.da-checkbox
+                                    input(
+                                        type='checkbox'
+                                        name='active'
+                                        value='1'
+                                        checked=discount ? (discount.active || discount.active == null ? true : false) : true
+                                    )
+                                    span Active
+
+                            .da-form-group
+                                label.da-form-label(for='description') Description
+                                textarea#description.da-form-input(
+                                    name='description'
+                                    rows='3'
+                                    placeholder='Internal note (not shown to customers)'
+                                )= discount ? (discount.description || '') : ''
+
+                .da-card-footer
+                    button.da-btn.da-btn--primary(type='submit')= isEdit ? 'Update Discount' : 'Create Discount'
+                    a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/discounts') Cancel
+
+        if isEdit && discount
+            - var canDelete = !discount.usedCount || discount.usedCount < 1
+            form#delete-discount-form(method='post' action=(adminPrefix || '') + '/discounts/' + discount.id + '/delete' style='margin-top:1.25rem')
+                button.da-btn.da-btn--danger(
+                    type='button'
+                    disabled=canDelete ? undefined : true
+                    data-confirm-modal=canDelete ? '' : undefined
+                    data-confirm-title='Delete Discount'
+                    data-confirm-msg='Are you sure you want to delete this discount code?'
+                    data-form-id='delete-discount-form'
+                    title=canDelete ? '' : ('Cannot delete: used ' + (discount.usedCount || 0) + ' time(s). Deactivate it instead.')
+                ) Delete Discount

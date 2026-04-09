@@ -1,0 +1,58 @@
+extends ../../layouts/admin
+
+block content
+    .da-page
+
+        +pageHeader('Discounts', 'Manage coupon codes for customer checkout')
+            +addBtn((adminPrefix || '') + '/discounts/new', 'New Discount')
+
+        .da-section
+            .da-panel
+                if discounts && discounts.length
+                    .da-table-scroll
+                        table.da-table
+                            thead
+                                tr
+                                    th Code
+                                    th Type
+                                    th Value
+                                    th Applies to
+                                    th Min Order
+                                    th Uses
+                                    th Valid From
+                                    th Valid Until
+                                    th Status
+                                    th(style='text-align:right') Actions
+                            tbody
+                                each d in discounts
+                                    - var now = new Date()
+                                    - var from = d.validFrom ? new Date(d.validFrom) : null
+                                    - var until = d.validUntil ? new Date(d.validUntil) : null
+                                    - var exhausted = d.maxUses != null && d.usedCount >= d.maxUses
+                                    - var notYet = from && now < from
+                                    - var expired = until && now > until
+                                    - var statusClass = !d.active ? 'da-badge--neutral' : exhausted ? 'da-badge--danger' : expired ? 'da-badge--warning' : notYet ? 'da-badge--info' : 'da-badge--success'
+                                    - var statusLabel = !d.active ? 'Inactive' : exhausted ? 'Exhausted' : expired ? 'Expired' : notYet ? 'Scheduled' : 'Active'
+                                    tr.da-row(data-id=d.id)
+                                        td.da-cell-primary
+                                            code(style='font-size:0.85rem; letter-spacing:0.04em')= d.code
+                                        td= d.type === 'percentage' ? 'Percentage' : 'Fixed'
+                                        td= d.type === 'percentage' ? d.value + '%' : '€' + Number(d.value).toFixed(2)
+                                        td
+                                            if d.applicableTo === 'events'
+                                                span.da-badge.da-badge--info Events only
+                                            else if d.applicableTo === 'products'
+                                                span.da-badge.da-badge--neutral Products only
+                                            else
+                                                span All
+                                        td= d.minOrderAmount != null ? '€' + Number(d.minOrderAmount).toFixed(2) : '—'
+                                        td= d.maxUses != null ? (d.usedCount + ' / ' + d.maxUses) : d.usedCount
+                                        td(style='font-size:0.85rem')= d.validFrom ? new Date(d.validFrom).toLocaleDateString('hr') : '—'
+                                        td(style='font-size:0.85rem')= d.validUntil ? new Date(d.validUntil).toLocaleDateString('hr') : '—'
+                                        td
+                                            span(class='da-badge ' + statusClass)= statusLabel
+                                        td
+                                            .da-cell-actions
+                                                a.da-row-btn.da-row-btn--edit(href=(adminPrefix || '') + '/discounts/' + d.id + '/edit') Edit
+                else
+                    p.da-table-empty No discount codes yet.

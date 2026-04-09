@@ -10,6 +10,7 @@ const product = require("./product");
 const refundRequest = require("./refundRequest");
 const registration = require("./registration");
 const user = require("./user");
+const discount = require("./discount");
 
 module.exports = {
   ...order,
@@ -20,4 +21,5 @@ module.exports = {
   ...refundRequest,
   ...registration,
   ...user,
+  ...discount,
 };

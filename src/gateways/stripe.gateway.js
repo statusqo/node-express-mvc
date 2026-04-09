@@ -19,6 +19,7 @@ const { sequelize } = require("../db");
 const orderService = require("../services/order.service");
 const orderRepo = require("../repos/order.repo");
 const orderLineRepo = require("../repos/orderLine.repo");
+const orderDiscountRepo = require("../repos/orderDiscount.repo");
 const userRepo = require("../repos/user.repo");
 const transactionRepo = require("../repos/transaction.repo");
 const refundTransactionRepo = require("../repos/refundTransaction.repo");
@@ -585,6 +586,33 @@ async function createInvoiceForOrder(orderId, userId, sessionId, options = {}) {
           ? stripe.invoiceItems.create(itemParams, { idempotencyKey: `${idempotencyKey}_item_${i}` })
           : stripe.invoiceItems.create(itemParams)
       );
+    }
+
+    // Add negative InvoiceItem(s) for any applied discount — one per VAT bracket so
+    // e-racuni receives correctly attributed discount lines on the Stripe invoice.
+    const orderDiscount = await orderDiscountRepo.findByOrder(order.id);
+    if (orderDiscount && Number(orderDiscount.amountDeducted) > 0) {
+      const vatDist = Array.isArray(orderDiscount.vatDistribution) ? orderDiscount.vatDistribution : [];
+      for (let di = 0; di < vatDist.length; di++) {
+        const entry = vatDist[di];
+        if (!entry || entry.amount <= 0) continue;
+        const discountItemParams = {
+          customer: customer.id,
+          invoice: invoiceId,
+          unit_amount: -Math.round(entry.amount * 100),
+          quantity: 1,
+          currency: order.currency.toLowerCase(),
+          description: `Discount (${orderDiscount.code})`,
+        };
+        if (attachStripeTaxRates && entry.stripeTaxRateId) {
+          discountItemParams.tax_rates = [entry.stripeTaxRateId];
+        }
+        await withTimeout(
+          idempotencyKey
+            ? stripe.invoiceItems.create(discountItemParams, { idempotencyKey: `${idempotencyKey}_disc_${di}` })
+            : stripe.invoiceItems.create(discountItemParams)
+        );
+      }
     }
 
     // Finalize: transitions draft → open. Stripe marks zero-amount invoices paid immediately.

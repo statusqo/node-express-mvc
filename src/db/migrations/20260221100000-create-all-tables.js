@@ -494,10 +494,50 @@ module.exports = {
       eventId: { type: Sequelize.STRING, primaryKey: true },
       createdAt: { type: Sequelize.DATE, allowNull: false },
     });
+
+    // --- discounts ---
+    await queryInterface.createTable("discounts", {
+      id: uuid,
+      code: { type: Sequelize.STRING, allowNull: false, unique: true },
+      type: { type: Sequelize.ENUM("percentage", "fixed_amount"), allowNull: false },
+      value: { type: Sequelize.DECIMAL(10, 2), allowNull: false },
+      minOrderAmount: { type: Sequelize.DECIMAL(10, 2), allowNull: true },
+      maxUses: { type: Sequelize.INTEGER, allowNull: true },
+      usedCount: { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
+      validFrom: { type: Sequelize.DATE, allowNull: true },
+      validUntil: { type: Sequelize.DATE, allowNull: true },
+      active: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: true },
+      description: { type: Sequelize.TEXT, allowNull: true },
+      // Controls which order lines the discount applies to: all | events | products
+      applicableTo: { type: Sequelize.ENUM("all", "events", "products"), allowNull: false, defaultValue: "all" },
+      ...ts,
+    });
+    await queryInterface.addIndex("discounts", ["code"], { unique: true });
+
+    // --- order_discounts (snapshot of applied discount at order time) ---
+    await queryInterface.createTable("order_discounts", {
+      id: uuid,
+      orderId: { type: Sequelize.UUID, allowNull: false, references: { model: "orders", key: "id" }, onUpdate: "CASCADE", onDelete: "CASCADE" },
+      discountId: { type: Sequelize.UUID, allowNull: true, references: { model: "discounts", key: "id" }, onUpdate: "CASCADE", onDelete: "SET NULL" },
+      code: { type: Sequelize.STRING, allowNull: false },
+      type: { type: Sequelize.ENUM("percentage", "fixed_amount"), allowNull: false },
+      value: { type: Sequelize.DECIMAL(10, 2), allowNull: false },
+      amountDeducted: { type: Sequelize.DECIMAL(10, 2), allowNull: false },
+      // Snapshotted at order time for audit — matches discount.applicableTo at redemption.
+      applicableTo: { type: Sequelize.ENUM("all", "events", "products"), allowNull: false, defaultValue: "all" },
+      // Pre-computed VAT distribution array, consumed by stripe.gateway to create
+      // correctly VAT-attributed negative InvoiceItems on the Stripe invoice.
+      // Shape: Array<{ vatRate: number|null, stripeTaxRateId: string|null, amount: number }>
+      vatDistribution: { type: Sequelize.JSON, allowNull: false },
+      ...ts,
+    });
+    await queryInterface.addIndex("order_discounts", ["orderId"]);
   },
 
   async down(queryInterface) {
     // Drop in reverse dependency order
+    await queryInterface.dropTable("order_discounts");
+    await queryInterface.dropTable("discounts");
     await queryInterface.dropTable("processed_stripe_events");
     await queryInterface.dropTable("store_settings");
     await queryInterface.dropTable("payment_methods");

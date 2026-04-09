@@ -28,6 +28,9 @@ block content
               span.checkout-summary-qty-prefix  × 
               span.checkout-summary-qty= qty
             span.checkout-summary-subtotal= (lineSubtotal).toFixed(2) + " " + currency
+      div#discountLineRow(style="display:none; margin-top:0.35rem; padding-top:0.35rem; justify-content:space-between; color:#16a34a; font-size:0.9rem")
+        span#discountLineLabel Discount
+        span#discountLineAmount
       div(style="margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid #e0e0e0; display:flex; justify-content:space-between; font-weight:600")
         span Total to pay
         span#checkoutTotalDisplay= (checkoutTotal != null ? Number(checkoutTotal).toFixed(2) : '0.00') + " " + (checkoutCurrency || DEFAULT_CURRENCY)
@@ -45,6 +48,13 @@ block content
 
     form#checkoutForm(action="/checkout" method="post" data-stripe-key=(stripePublishableKey || '') data-user-logged-in=(user ? '1' : '') data-requires-address=(requiresAddress ? '1' : '0') data-person-type=(user && user.personType === 'legal' ? 'legal' : 'private') data-checkout-currency=(checkoutCurrency || DEFAULT_CURRENCY) data-checkout-vat-enabled=(checkoutVatEnabled ? '1' : '0'))
       input#attendeesPayload(type="hidden" name="attendees" value="")
+      input#discountCodeHidden(type="hidden" name="discountCode" value="")
+      div(style="margin-bottom:1.25rem")
+        label(for="discountCodeInput" style="font-weight:600; display:block; margin-bottom:0.4rem") Discount code
+        div(style="display:flex; gap:0.5rem")
+          input#discountCodeInput(type="text" placeholder="Enter code" style="flex:1; text-transform:uppercase" autocomplete="off" maxlength="50")
+          button#applyDiscountBtn(type="button" style="white-space:nowrap") Apply
+        p#discountMsg(style="margin:0.35rem 0 0; font-size:0.88rem; min-height:1.2em")
       if user
         p(style="margin-bottom:1rem; padding:0.75rem; background:#e8f4fd; border-radius:6px; font-size:0.95rem")
           | You can

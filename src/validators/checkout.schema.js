@@ -18,6 +18,7 @@ const CheckoutSchema = z.object({
   billingPostcode: z.string().max(20).optional().nullable(),
   billingCountry: z.string().max(100).optional().nullable(),
   attendees: z.string().optional().nullable(),
+  discountCode: z.string().trim().max(50).optional().nullable(),
 });
 
 function validateCheckout(body) {
@@ -46,7 +47,8 @@ function validateCheckout(body) {
       return { ok: false, errors: [{ message: "Invalid attendees payload." }] };
     }
   }
-  return { ok: true, data: { ...data, attendees } };
+  const discountCode = data.discountCode && String(data.discountCode).trim() ? String(data.discountCode).trim() : null;
+  return { ok: true, data: { ...data, attendees, discountCode } };
 }
 
 module.exports = { validateCheckout };

@@ -34,6 +34,8 @@ const AdminZoomAccount = require("./AdminZoomAccount");
 const EventMeeting = require("./EventMeeting");
 const ProcessedStripeEvent = require("./ProcessedStripeEvent");
 const StoreSetting = require("./StoreSetting");
+const Discount = require("./Discount");
+const OrderDiscount = require("./OrderDiscount");
 
 // --- Menu <-> MenuItem ---
 Menu.hasMany(MenuItem, { foreignKey: "menuId" });
@@ -179,6 +181,12 @@ AdminZoomAccount.belongsTo(User, { foreignKey: "userId" });
 AdminZoomAccount.hasMany(EventMeeting, { foreignKey: "zoomHostAccountId" });
 EventMeeting.belongsTo(AdminZoomAccount, { foreignKey: "zoomHostAccountId" });
 
+// --- Discount & OrderDiscount (applied discount snapshot per order) ---
+Order.hasOne(OrderDiscount, { foreignKey: "orderId", as: "OrderDiscount" });
+OrderDiscount.belongsTo(Order, { foreignKey: "orderId" });
+Discount.hasMany(OrderDiscount, { foreignKey: "discountId", as: "OrderDiscounts" });
+OrderDiscount.belongsTo(Discount, { foreignKey: "discountId", as: "Discount" });
+
 module.exports = {
   User,
   Menu,
@@ -215,4 +223,6 @@ module.exports = {
   EventMeeting,
   ProcessedStripeEvent,
   StoreSetting,
+  Discount,
+  OrderDiscount,
 };

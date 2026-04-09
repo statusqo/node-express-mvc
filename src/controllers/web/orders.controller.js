@@ -1,5 +1,6 @@
 const orderService = require("../../services/order.service");
 const refundRequestService = require("../../services/refundRequest.service");
+const orderDiscountRepo = require("../../repos/orderDiscount.repo");
 
 function getUserIdAndSession(req) {
   const userId = req.user ? req.user.id : null;
@@ -22,9 +23,15 @@ module.exports = {
     const orderId = req.params.id;
     const { order, lines } = await orderService.getOrderWithLines(orderId, userId, sessionId);
 
-    const refundRequests = await refundRequestService.findByOrder(order.id);
+    const [refundRequests, orderDiscountRaw] = await Promise.all([
+      refundRequestService.findByOrder(order.id),
+      orderDiscountRepo.findByOrder(order.id),
+    ]);
     const hasPendingRefundRequest = refundRequests.some((r) => r.status === "pending");
     const hasApprovedRefundRequest = refundRequests.some((r) => r.status === "approved");
+    const orderDiscount = orderDiscountRaw
+      ? (orderDiscountRaw.get ? orderDiscountRaw.get({ plain: true }) : orderDiscountRaw)
+      : null;
 
     res.render("web/orders/show", {
       title: "Order",
@@ -33,6 +40,7 @@ module.exports = {
       refundRequests,
       hasPendingRefundRequest,
       hasApprovedRefundRequest,
+      orderDiscount,
       stripePublishableKey: require("../../config").stripe?.publishableKey || "",
     });
   },

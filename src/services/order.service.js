@@ -18,6 +18,8 @@ const { REFUND_REQUEST_STATUS } = require("../constants/refundRequest");
 const { getMeetingProvider } = require("../gateways/meeting.interface");
 const emailService = require("./email.service");
 const storeSettingService = require("./storeSetting.service");
+const discountService = require("./discount.service");
+const orderDiscountRepo = require("../repos/orderDiscount.repo");
 // stripeGateway is required lazily to avoid circular dependency with stripe.gateway
 
 const { DEFAULT_CURRENCY } = require("../config/constants");
@@ -620,7 +622,29 @@ async function createOrderFromCart(userId, sessionId, opts = {}) {
       }
     }
 
-    await order.update({ total }, { transaction: t });
+    // Apply discount if a code was provided — runs inside the same transaction.
+    let finalTotal = total;
+    if (opts.discountCode) {
+      const orderLineSnapshots = await orderRepo.getLines(order.id, { transaction: t });
+      const lineObjects = orderLineSnapshots.map((l) => ({
+        price: Number(l.price) || 0,
+        quantity: Number(l.quantity) || 1,
+        vatRate: l.vatRate != null ? Number(l.vatRate) : null,
+        stripeTaxRateId: l.stripeTaxRateId || null,
+        // Required by discount.service.getApplicableLines to filter by applicableTo.
+        eventId: l.eventId || null,
+      }));
+      const amountDeducted = await discountService.applyToOrder(
+        order.id,
+        opts.discountCode,
+        lineObjects,
+        checkoutVatEnabled,
+        { transaction: t },
+      );
+      finalTotal = Math.max(0, total - amountDeducted);
+    }
+
+    await order.update({ total: finalTotal }, { transaction: t });
     if (clearCart) {
       await cartRepo.clearLines(cart.id, { transaction: t });
     }
@@ -1629,6 +1653,11 @@ async function getAdminOrderEditPayload(orderId) {
   const orderLinesPlain = (lines || []).map((l) => (l.get ? l.get({ plain: true }) : l));
   const orderHasEventLines = orderLinesPlain.some((l) => l.eventId != null && String(l.eventId).trim() !== "");
 
+  const orderDiscountRow = await orderDiscountRepo.findByOrder(orderId);
+  const orderDiscount = orderDiscountRow
+    ? (orderDiscountRow.get ? orderDiscountRow.get({ plain: true }) : orderDiscountRow)
+    : null;
+
   return {
     order: orderPlain,
     orderLines: orderLinesPlain,
@@ -1641,6 +1670,7 @@ async function getAdminOrderEditPayload(orderId) {
     hasActiveRegistrations,
     activeRegistrationCount,
     orderHasEventLines,
+    orderDiscount,
   };
 }
 

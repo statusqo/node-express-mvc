@@ -75,6 +75,85 @@
 
     var personType = form.getAttribute("data-person-type") || "private";
 
+    // --- Discount code ---
+    var discountCodeInput = document.getElementById("discountCodeInput");
+    var discountCodeHidden = document.getElementById("discountCodeHidden");
+    var applyDiscountBtn = document.getElementById("applyDiscountBtn");
+    var discountMsg = document.getElementById("discountMsg");
+    var discountLineRow = document.getElementById("discountLineRow");
+    var discountLineLabel = document.getElementById("discountLineLabel");
+    var discountLineAmount = document.getElementById("discountLineAmount");
+
+    var appliedDiscount = null; // { code, amountDeducted } | null
+
+    function clearDiscount() {
+      appliedDiscount = null;
+      if (discountCodeHidden) discountCodeHidden.value = "";
+      if (discountLineRow) discountLineRow.style.display = "none";
+      if (discountLineLabel) discountLineLabel.textContent = "Discount";
+      if (discountLineAmount) discountLineAmount.textContent = "";
+    }
+
+    function applyDiscountToSummary(discount, currency) {
+      appliedDiscount = discount; // { code, type, value, amountDeducted }
+      if (discountCodeHidden) discountCodeHidden.value = discount.code;
+      if (discountLineRow) discountLineRow.style.display = "flex";
+      if (discountLineLabel) discountLineLabel.textContent = "Discount (" + discount.code + ")";
+      if (discountLineAmount) discountLineAmount.textContent = "−" + discount.amountDeducted.toFixed(2) + " " + currency;
+    }
+
+    if (discountCodeInput) {
+      discountCodeInput.addEventListener("input", function () {
+        if (appliedDiscount && discountCodeInput.value.trim().toUpperCase() !== appliedDiscount.code) {
+          clearDiscount();
+          if (discountMsg) { discountMsg.style.color = ""; discountMsg.textContent = ""; }
+          refreshCheckoutSummary();
+        }
+      });
+    }
+
+    if (applyDiscountBtn) {
+      applyDiscountBtn.addEventListener("click", function () {
+        var code = discountCodeInput ? discountCodeInput.value.trim() : "";
+        if (!code) {
+          if (discountMsg) { discountMsg.style.color = "#c00"; discountMsg.textContent = "Please enter a discount code."; }
+          return;
+        }
+        applyDiscountBtn.disabled = true;
+        applyDiscountBtn.textContent = "Checking…";
+        if (discountMsg) { discountMsg.style.color = ""; discountMsg.textContent = ""; }
+
+        var currentTotal = computeCartTotal();
+        fetch("/api/discounts/apply", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: "code=" + encodeURIComponent(code) + (currentTotal > 0 ? "&cartTotal=" + currentTotal.toFixed(2) : ""),
+          credentials: "same-origin",
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            var currency = form.getAttribute("data-checkout-currency") || "";
+            if (data.ok) {
+              applyDiscountToSummary({ code: data.code, type: data.type, value: data.value, amountDeducted: data.amountDeducted }, currency);
+              if (discountMsg) { discountMsg.style.color = "#16a34a"; discountMsg.textContent = "Discount applied!"; }
+              refreshCheckoutSummary();
+            } else {
+              clearDiscount();
+              if (discountMsg) { discountMsg.style.color = "#c00"; discountMsg.textContent = data.error || "Invalid discount code."; }
+              refreshCheckoutSummary();
+            }
+          })
+          .catch(function () {
+            if (discountMsg) { discountMsg.style.color = "#c00"; discountMsg.textContent = "Could not apply discount. Please try again."; }
+          })
+          .finally(function () {
+            applyDiscountBtn.disabled = false;
+            applyDiscountBtn.textContent = "Apply";
+          });
+      });
+    }
+    // --- End discount code ---
+
     function getEffectiveQtyForSummaryLine(lineEl) {
       var initialQty = parseInt(lineEl.getAttribute("data-initial-qty") || "1", 10) || 1;
       var isEvent = lineEl.getAttribute("data-is-event") === "1";
@@ -88,6 +167,20 @@
         }
       }
       return initialQty;
+    }
+
+    // Returns the pre-discount grand total using effective quantities (attendee-aware).
+    function computeCartTotal() {
+      var list = document.getElementById("checkoutSummaryList");
+      if (!list) return 0;
+      var lineEls = list.querySelectorAll(".checkout-summary-line");
+      var total = 0;
+      for (var i = 0; i < lineEls.length; i++) {
+        var price = parseFloat(lineEls[i].getAttribute("data-unit-price") || "0") || 0;
+        var qty = getEffectiveQtyForSummaryLine(lineEls[i]);
+        total += price * qty;
+      }
+      return total;
     }
 
     function refreshCheckoutSummary() {
@@ -114,7 +207,21 @@
         if (qtySpan) qtySpan.textContent = String(qty);
         if (subSpan) subSpan.textContent = sub.toFixed(2) + " " + currency;
       }
-      totalEl.textContent = grandTotal.toFixed(2) + " " + currency;
+      var displayTotal = grandTotal;
+      if (appliedDiscount) {
+        // Re-compute the deduction from the current grand total so a percentage
+        // discount scales correctly when attendee rows are added/removed.
+        var effectiveDeduction = appliedDiscount.amountDeducted;
+        if (appliedDiscount.type === "percentage") {
+          effectiveDeduction = Math.round(grandTotal * (appliedDiscount.value / 100) * 100) / 100;
+          effectiveDeduction = Math.min(effectiveDeduction, grandTotal);
+          if (discountLineAmount && currency) {
+            discountLineAmount.textContent = "−" + effectiveDeduction.toFixed(2) + " " + currency;
+          }
+        }
+        displayTotal = Math.max(0, grandTotal - effectiveDeduction);
+      }
+      totalEl.textContent = displayTotal.toFixed(2) + " " + currency;
       var vatWrap = document.getElementById("checkoutVatWrap");
       if (!vatWrap) return;
       if (!vatEnabled) {
@@ -304,7 +411,7 @@
 
         function buildFormBody() {
           var bodyParams = new URLSearchParams();
-          var fields = ["forename","surname","email","mobile","deliveryLine1","deliveryLine2","deliveryCity","deliveryState","deliveryPostcode","deliveryCountry","billingLine1","billingLine2","billingCity","billingState","billingPostcode","billingCountry","sameAsDelivery","saveCard","paymentMethodId","attendees"];
+          var fields = ["forename","surname","email","mobile","deliveryLine1","deliveryLine2","deliveryCity","deliveryState","deliveryPostcode","deliveryCountry","billingLine1","billingLine2","billingCity","billingState","billingPostcode","billingCountry","sameAsDelivery","saveCard","paymentMethodId","attendees","discountCode"];
           for (var i = 0; i < fields.length; i++) {
             var el = form.querySelector('[name="' + fields[i] + '"]');
             if (el && el.name && (el.value !== undefined)) bodyParams.append(el.name, el.value || "");

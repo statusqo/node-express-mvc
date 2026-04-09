@@ -1,0 +1,122 @@
+extends ../../layouts/admin
+
+block append links
+    link(rel='preconnect' href='https://fonts.googleapis.com')
+    link(rel='preconnect' href='https://fonts.gstatic.com' crossorigin)
+
+block content
+    - var fmtDate = function(d){ return d ? new Date(d).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'; }
+    - var fmtTime = function(d){ return d ? new Date(d).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}) : ''; }
+    - var scopeLabel = function(s){ return ({full_order:'Full order', line_quantity:'Line quantity', event_attendee:'Event attendee'})[s] || (s || '—'); }
+
+    .da-page
+
+        //- ── Page header ─────────────────────────────────────────────
+        - var subtitle = (refundTransactions ? refundTransactions.length : 0) + ' result' + ((refundTransactions && refundTransactions.length !== 1) ? 's' : '')
+        +pageHeader('Refund Transactions', subtitle)
+
+        //- ── Filter bar ──────────────────────────────────────────────
+        form.da-filter-bar(method='get' action=(adminPrefix || '') + '/refund-transactions')
+            .da-filter-head
+                span.da-filter-head-label Filters
+                a.da-filter-clear(href=(adminPrefix || '') + '/refund-transactions') Clear all
+
+            .da-filter-group
+                label.da-filter-group-label(for='filter-status') Status
+                select#filter-status.da-form-select(name='status')
+                    option(value='' selected=(!filters.status)) All statuses
+                    each s in validStatuses
+                        option(value=s selected=(filters.status === s))= s.charAt(0).toUpperCase() + s.slice(1)
+
+            .da-filter-actions
+                button.da-btn.da-btn--primary(type='submit')
+                    svg(xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                        polygon(points='22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3')
+                    | Apply
+
+        //- ── Table ───────────────────────────────────────────────────
+        .da-panel
+            .da-table-scroll
+                table.da-table(role='table' aria-label='Refund transactions')
+                    thead
+                        tr
+                            th(scope='col') Status
+                            th(scope='col') Order
+                            th(scope='col') Amount
+                            th(scope='col') Scope
+                            th(scope='col') Stripe Refund ID
+                            th.da-col-reason(scope='col') Reason
+                            th.da-col-created(scope='col') Created
+                            th.da-col-created(scope='col') Processed
+                            th(scope='col' style='text-align:right') Actions
+                    tbody
+                        if refundTransactions && refundTransactions.length
+                            each rt in refundTransactions
+                                - var statusClass = ({pending:'warning', succeeded:'success', failed:'danger', cancelled:'neutral'})[rt.status] || 'neutral'
+                                tr
+                                    //- Status
+                                    td
+                                        span.da-badge(class='da-badge--' + statusClass)= rt.status ? rt.status.charAt(0).toUpperCase() + rt.status.slice(1) : '—'
+
+                                    //- Order link
+                                    td
+                                        if rt.Order
+                                            .da-order-cell
+                                                a.da-order-link(
+                                                    href=(adminPrefix || '') + '/orders/' + rt.Order.id + '/edit'
+                                                    aria-label='View order ' + (rt.Order.orderNumber ? '#' + rt.Order.orderNumber : rt.Order.id.slice(0,8))
+                                                )
+                                                    span.da-cell-mono= rt.Order.orderNumber ? '#' + rt.Order.orderNumber : '—'
+                                                if rt.Order.email
+                                                    span.da-order-email= rt.Order.email
+                                        else
+                                            span.da-cell-muted —
+
+                                    //- Amount
+                                    td
+                                        span(style='font-variant-numeric:tabular-nums;font-weight:600;color:var(--ds-text-1)')
+                                            = rt.amount != null ? Number(rt.amount).toFixed(2) + ' ' + (rt.currency || (rt.Order && rt.Order.currency) || 'EUR') : '—'
+
+                                    //- Scope
+                                    td= scopeLabel(rt.scopeType)
+
+                                    //- Stripe Refund ID
+                                    td
+                                        if rt.stripeRefundId
+                                            span.da-cell-mono= rt.stripeRefundId
+                                        else
+                                            span.da-cell-muted —
+
+                                    //- Reason
+                                    td.da-col-reason
+                                        if rt.reason
+                                            span.da-reason-text(title=rt.reason)= rt.reason.length > 40 ? rt.reason.slice(0, 40) + '…' : rt.reason
+                                        else
+                                            span.da-cell-muted —
+
+                                    //- Created
+                                    td.da-col-created
+                                        .da-date-cell
+                                            span.da-cell-muted= fmtDate(rt.createdAt)
+                                            if rt.createdAt
+                                                span.da-date-time= fmtTime(rt.createdAt)
+
+                                    //- Processed
+                                    td.da-col-created
+                                        if rt.processedAt
+                                            .da-date-cell
+                                                span.da-cell-muted= fmtDate(rt.processedAt)
+                                                span.da-date-time= fmtTime(rt.processedAt)
+                                        else
+                                            span.da-cell-muted —
+
+                                    //- Actions
+                                    td
+                                        .da-cell-actions
+                                            if rt.Order
+                                                a.da-row-btn.da-row-btn--edit(
+                                                    href=(adminPrefix || '') + '/orders/' + rt.Order.id + '/edit'
+                                                    aria-label='View order for this refund transaction'
+                                                ) View Order
+                        else
+                            +tableEmpty(filters && filters.status ? 'No ' + filters.status + ' refund transactions.' : 'No refund transactions found.', 9)

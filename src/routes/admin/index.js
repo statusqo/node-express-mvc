@@ -15,12 +15,14 @@ const menusController = require("../../controllers/admin/menus.controller");
 const menuItemsController = require("../../controllers/admin/menuItems.controller");
 const ordersController = require("../../controllers/admin/orders.controller");
 const refundRequestsController = require("../../controllers/admin/refundRequests.controller");
+const refundTransactionsController = require("../../controllers/admin/refundTransactions.controller");
 const webinarsRoutes = require("./webinars.routes");
 const seminarsRoutes = require("./seminars.routes");
 const classroomsRoutes = require("./classrooms.routes");
 const eventsRoutes = require("./events.routes");
 const zoomController = require("../../controllers/admin/zoom.controller");
 const settingsController = require("../../controllers/admin/settings.controller");
+const discountsController = require("../../controllers/admin/discounts.controller");
 const { requireAuth } = require("../../middlewares/auth.middleware");
 const { uploadMedia } = require("../../middlewares/uploadMedia.middleware");
 
@@ -87,6 +89,7 @@ router.get("/zoom/callback", asyncHandler(zoomController.callback));
 // Orders (admin list with filters)
 router.get("/orders", asyncHandler(ordersController.index));
 router.get("/refund-requests", asyncHandler(refundRequestsController.index));
+router.get("/refund-transactions", asyncHandler(refundTransactionsController.index));
 router.get("/orders/:id/edit", asyncHandler(ordersController.editForm));
 router.post("/orders/:id/edit", asyncHandler(ordersController.update));
 router.post("/orders/:id/cancel-and-refund", asyncHandler(ordersController.cancelAndRefundOrder));
@@ -201,5 +204,13 @@ router.post("/menu-items/new", asyncHandler(menuItemsController.create));
 router.get("/menu-items/:id/edit", asyncHandler(menuItemsController.editForm));
 router.post("/menu-items/:id/edit", asyncHandler(menuItemsController.update));
 router.post("/menu-items/:id/delete", asyncHandler(menuItemsController.delete));
+
+// Discounts CRUD
+router.get("/discounts", asyncHandler(discountsController.index));
+router.get("/discounts/new", asyncHandler(discountsController.newForm));
+router.post("/discounts/new", asyncHandler(discountsController.create));
+router.get("/discounts/:id/edit", asyncHandler(discountsController.editForm));
+router.post("/discounts/:id/edit", asyncHandler(discountsController.update));
+router.post("/discounts/:id/delete", asyncHandler(discountsController.delete));
 
 module.exports = router;

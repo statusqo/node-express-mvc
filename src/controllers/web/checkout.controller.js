@@ -136,6 +136,7 @@ module.exports = {
       companyName: req.user?.companyName || null,
       companyOib: req.user?.companyOib || null,
       attendees: parsed.data.attendees || [],
+      discountCode: parsed.data.discountCode || null,
       clearCart: false,
     };
 
