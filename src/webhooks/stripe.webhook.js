@@ -1,5 +1,5 @@
-const { getGateway } = require("../../gateways");
-const logger = require("../../config/logger");
+const { getGateway } = require("../gateways");
+const logger = require("../config/logger");
 
 module.exports = {
   async webhook(req, res) {

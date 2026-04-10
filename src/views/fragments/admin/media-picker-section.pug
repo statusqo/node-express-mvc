@@ -1,5 +1,5 @@
 //- Media picker component (COMPONENT_STANDARD)
-//- Usage: include this file, then +mediaPickerSection({ inputName, attachedMedia, uploadsBaseUrl, apiUrl, label?, hint? })
+//- Usage: include this file, then +mediaPickerSection({ inputName, attachedMedia, uploadsBaseUrl, apiUrl, featuredMediaId?, featuredInputName?, label?, hint? })
 //- Requires +adminDialogShell from fragments/admin/admin-dialog-shell (via layouts/admin components include).
 mixin mediaPickerSection(options)
   - const inputName = options.inputName || 'mediaIds[]'
@@ -8,11 +8,14 @@ mixin mediaPickerSection(options)
   - const apiUrl = options.apiUrl || ''
   - const label = options.label != null ? options.label : 'Media'
   - const hint = options.hint
+  - const featuredMediaId = options.featuredMediaId || null
+  - const featuredInputName = options.featuredInputName || 'featuredMediaId'
   div.admin-media-picker-section(
     data-media-picker
     data-input-name=inputName
     data-api-url=apiUrl
     data-uploads-base-url=uploadsBaseUrl
+    data-featured-input-name=featuredInputName
   )
     div.admin-form-group
       label= label
@@ -21,11 +24,21 @@ mixin mediaPickerSection(options)
     div.admin-media-picker-attached
       each item in attachedMedia
         - const imgPath = uploadsBaseUrl + '/' + (item.path || '').replace(/\\/g, '/')
+        - const isFeatured = featuredMediaId && featuredMediaId === item.id
         div.admin-media-picker-attached-item(data-media-id=item.id)
-          if item.mimeType && item.mimeType.startsWith("image/")
-            img.admin-media-picker-thumb(src=imgPath alt=item.alt || item.filename || "" width="80" height="60")
-          else
-            span.admin-media-picker-placeholder File
+          div.admin-media-picker-thumb-wrap
+            if item.mimeType && item.mimeType.startsWith("image/")
+              img.admin-media-picker-thumb(src=imgPath alt=item.alt || item.filename || "" width="80" height="60")
+            else
+              span.admin-media-picker-placeholder File
+            label.admin-media-picker-featured-btn(title="Set as featured image")
+              input.admin-media-picker-featured-radio(
+                type="radio"
+                name=featuredInputName
+                value=item.id
+                checked=isFeatured
+              )
+              span.admin-media-picker-featured-icon(aria-hidden="true") ★
           span.admin-media-picker-filename(title=item.filename || item.path)= item.filename || item.path || item.id
           button.admin-media-picker-remove(type="button" data-action="remove-attached" aria-label="Remove") Remove
         input(type="hidden" name=inputName value=item.id)

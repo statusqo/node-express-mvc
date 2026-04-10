@@ -55,6 +55,12 @@ const Product = sequelize.define("Product", {
     type: DataTypes.ENUM(...UNIT_OF_MEASURE_LIST),
     allowNull: false,
   },
+  // FK to media. The single image shown in catalogues, carts, and listings.
+  // Full gallery is loaded via the product_media join table.
+  featuredMediaId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+  },
 }, {
   timestamps: true,
   tableName: "products",

@@ -1752,6 +1752,63 @@ tr.da-row--entering {
 .da-page .admin-media-picker-attached-item:hover {
     border-color: var(--ds-border-accent);
 }
+/* Highlight the item card when its featured radio is checked */
+.da-page .admin-media-picker-attached-item:has(.admin-media-picker-featured-radio:checked) {
+    border-color: #F59E0B;
+    background: color-mix(in srgb, #F59E0B 8%, var(--ds-surface-3));
+}
+
+/* Thumb wrap — needed for the featured star overlay */
+.da-page .admin-media-picker-thumb-wrap {
+    position: relative;
+    width: 80px;
+    height: 60px;
+    flex-shrink: 0;
+}
+
+/* Featured star button — overlaid top-right of thumbnail */
+.da-page .admin-media-picker-featured-btn {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.5);
+    transition: background 140ms var(--ds-ease);
+    line-height: 1;
+}
+.da-page .admin-media-picker-featured-btn:hover {
+    background: rgba(0, 0, 0, 0.72);
+}
+
+/* Hide the actual radio input — star label is the visual control */
+.da-page .admin-media-picker-featured-radio {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    width: 0;
+    height: 0;
+    margin: 0;
+}
+
+.da-page .admin-media-picker-featured-icon {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.4);
+    transition: color 140ms var(--ds-ease), transform 160ms var(--ds-ease);
+    line-height: 1;
+    display: block;
+    user-select: none;
+}
+/* Gold star when radio is checked */
+.da-page .admin-media-picker-featured-btn:has(.admin-media-picker-featured-radio:checked) .admin-media-picker-featured-icon {
+    color: #F59E0B;
+    transform: scale(1.2);
+}
 
 .da-page .admin-media-picker-thumb {
     width: 80px;

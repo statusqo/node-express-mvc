@@ -137,6 +137,7 @@ module.exports = {
       slug: { type: Sequelize.STRING, allowNull: false, unique: true },
       description: { type: Sequelize.TEXT, allowNull: true },
       active: { type: Sequelize.BOOLEAN, defaultValue: true },
+      featuredMediaId: { type: Sequelize.UUID, allowNull: true, references: { model: "media", key: "id" }, onUpdate: "CASCADE", onDelete: "SET NULL" },
       ...ts,
     });
 
@@ -165,6 +166,7 @@ module.exports = {
       weight: { type: Sequelize.DECIMAL(10, 3), allowNull: true },
       weightUnit: { type: Sequelize.ENUM("g", "kg"), allowNull: true },
       unitOfMeasure: { type: Sequelize.ENUM("kom", "h", "mj", "usl", "god"), allowNull: false },
+      featuredMediaId: { type: Sequelize.UUID, allowNull: true, references: { model: "media", key: "id" }, onUpdate: "CASCADE", onDelete: "SET NULL" },
       ...ts,
     });
 

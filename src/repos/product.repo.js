@@ -91,6 +91,17 @@ function normalizeMediaIds(mediaIds) {
   return arr.filter((id) => id && String(id).trim());
 }
 
+/**
+ * Validate featuredMediaId is present in the given mediaIds list.
+ * Returns the id if valid, null otherwise.
+ */
+function normalizeFeaturedMediaId(featuredMediaId, mediaIds) {
+  if (!featuredMediaId || typeof featuredMediaId !== "string") return null;
+  const id = featuredMediaId.trim();
+  if (!id) return null;
+  return normalizeMediaIds(mediaIds).includes(id) ? id : null;
+}
+
 async function syncProductMedia(productId, mediaIds, options = {}) {
   const ids = normalizeMediaIds(mediaIds);
   const t = options.transaction;
@@ -349,7 +360,8 @@ module.exports = {
    * Accepts metaObjectIds and metaObjectValues for per-product meta object instance values.
    */
   async create(data, options = {}) {
-    const { title, slug, description, productTypeId, productCategoryId, taxRateId, active = true, priceAmount, /* currency is ignored */ quantity, metaObjectIds, metaObjectValues, mediaIds, isPhysical, weight, weightUnit, unitOfMeasure } = data;
+    const { title, slug, description, productTypeId, productCategoryId, taxRateId, active = true, priceAmount, /* currency is ignored */ quantity, metaObjectIds, metaObjectValues, mediaIds, featuredMediaId: rawFeaturedMediaId, isPhysical, weight, weightUnit, unitOfMeasure } = data;
+    const featuredMediaId = normalizeFeaturedMediaId(rawFeaturedMediaId, mediaIds);
     const t = options.transaction || (await sequelize.transaction());
     const ownTransaction = !options.transaction;
     try {
@@ -369,6 +381,7 @@ module.exports = {
           weight: weightVal,
           weightUnit: unitVal,
           unitOfMeasure: unitOfMeasure || null,
+          featuredMediaId: featuredMediaId || null,
         },
         { transaction: t }
       );
@@ -413,7 +426,7 @@ module.exports = {
   async update(id, data, options = {}) {
     const product = await Product.findByPk(id, options);
     if (!product) return null;
-    const { title, slug, description, productTypeId, productCategoryId, taxRateId, active, priceAmount, currency, quantity, metaObjectIds, metaObjectValues, mediaIds, isPhysical, weight, weightUnit, unitOfMeasure } = data;
+    const { title, slug, description, productTypeId, productCategoryId, taxRateId, active, priceAmount, currency, quantity, metaObjectIds, metaObjectValues, mediaIds, featuredMediaId: rawFeaturedMediaId, isPhysical, weight, weightUnit, unitOfMeasure } = data;
     const payload = {};
     if (title !== undefined) payload.title = String(title).trim();
     if (slug !== undefined) payload.slug = String(slug).trim();
@@ -440,6 +453,15 @@ module.exports = {
     }
     if (unitOfMeasure !== undefined) {
       payload.unitOfMeasure = unitOfMeasure || null;
+    }
+    // featuredMediaId: validate against submitted media list (or existing if media not being changed).
+    if (rawFeaturedMediaId !== undefined) {
+      if (data.mediaIds !== undefined) {
+        payload.featuredMediaId = normalizeFeaturedMediaId(rawFeaturedMediaId, data.mediaIds);
+      } else {
+        const existingMedia = await ProductMedia.findAll({ where: { productId: id }, ...options });
+        payload.featuredMediaId = normalizeFeaturedMediaId(rawFeaturedMediaId, existingMedia.map((r) => r.mediaId));
+      }
     }
     await product.update(payload, options);
     if (priceAmount !== undefined || currency !== undefined) {

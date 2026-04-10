@@ -67,31 +67,8 @@ app.use(compression());
 // Only accept requests whose Host is in the allowed list (protects redirect/CSRF use of Host)
 app.use(allowHost);
 
-// Stripe webhook route - must be before body parsing to receive raw body for signature verification
-const stripeWebhookController = require("./controllers/web/stripe.controller");
-const zoomWebhookController = require("./controllers/api/zoomWebhook.controller");
-app.post(
-  "/api/stripe/webhook",
-  express.raw({ type: "application/json" }),
-  async (req, res, next) => {
-    try {
-      await stripeWebhookController.webhook(req, res);
-    } catch (err) {
-      next(err);
-    }
-  }
-);
-app.post(
-  "/api/zoom/webhook",
-  express.raw({ type: "application/json" }),
-  async (req, res, next) => {
-    try {
-      await zoomWebhookController.webhook(req, res);
-    } catch (err) {
-      next(err);
-    }
-  }
-);
+// Webhook routes — mounted before body parsing so raw body is available for signature verification
+app.use("/api/webhooks", require("./webhooks"));
 
 // body parsing
 app.use(express.urlencoded({ extended: true }));
@@ -154,7 +131,7 @@ app.use(globalLimiter);
 // csrf protection for state-changing requests
 // Skip CSRF for Stripe and Zoom webhooks (they use signature verification / token validation)
 app.use((req, res, next) => {
-  if (req.path.startsWith("/api/stripe/webhook") || req.path.startsWith("/api/zoom/webhook")) {
+  if (req.path.startsWith("/api/webhooks")) {
     return next();
   }
   return csrfProtection(req, res, next);

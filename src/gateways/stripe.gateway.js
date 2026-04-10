@@ -568,6 +568,8 @@ async function createInvoiceForOrder(orderId, userId, sessionId, options = {}) {
       const line = lines[i];
       const itemMeta = {};
       if (line.sku) itemMeta.sku = String(line.sku);
+      if (line.kpd) itemMeta.kpd = String(line.kpd);
+      if (line.unit) itemMeta.unit = String(line.unit);
 
       const itemParams = {
         customer: customer.id,

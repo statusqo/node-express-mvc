@@ -84,7 +84,7 @@
     var discountLineLabel = document.getElementById("discountLineLabel");
     var discountLineAmount = document.getElementById("discountLineAmount");
 
-    var appliedDiscount = null; // { code, amountDeducted } | null
+    var appliedDiscount = null; // { code, type, value, applicableTo, amountDeducted } | null
 
     function clearDiscount() {
       appliedDiscount = null;
@@ -134,7 +134,7 @@
           .then(function (data) {
             var currency = form.getAttribute("data-checkout-currency") || "";
             if (data.ok) {
-              applyDiscountToSummary({ code: data.code, type: data.type, value: data.value, amountDeducted: data.amountDeducted }, currency);
+              applyDiscountToSummary({ code: data.code, type: data.type, value: data.value, applicableTo: data.applicableTo || "all", amountDeducted: data.amountDeducted }, currency);
               if (discountMsg) { discountMsg.style.color = "#16a34a"; discountMsg.textContent = "Discount applied!"; }
               refreshCheckoutSummary();
             } else {
@@ -209,11 +209,22 @@
       }
       var displayTotal = grandTotal;
       if (appliedDiscount) {
-        // Re-compute the deduction from the current grand total so a percentage
-        // discount scales correctly when attendee rows are added/removed.
+        // Re-compute the deduction from the current applicable total so a percentage
+        // discount scales correctly when attendee rows are added/removed, and
+        // respects the discount's applicableTo scope (all / events / products).
         var effectiveDeduction = appliedDiscount.amountDeducted;
         if (appliedDiscount.type === "percentage") {
-          effectiveDeduction = Math.round(grandTotal * (appliedDiscount.value / 100) * 100) / 100;
+          var scope = appliedDiscount.applicableTo || "all";
+          var applicableTotal = 0;
+          for (var j = 0; j < lineEls.length; j++) {
+            var isEventLine = lineEls[j].getAttribute("data-is-event") === "1";
+            if (scope === "events" && !isEventLine) continue;
+            if (scope === "products" && isEventLine) continue;
+            var lPrice = parseFloat(lineEls[j].getAttribute("data-unit-price") || "0") || 0;
+            var lQty = getEffectiveQtyForSummaryLine(lineEls[j]);
+            applicableTotal += lPrice * lQty;
+          }
+          effectiveDeduction = Math.round(applicableTotal * (appliedDiscount.value / 100) * 100) / 100;
           effectiveDeduction = Math.min(effectiveDeduction, grandTotal);
           if (discountLineAmount && currency) {
             discountLineAmount.textContent = "−" + effectiveDeduction.toFixed(2) + " " + currency;

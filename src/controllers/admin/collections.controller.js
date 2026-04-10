@@ -28,6 +28,12 @@ function normalizeMediaIds(mediaIds) {
   return arr.filter((id) => id && String(id).trim());
 }
 
+function normalizeFeaturedMediaId(value) {
+  if (!value || typeof value !== "string") return null;
+  const id = value.trim();
+  return id || null;
+}
+
 module.exports = {
   async index(req, res) {
     const collections = await collectionService.findAllForAdmin();
@@ -57,7 +63,7 @@ module.exports = {
         error: result.errors[0].message,
       });
     }
-    await collectionService.create({ ...result.data, mediaIds: req.body.mediaIds });
+    await collectionService.create({ ...result.data, mediaIds: req.body.mediaIds, featuredMediaId: normalizeFeaturedMediaId(req.body.featuredMediaId) });
     res.setFlash("success", "Collection created.");
     res.redirect((req.adminPrefix || "") + "/collections");
   },
@@ -77,6 +83,7 @@ module.exports = {
       title: "Edit Collection",
       collection: { ...plain, mediaIds },
       attachedMedia,
+      featuredMediaId: plain.featuredMediaId || null,
       uploadsBaseUrl: getUploadsBaseUrl(),
       isEdit: true,
     });
@@ -100,12 +107,13 @@ module.exports = {
         title: "Edit Collection",
         collection: { id, ...req.body, slug: slugVal, active: req.body.active === "on", mediaIds: mediaIdsOrder },
         attachedMedia,
+        featuredMediaId: normalizeFeaturedMediaId(req.body.featuredMediaId),
         uploadsBaseUrl: getUploadsBaseUrl(),
         isEdit: true,
         error: result.errors[0].message,
       });
     }
-    await collectionService.update(id, { ...result.data, mediaIds: req.body.mediaIds });
+    await collectionService.update(id, { ...result.data, mediaIds: req.body.mediaIds, featuredMediaId: normalizeFeaturedMediaId(req.body.featuredMediaId) });
     res.setFlash("success", "Collection updated.");
     res.redirect((req.adminPrefix || "") + "/collections");
   },

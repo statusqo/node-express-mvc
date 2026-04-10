@@ -2,6 +2,10 @@
  * Admin media picker component.
  * Finds all [data-media-picker] roots, reads config from data-* attributes,
  * and wires: open modal → fetch media → render grid → add selected / remove / cancel.
+ *
+ * Featured media: each attached item has a radio button (styled as a star).
+ * Selecting it marks that item as the featured image. The radio name matches
+ * data-featured-input-name so it submits directly with the form.
  */
 (function () {
   "use strict";
@@ -18,10 +22,32 @@
       .replace(/\]/g, "\\]");
   }
 
+  function buildFeaturedBtn(id, featuredInputName) {
+    var label = document.createElement("label");
+    label.className = "admin-media-picker-featured-btn";
+    label.title = "Set as featured image";
+
+    var radio = document.createElement("input");
+    radio.type = "radio";
+    radio.className = "admin-media-picker-featured-radio";
+    radio.name = featuredInputName;
+    radio.value = id;
+
+    var icon = document.createElement("span");
+    icon.className = "admin-media-picker-featured-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = "★";
+
+    label.appendChild(radio);
+    label.appendChild(icon);
+    return label;
+  }
+
   function initRoot(root) {
     var inputName = getAttr(root, "data-input-name");
     var apiUrl = getAttr(root, "data-api-url");
     var uploadsBaseUrl = getAttr(root, "data-uploads-base-url") || "";
+    var featuredInputName = getAttr(root, "data-featured-input-name") || "featuredMediaId";
     if (!inputName || !apiUrl) return;
 
     var attachedContainer = root.querySelector(".admin-media-picker-attached");
@@ -128,6 +154,11 @@
         var item = document.createElement("div");
         item.className = "admin-media-picker-attached-item";
         item.setAttribute("data-media-id", id);
+
+        // Thumb wrap with featured star overlay
+        var thumbWrap = document.createElement("div");
+        thumbWrap.className = "admin-media-picker-thumb-wrap";
+
         if ((mimeType || "").indexOf("image/") === 0) {
           var img = document.createElement("img");
           img.className = "admin-media-picker-thumb";
@@ -135,18 +166,23 @@
           img.alt = alt || filename;
           img.width = 80;
           img.height = 60;
-          item.appendChild(img);
+          thumbWrap.appendChild(img);
         } else {
           var place = document.createElement("span");
           place.className = "admin-media-picker-placeholder";
           place.textContent = "File";
-          item.appendChild(place);
+          thumbWrap.appendChild(place);
         }
+
+        thumbWrap.appendChild(buildFeaturedBtn(id, featuredInputName));
+        item.appendChild(thumbWrap);
+
         var nameSpan = document.createElement("span");
         nameSpan.className = "admin-media-picker-filename";
         nameSpan.textContent = filename || path || id;
         nameSpan.title = filename || path;
         item.appendChild(nameSpan);
+
         var removeBtn = document.createElement("button");
         removeBtn.type = "button";
         removeBtn.className = "admin-media-picker-remove";
@@ -173,6 +209,7 @@
     function removeAttached(itemEl) {
       var id = itemEl.getAttribute("data-media-id");
       if (!id) return;
+      // Remove hidden mediaIds input
       var inputs = root.querySelectorAll('input[name="' + escapeSelectorAttr(inputName) + '"]');
       for (var i = 0; i < inputs.length; i++) {
         if (inputs[i].value === id) {

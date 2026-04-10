@@ -24,6 +24,12 @@ const Collection = sequelize.define("Collection", {
     type: DataTypes.BOOLEAN,
     defaultValue: true,
   },
+  // FK to media. The single image shown in collection listings.
+  // Full gallery is loaded via the collection_media join table.
+  featuredMediaId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+  },
 }, {
   timestamps: true,
   tableName: "collections",

@@ -4,9 +4,9 @@
  * available for HMAC signature verification.
  */
 const crypto = require("crypto");
-const config = require("../../config");
-const logger = require("../../config/logger");
-const eventService = require("../../services/event.service");
+const config = require("../config");
+const logger = require("../config/logger");
+const eventService = require("../services/event.service");
 
 /**
  * Verify the Zoom webhook signature.
@@ -50,11 +50,11 @@ function verifyZoomSignature(req, secret) {
 }
 
 /**
- * POST /api/zoom/webhook
+ * POST /api/webhooks/zoom
  * Body: JSON (or validation payload with plainToken).
  */
 async function webhook(req, res) {
-  logger.info("Zoom webhook: POST /api/zoom/webhook hit");
+  logger.info("Zoom webhook: POST /api/webhooks/zoom hit");
 
   let body;
   const raw = req.body;
@@ -124,7 +124,6 @@ async function webhook(req, res) {
     try {
       const result = await eventService.handleZoomMeetingDeleted(meetingId);
       if (result.handled) {
-        // resyncOrphanedEvent will create a fresh EventMeeting when the admin re-syncs.
         logger.info("Event marked orphaned and stale meeting record removed (Zoom meeting deleted)", { eventId: result.eventId, meetingId });
       } else {
         logger.info(

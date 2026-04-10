@@ -27,6 +27,12 @@ function normalizeMediaIds(mediaIds) {
   return arr.filter((id) => id && String(id).trim());
 }
 
+function normalizeFeaturedMediaId(value) {
+  if (!value || typeof value !== "string") return null;
+  const id = value.trim();
+  return id || null;
+}
+
 function toPlain(obj) {
   return obj && typeof obj.get === "function" ? obj.get({ plain: true }) : obj;
 }
@@ -127,6 +133,7 @@ module.exports = {
         attachedMedia: [],
         uploadsBaseUrl: getUploadsBaseUrl(),
         manageableVariants: [],
+        featuredMediaId: normalizeFeaturedMediaId(req.body.featuredMediaId),
         isEdit: false,
         error: result.errors[0].message,
         DEFAULT_CURRENCY,
@@ -168,6 +175,7 @@ module.exports = {
         attachedMedia: [],
         uploadsBaseUrl: getUploadsBaseUrl(),
         manageableVariants: [],
+        featuredMediaId: normalizeFeaturedMediaId(req.body.featuredMediaId),
         isEdit: false,
         error: metaValidation.errors?.join(" ") || "Invalid meta object values.",
         DEFAULT_CURRENCY,
@@ -189,6 +197,7 @@ module.exports = {
         attachedMedia: [],
         uploadsBaseUrl: getUploadsBaseUrl(),
         manageableVariants: [],
+        featuredMediaId: normalizeFeaturedMediaId(req.body.featuredMediaId),
         isEdit: false,
         error: "One or more selected meta objects are invalid.",
         DEFAULT_CURRENCY,
@@ -209,6 +218,7 @@ module.exports = {
         attachedMedia: [],
         uploadsBaseUrl: getUploadsBaseUrl(),
         manageableVariants: [],
+        featuredMediaId: normalizeFeaturedMediaId(req.body.featuredMediaId),
         isEdit: false,
         error: variantResult.error,
         DEFAULT_CURRENCY,
@@ -221,6 +231,7 @@ module.exports = {
       metaObjectIds: ids,
       metaObjectValues: metaValidation.data,
       mediaIds: normalizeMediaIds(req.body.mediaIds),
+      featuredMediaId: normalizeFeaturedMediaId(req.body.featuredMediaId),
       variants: variantResult.data,
     };
     if (!checkoutVatEnabled) createData.taxRateId = null;
@@ -239,6 +250,7 @@ module.exports = {
         attachedMedia: [],
         uploadsBaseUrl: getUploadsBaseUrl(),
         manageableVariants: [],
+        featuredMediaId: normalizeFeaturedMediaId(req.body.featuredMediaId),
         isEdit: false,
         error: e.message || "Could not create product.",
         DEFAULT_CURRENCY,
@@ -285,6 +297,7 @@ module.exports = {
         metaObjectValues,
         mediaIds,
       },
+      featuredMediaId: plain.featuredMediaId || null,
       productTypes: (types || []).map(toPlain),
       productCategories: (categories || []).map(toPlain),
       taxRates: (taxRates || []).map(toPlain),
@@ -331,6 +344,7 @@ module.exports = {
         attachedMetaObjects,
         attachedMedia,
         uploadsBaseUrl: getUploadsBaseUrl(),
+        featuredMediaId: normalizeFeaturedMediaId(req.body.featuredMediaId),
         isEdit: true,
         error: result.errors[0].message,
         DEFAULT_CURRENCY,
@@ -377,6 +391,7 @@ module.exports = {
         attachedMetaObjects,
         attachedMedia,
         uploadsBaseUrl: getUploadsBaseUrl(),
+        featuredMediaId: normalizeFeaturedMediaId(req.body.featuredMediaId),
         isEdit: true,
         error: metaValidation.errors?.join(" ") || "Invalid meta object values.",
         DEFAULT_CURRENCY,
@@ -400,6 +415,7 @@ module.exports = {
         attachedMetaObjects,
         attachedMedia,
         uploadsBaseUrl: getUploadsBaseUrl(),
+        featuredMediaId: normalizeFeaturedMediaId(req.body.featuredMediaId),
         isEdit: true,
         error: variantResult.error,
         DEFAULT_CURRENCY,
@@ -413,6 +429,7 @@ module.exports = {
       metaObjectIds: validIds,
       metaObjectValues: metaValidation.data,
       mediaIds: normalizeMediaIds(req.body.mediaIds),
+      featuredMediaId: normalizeFeaturedMediaId(req.body.featuredMediaId),
       variants: variantResult.data,
     };
     if (!checkoutVatEnabled) updatePayload.taxRateId = null;
@@ -433,6 +450,7 @@ module.exports = {
         attachedMetaObjects,
         attachedMedia,
         uploadsBaseUrl: getUploadsBaseUrl(),
+        featuredMediaId: normalizeFeaturedMediaId(req.body.featuredMediaId),
         isEdit: true,
         error: e.message || "Could not update product.",
         DEFAULT_CURRENCY,

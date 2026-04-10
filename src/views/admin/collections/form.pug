@@ -59,6 +59,8 @@ block content
                             attachedMedia: attachedMedia || [],
                             uploadsBaseUrl: uploadsBaseUrl || '/uploads',
                             apiUrl: (adminPrefix || '') + '/api/media',
+                            featuredMediaId: featuredMediaId || null,
+                            featuredInputName: 'featuredMediaId',
                             label: 'Media',
                             hint: 'Select media to attach to this collection. Upload new files on the Media page, then select them here.'
                         })

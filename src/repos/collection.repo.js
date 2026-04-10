@@ -6,6 +6,13 @@ function normalizeMediaIds(mediaIds) {
   return arr.filter((id) => id && String(id).trim());
 }
 
+function normalizeFeaturedMediaId(featuredMediaId, mediaIds) {
+  if (!featuredMediaId || typeof featuredMediaId !== "string") return null;
+  const id = featuredMediaId.trim();
+  if (!id) return null;
+  return normalizeMediaIds(mediaIds).includes(id) ? id : null;
+}
+
 async function syncCollectionMedia(collectionId, mediaIds, options = {}) {
   const ids = normalizeMediaIds(mediaIds);
   const t = options.transaction;
@@ -108,8 +115,9 @@ module.exports = {
   },
 
   async create(data, options = {}) {
-    const { mediaIds, ...rest } = data;
-    const collection = await Collection.create(rest, options);
+    const { mediaIds, featuredMediaId: rawFeaturedMediaId, ...rest } = data;
+    const featuredMediaId = normalizeFeaturedMediaId(rawFeaturedMediaId, mediaIds);
+    const collection = await Collection.create({ ...rest, featuredMediaId: featuredMediaId || null }, options);
     if (mediaIds && mediaIds.length > 0) {
       await syncCollectionMedia(collection.id, mediaIds, options);
     }
@@ -119,8 +127,17 @@ module.exports = {
   async update(id, data, options = {}) {
     const collection = await Collection.findByPk(id, options);
     if (!collection) return null;
-    const { mediaIds, ...rest } = data;
-    await collection.update(rest, options);
+    const { mediaIds, featuredMediaId: rawFeaturedMediaId, ...rest } = data;
+    const updateData = { ...rest };
+    if (rawFeaturedMediaId !== undefined) {
+      if (mediaIds !== undefined) {
+        updateData.featuredMediaId = normalizeFeaturedMediaId(rawFeaturedMediaId, mediaIds);
+      } else {
+        const existingMedia = await CollectionMedia.findAll({ where: { collectionId: id }, ...options });
+        updateData.featuredMediaId = normalizeFeaturedMediaId(rawFeaturedMediaId, existingMedia.map((r) => r.mediaId));
+      }
+    }
+    await collection.update(updateData, options);
     if (mediaIds !== undefined) {
       await syncCollectionMedia(id, mediaIds, options);
     }
