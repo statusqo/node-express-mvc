@@ -81,13 +81,13 @@ block content
                 .da-card-footer
                     button.da-btn.da-btn--primary(type='submit')= isEdit ? 'Update' : 'Create'
                     a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/blog') Cancel
-
-        if isEdit
-            form#delete-post-form(method='post' action=(adminPrefix || '') + '/blog/' + post.id + '/delete' style='margin-top:1.25rem')
-                button.da-btn.da-btn--danger(
-                    type='button'
-                    data-confirm-modal
-                    data-confirm-title='Delete Post'
-                    data-confirm-msg='Are you sure you want to delete this post? This cannot be undone.'
-                    data-form-id='delete-post-form'
-                ) Delete Post
+                    if isEdit
+                        div(style='margin-left:auto')
+                            form#delete-post-form(method='post' action=(adminPrefix || '') + '/blog/' + post.id + '/delete')
+                                button.da-btn.da-btn--danger(
+                                    type='button'
+                                    data-confirm-modal
+                                    data-confirm-title='Delete Post'
+                                    data-confirm-msg='Are you sure you want to delete this post? This cannot be undone.'
+                                    data-form-id='delete-post-form'
+                                ) Delete Post

@@ -97,16 +97,16 @@ block content
                 .da-card-footer
                     button.da-btn.da-btn--primary(type='submit')= isEdit ? 'Update' : 'Create'
                     a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/meta-objects') Cancel
-
-        if isEdit
-            form#delete-meta-object-form(method='post' action=(adminPrefix || '') + '/meta-objects/' + metaObject.id + '/delete' style='margin-top:1.25rem')
-                button.da-btn.da-btn--danger(
-                    type='button'
-                    data-confirm-modal
-                    data-confirm-title='Delete Meta Object'
-                    data-confirm-msg='Are you sure you want to delete this meta object? This cannot be undone.'
-                    data-form-id='delete-meta-object-form'
-                ) Delete Meta Object
+                    if isEdit
+                        div(style='margin-left:auto')
+                            form#delete-meta-object-form(method='post' action=(adminPrefix || '') + '/meta-objects/' + metaObject.id + '/delete')
+                                button.da-btn.da-btn--danger(
+                                    type='button'
+                                    data-confirm-modal
+                                    data-confirm-title='Delete Meta Object'
+                                    data-confirm-msg='Are you sure you want to delete this meta object? This cannot be undone.'
+                                    data-form-id='delete-meta-object-form'
+                                ) Delete Meta Object
 
 block append scripts
     script(src='/public/js/admin-meta-object-form.js')

@@ -32,9 +32,9 @@ block content
         //- ── KPI Cards ────────────────────────────────────────────────
         .dash-kpi-grid
             +kpiCardDelta((adminPrefix || '') + '/orders',          Math.round(stats.revenueThisMonth || 0),  'Revenue This Month',  'trending-up',  'accent',   stats.revenueDelta,   '€')
-            +kpiCardDelta((adminPrefix || '') + '/orders',          Math.round(stats.netRevenueThisMonth || 0), 'Net Revenue',       'dollar-sign',  'success',  null,                 '€')
+            +kpiCardDelta((adminPrefix || '') + '/orders',          Math.round(stats.netRevenueThisMonth || 0), 'Net Revenue This Month',       'dollar-sign',  'success',  null,                 '€')
             +kpiCardDelta((adminPrefix || '') + '/orders',          stats.ordersThisMonth || 0,               'Orders This Month',   'shopping-bag', 'info',     stats.ordersDelta)
-            +kpiCardDelta((adminPrefix || '') + '/users',           stats.newUsersThisMonth || 0,             'New Users',           'user-plus',    'warning',  stats.newUsersDelta)
+            +kpiCardDelta((adminPrefix || '') + '/users',           stats.newUsersThisMonth || 0,             'New Users This Month',           'user-plus',    'warning',  stats.newUsersDelta)
 
         //- ── Actionable Orders ────────────────────────────────────────
         section.da-panel

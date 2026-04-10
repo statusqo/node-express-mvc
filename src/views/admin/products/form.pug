@@ -288,16 +288,16 @@ block content
                 .da-product-form-actions
                     button.da-btn.da-btn--primary(type='submit')= isEdit ? 'Update Product' : 'Create Product'
                     a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/products') Cancel
-
-        if isEdit
-            form#delete-product-form(method='post' action=(adminPrefix || '') + '/products/' + product.id + '/delete')
-                button.da-btn.da-btn--danger(
-                    type='button'
-                    data-confirm-modal
-                    data-confirm-title='Delete Product'
-                    data-confirm-msg='Are you sure you want to delete this product? This cannot be undone.'
-                    data-form-id='delete-product-form'
-                ) Delete Product
+                    if isEdit
+                        div(style='margin-left:auto')
+                            form#delete-product-form(method='post' action=(adminPrefix || '') + '/products/' + product.id + '/delete')
+                                button.da-btn.da-btn--danger(
+                                    type='button'
+                                    data-confirm-modal
+                                    data-confirm-title='Delete Product'
+                                    data-confirm-msg='Are you sure you want to delete this product? This cannot be undone.'
+                                    data-form-id='delete-product-form'
+                                ) Delete Product
 
 block append scripts
     script(src='/public/js/admin-product-form.js')

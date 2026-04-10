@@ -73,13 +73,13 @@ block content
                 .da-card-footer
                     button.da-btn.da-btn--primary(type='submit')= isEdit ? 'Update' : 'Create'
                     a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/collections') Cancel
-
-        if isEdit
-            form#delete-collection-form(method='post' action=(adminPrefix || '') + '/collections/' + collection.id + '/delete' style='margin-top:1.25rem')
-                button.da-btn.da-btn--danger(
-                    type='button'
-                    data-confirm-modal
-                    data-confirm-title='Delete Collection'
-                    data-confirm-msg='Are you sure you want to delete this collection? This cannot be undone.'
-                    data-form-id='delete-collection-form'
-                ) Delete Collection
+                    if isEdit
+                        div(style='margin-left:auto')
+                            form#delete-collection-form(method='post' action=(adminPrefix || '') + '/collections/' + collection.id + '/delete')
+                                button.da-btn.da-btn--danger(
+                                    type='button'
+                                    data-confirm-modal
+                                    data-confirm-title='Delete Collection'
+                                    data-confirm-msg='Are you sure you want to delete this collection? This cannot be undone.'
+                                    data-form-id='delete-collection-form'
+                                ) Delete Collection

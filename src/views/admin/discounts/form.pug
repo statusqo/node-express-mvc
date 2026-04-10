@@ -84,17 +84,17 @@ block content
                             .da-form-group
                                 label.da-form-label(for='validFrom') Valid from
                                 input#validFrom.da-form-input(
-                                    type='datetime-local'
+                                    type='date'
                                     name='validFrom'
-                                    value=discount && discount.validFrom ? discount.validFrom.toString().slice(0,16) : ''
+                                    value=discount && discount.validFrom ? discount.validFrom.toString().slice(0,10) : ''
                                 )
 
                             .da-form-group
                                 label.da-form-label(for='validUntil') Valid until
                                 input#validUntil.da-form-input(
-                                    type='datetime-local'
+                                    type='date'
                                     name='validUntil'
-                                    value=discount && discount.validUntil ? discount.validUntil.toString().slice(0,16) : ''
+                                    value=discount && discount.validUntil ? discount.validUntil.toString().slice(0,10) : ''
                                 )
 
                             .da-form-group
@@ -131,16 +131,16 @@ block content
                 .da-card-footer
                     button.da-btn.da-btn--primary(type='submit')= isEdit ? 'Update Discount' : 'Create Discount'
                     a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/discounts') Cancel
-
-        if isEdit && discount
-            - var canDelete = !discount.usedCount || discount.usedCount < 1
-            form#delete-discount-form(method='post' action=(adminPrefix || '') + '/discounts/' + discount.id + '/delete' style='margin-top:1.25rem')
-                button.da-btn.da-btn--danger(
-                    type='button'
-                    disabled=canDelete ? undefined : true
-                    data-confirm-modal=canDelete ? '' : undefined
-                    data-confirm-title='Delete Discount'
-                    data-confirm-msg='Are you sure you want to delete this discount code?'
-                    data-form-id='delete-discount-form'
-                    title=canDelete ? '' : ('Cannot delete: used ' + (discount.usedCount || 0) + ' time(s). Deactivate it instead.')
-                ) Delete Discount
+                    if isEdit && discount
+                        - var canDelete = !discount.usedCount || discount.usedCount < 1
+                        div(style='margin-left:auto')
+                            form#delete-discount-form(method='post' action=(adminPrefix || '') + '/discounts/' + discount.id + '/delete')
+                                button.da-btn.da-btn--danger(
+                                    type='button'
+                                    disabled=canDelete ? undefined : true
+                                    data-confirm-modal=canDelete ? '' : undefined
+                                    data-confirm-title='Delete Discount'
+                                    data-confirm-msg='Are you sure you want to delete this discount code?'
+                                    data-form-id='delete-discount-form'
+                                    title=canDelete ? '' : ('Cannot delete: used ' + (discount.usedCount || 0) + ' time(s). Deactivate it instead.')
+                                ) Delete Discount

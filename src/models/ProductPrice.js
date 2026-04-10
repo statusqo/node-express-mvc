@@ -24,7 +24,7 @@ const ProductPrice = sequelize.define("ProductPrice", {
   },
   isDefault: {
     type: DataTypes.BOOLEAN,
-    defaultValue: true,
+    defaultValue: false,
   },
 }, {
   timestamps: true,

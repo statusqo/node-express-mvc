@@ -39,14 +39,14 @@ const Discount = sequelize.define("Discount", {
     allowNull: false,
     defaultValue: 0,
   },
-  // Inclusive start of valid window. null = no lower bound.
+  // Inclusive start of valid window (date only, YYYY-MM-DD). null = no lower bound.
   validFrom: {
-    type: DataTypes.DATE,
+    type: DataTypes.DATEONLY,
     allowNull: true,
   },
-  // Inclusive end of valid window. null = no upper bound.
+  // Inclusive end of valid window (date only, YYYY-MM-DD). null = no upper bound.
   validUntil: {
-    type: DataTypes.DATE,
+    type: DataTypes.DATEONLY,
     allowNull: true,
   },
   active: {
@@ -71,9 +71,7 @@ const Discount = sequelize.define("Discount", {
 }, {
   timestamps: true,
   tableName: "discounts",
-  indexes: [
-    { fields: ["code"], unique: true },
-  ],
+  indexes: [],
 });
 
 module.exports = Discount;

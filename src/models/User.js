@@ -83,7 +83,6 @@ const User = sequelize.define("User", {
   tableName: 'users',
   indexes: [
     { fields: ['stripeCustomerId'] },
-    { fields: ['googleId'], unique: true },
   ],
 });
 

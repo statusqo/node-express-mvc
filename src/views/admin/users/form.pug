@@ -144,18 +144,17 @@ block content
                     .da-card-footer
                         button.da-btn.da-btn--primary(type='submit' form='userEditForm')= isEdit ? 'Save Changes' : 'Create User'
                         a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/users') Cancel
-
-                //- Danger zone (edit only)
-                if isEdit
-                    form#delete-user-form(method='post' action=(adminPrefix || '') + '/users/' + user.id + '/delete')
-                        button.da-btn.da-btn--danger(
-                            type='button'
-                            data-confirm-modal
-                            data-confirm-title='Delete User'
-                            data-confirm-msg='This cannot be undone. The following will be removed:'
-                            data-confirm-bullets='["User account and login","All saved addresses","All saved payment methods"]'
-                            data-form-id='delete-user-form'
-                        ) Delete User
+                        if isEdit
+                            div(style='margin-left:auto')
+                                form#delete-user-form(method='post' action=(adminPrefix || '') + '/users/' + user.id + '/delete')
+                                    button.da-btn.da-btn--danger(
+                                        type='button'
+                                        data-confirm-modal
+                                        data-confirm-title='Delete User'
+                                        data-confirm-msg='This cannot be undone. The following will be removed:'
+                                        data-confirm-bullets='["User account and login","All saved addresses","All saved payment methods"]'
+                                        data-form-id='delete-user-form'
+                                    ) Delete User
 
             //- ── Aside column (edit only) ────────────────────────────
             if isEdit
@@ -248,6 +247,7 @@ block content
                                     th(scope='col') Fulfillment
                                     th.da-col-created(scope='col') Total
                                     th.da-col-created(scope='col') Date
+                                    th(scope='col' style='text-align:right') Actions
                             tbody
                                 if orders && orders.length
                                     each order in orders
@@ -267,12 +267,18 @@ block content
                                                 else
                                                     span.da-cell-muted —
                                             td.da-col-created
-                                                span.da-cell-secondary= order.total != null ? Number(order.total).toFixed(2) + ' ' + (order.currency || 'USD') : '—'
+                                                span.da-cell-secondary= order.total != null ? Number(order.total).toFixed(2) + ' ' + (order.currency || 'EUR') : '—'
                                             td.da-col-created
                                                 span.da-cell-muted= order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'
+                                            td
+                                                .da-cell-actions
+                                                    a.da-row-btn.da-row-btn--edit(
+                                                        href=(adminPrefix || '') + '/orders/' + order.id + '/edit'
+                                                        aria-label='View order ' + (order.orderNumber ? '#' + order.orderNumber : '')
+                                                    ) View Order
                                 else
                                     tr
-                                        td(colspan='5')
+                                        td(colspan='6')
                                             .da-table-empty No orders yet.
 
 block append scripts

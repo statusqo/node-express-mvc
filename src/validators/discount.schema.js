@@ -22,11 +22,11 @@ const AdminDiscountSchema = z
       return Number(v);
     }),
     validFrom: z
-      .union([z.string().trim(), z.null()])
+      .union([z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Valid from must be a date (YYYY-MM-DD)."), z.literal(""), z.null()])
       .optional()
       .transform((v) => (v && v.trim() ? v.trim() : null)),
     validUntil: z
-      .union([z.string().trim(), z.null()])
+      .union([z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Valid until must be a date (YYYY-MM-DD)."), z.literal(""), z.null()])
       .optional()
       .transform((v) => (v && v.trim() ? v.trim() : null)),
     applicableTo: z.enum(DISCOUNT_APPLIES_TO_LIST, {

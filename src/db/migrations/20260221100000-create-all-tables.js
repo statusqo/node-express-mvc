@@ -28,7 +28,6 @@ module.exports = {
       ...ts,
     });
     await queryInterface.addIndex("users", ["stripeCustomerId"]);
-    await queryInterface.addIndex("users", ["googleId"], { unique: true });
 
     // --- addresses ---
     await queryInterface.createTable("addresses", {
@@ -99,7 +98,7 @@ module.exports = {
       id: uuid,
       name: { type: Sequelize.STRING, allowNull: false },
       slug: { type: Sequelize.STRING, allowNull: false, unique: true },
-      kpdCode: { type: Sequelize.STRING, allowNull: true },
+      kpdCode: { type: Sequelize.STRING, allowNull: false },
       ...ts,
     });
 
@@ -276,7 +275,7 @@ module.exports = {
       personType: { type: Sequelize.ENUM("private", "legal"), allowNull: false, defaultValue: "private" },
       companyName: { type: Sequelize.STRING, allowNull: true },
       companyOib: { type: Sequelize.STRING(11), allowNull: true },
-      paymentStatus: { type: Sequelize.ENUM("pending", "paid", "failed", "partially_refunded", "refunded", "voided"), allowNull: false, defaultValue: "paid" },
+      paymentStatus: { type: Sequelize.ENUM("pending", "paid", "failed", "partially_refunded", "refunded", "voided"), allowNull: false, defaultValue: "pending" },
       fulfillmentStatus: { type: Sequelize.ENUM("pending", "processing", "shipped", "delivered", "refund_requested", "refunded", "cancelled", "returned"), allowNull: false, defaultValue: "pending" },
       source: { type: Sequelize.ENUM("cart", "event"), allowNull: false, defaultValue: "cart" },
       total: { type: Sequelize.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
@@ -316,7 +315,6 @@ module.exports = {
       tokenExpiresAt: { type: Sequelize.DATE, allowNull: true },
       ...ts,
     });
-    await queryInterface.addIndex("admin_zoom_accounts", ["userId"], { unique: true });
     await queryInterface.addIndex("admin_zoom_accounts", ["zoomUserId"]);
 
     // --- event_meetings ---
@@ -504,15 +502,14 @@ module.exports = {
       minOrderAmount: { type: Sequelize.DECIMAL(10, 2), allowNull: true },
       maxUses: { type: Sequelize.INTEGER, allowNull: true },
       usedCount: { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
-      validFrom: { type: Sequelize.DATE, allowNull: true },
-      validUntil: { type: Sequelize.DATE, allowNull: true },
+      validFrom: { type: Sequelize.DATEONLY, allowNull: true },
+      validUntil: { type: Sequelize.DATEONLY, allowNull: true },
       active: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: true },
       description: { type: Sequelize.TEXT, allowNull: true },
       // Controls which order lines the discount applies to: all | events | products
       applicableTo: { type: Sequelize.ENUM("all", "events", "products"), allowNull: false, defaultValue: "all" },
       ...ts,
     });
-    await queryInterface.addIndex("discounts", ["code"], { unique: true });
 
     // --- order_discounts (snapshot of applied discount at order time) ---
     await queryInterface.createTable("order_discounts", {

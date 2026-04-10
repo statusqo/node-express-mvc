@@ -9,7 +9,7 @@ const ProductCollection = sequelize.define("ProductCollection", {
   },
   productId: {
     type: DataTypes.UUID,
-    allowNull: true,
+    allowNull: false,
   },
   collectionId: {
     type: DataTypes.UUID,

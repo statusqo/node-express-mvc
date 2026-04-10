@@ -4,7 +4,7 @@
 
 const { Op } = require('sequelize');
 const {
-  Order, User,
+  Order, User, RefundTransaction,
 } = require('../models');
 
 function monthStart(d) {
@@ -18,7 +18,6 @@ function prevMonthRange(now) {
 }
 
 const PAID_STATUSES = ['paid', 'partially_refunded', 'refunded'];
-const REFUND_STATUSES = ['refunded', 'partially_refunded'];
 
 module.exports = {
 
@@ -46,22 +45,44 @@ module.exports = {
   },
 
   /**
-   * Net revenue this month = gross revenue − refunded order totals this month.
+   * Net revenue this month = sum of paid order totals − sum of succeeded refund
+   * transaction amounts for those orders.
+   *
+   * Uses RefundTransaction.amount (the actual refunded value) rather than
+   * Order.total so partial refunds are correctly accounted for:
+   *   - paid order, no refund  → counts in full
+   *   - partially refunded     → counts minus the refunded portion only
+   *   - fully refunded         → counts as zero
+   *
    * Returns Number
    */
   async getNetRevenueThisMonth() {
     const since = monthStart(new Date());
 
-    const [gross, refunded] = await Promise.all([
-      Order.sum('total', {
-        where: { paymentStatus: { [Op.in]: PAID_STATUSES }, createdAt: { [Op.gte]: since } },
-      }),
-      Order.sum('total', {
-        where: { paymentStatus: { [Op.in]: REFUND_STATUSES }, createdAt: { [Op.gte]: since } },
-      }),
-    ]);
+    // Fetch all paid-status orders this month with their totals and IDs in one query.
+    const paidOrders = await Order.findAll({
+      where: {
+        paymentStatus: { [Op.in]: PAID_STATUSES },
+        createdAt: { [Op.gte]: since },
+      },
+      attributes: ['id', 'total'],
+      raw: true,
+    });
 
-    return (parseFloat(gross) || 0) - (parseFloat(refunded) || 0);
+    if (!paidOrders.length) return 0;
+
+    const gross = paidOrders.reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
+    const orderIds = paidOrders.map((o) => o.id);
+
+    // Sum only succeeded refund transactions — pending/failed refunds don't reduce revenue yet.
+    const refunded = await RefundTransaction.sum('amount', {
+      where: {
+        orderId: { [Op.in]: orderIds },
+        status: 'succeeded',
+      },
+    });
+
+    return Math.max(0, gross - (parseFloat(refunded) || 0));
   },
 
   // ── Orders ─────────────────────────────────────────────────────────

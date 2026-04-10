@@ -101,7 +101,7 @@ const Order = sequelize.define("Order", {
   paymentStatus: {
     type: DataTypes.ENUM(...PAYMENT_STATUS_LIST),
     allowNull: false,
-    defaultValue: PAYMENT_STATUS.PAID,
+    defaultValue: PAYMENT_STATUS.PENDING,
   },
   fulfillmentStatus: {
     type: DataTypes.ENUM(...FULFILLMENT_STATUS_LIST),

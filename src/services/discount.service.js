@@ -7,6 +7,22 @@ const { DISCOUNT_TYPE, DISCOUNT_APPLIES_TO } = require("../constants/discount");
 // ---------------------------------------------------------------------------
 
 /**
+ * Returns today's date as a YYYY-MM-DD string in server-local time.
+ * Used for DATEONLY field comparisons so that "valid until April 10" covers the
+ * full calendar day regardless of the server clock's time-of-day or UTC offset.
+ */
+function localDateStr() {
+  const d = new Date();
+  return (
+    d.getFullYear() +
+    "-" +
+    String(d.getMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(d.getDate()).padStart(2, "0")
+  );
+}
+
+/**
  * Rounds a number to 2 decimal places (standard currency rounding).
  * @param {number} value
  * @returns {number}
@@ -152,11 +168,11 @@ async function validateCode(code, applicableTotal, options = {}) {
     return { ok: false, error: "Invalid discount code." };
   }
 
-  const now = new Date();
-  if (discount.validFrom && now < new Date(discount.validFrom)) {
+  const today = localDateStr();
+  if (discount.validFrom && today < String(discount.validFrom).slice(0, 10)) {
     return { ok: false, error: "Invalid discount code." };
   }
-  if (discount.validUntil && now > new Date(discount.validUntil)) {
+  if (discount.validUntil && today > String(discount.validUntil).slice(0, 10)) {
     return { ok: false, error: "Invalid discount code." };
   }
   if (discount.maxUses != null && discount.usedCount >= discount.maxUses) {
@@ -220,13 +236,13 @@ async function applyToOrder(orderId, code, orderLines, vatEnabled, options = {})
     throw err;
   }
 
-  const now = new Date();
-  if (discount.validFrom && now < new Date(discount.validFrom)) {
+  const today = localDateStr();
+  if (discount.validFrom && today < String(discount.validFrom).slice(0, 10)) {
     const err = new Error("Invalid discount code.");
     err.status = 400;
     throw err;
   }
-  if (discount.validUntil && now > new Date(discount.validUntil)) {
+  if (discount.validUntil && today > String(discount.validUntil).slice(0, 10)) {
     const err = new Error("Invalid discount code.");
     err.status = 400;
     throw err;
