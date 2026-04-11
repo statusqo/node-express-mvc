@@ -16,7 +16,8 @@
       "WebFetch(domain:github.com)",
       "Bash(node src/scripts/test-fiscalization-storno.js)",
       "Bash(ls -la d:/DEFY/projects/node-express-mvc/src/views/admin/*/index.pug)",
-      "Bash(node -e ':*)"
+      "Bash(node -e ':*)",
+      "Bash(grep -n \"createLineFromVariant\" /d/DEFY/projects/node-express-mvc/src/repos/*.js)"
     ]
   }
 }

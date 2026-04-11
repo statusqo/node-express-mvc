@@ -1552,6 +1552,35 @@ tr.da-row--entering {
 .da-card--variants.da-variant-section--pulse {
     animation: da-variant-section-pulse 0.55s ease-out;
 }
+/* Variant row — inline edit mode */
+.da-variant-row--editing {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: flex-start;
+    background: var(--ds-surface-2);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    gap: 0;
+}
+.da-variant-row--editing .da-variant-row-main,
+.da-variant-row--editing .da-variant-edit,
+.da-variant-row--editing .da-variant-remove {
+    display: none;
+}
+.da-variant-edit-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.da-variant-edit-fields {
+    margin-bottom: 0.25rem;
+}
+.da-variant-edit-actions {
+    margin-top: 0.5rem;
+    display: flex;
+    gap: 0.5rem;
+}
 
 /* Horizontal row of form groups (pricing, shipping) */
 .da-form-row {

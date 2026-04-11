@@ -31,7 +31,9 @@ function formatCartForApi(cart, lines, actorContext = {}) {
     const isQuantityRestricted = isEventVariant;
     const showQuantityStepper = !isQuantityRestricted;
     const productVariantId = line.productVariantId || variant.id;
-    const title = product.title || variant.title || "";
+    const title = variant.isDefault
+      ? (product.title || variant.title || "")
+      : `${product.title || variant.title || ""} - ${variant.title}`;
     return {
       productVariantId: productVariantId != null ? String(productVariantId) : "",
       title: String(title),

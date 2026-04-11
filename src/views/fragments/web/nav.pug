@@ -70,7 +70,7 @@ div(class="navbar")
                 - const qty = line.quantity || 1
                 - const subtotal = price * qty
                 - const productVariantId = line.productVariantId || variant.id
-                - const title = line.title || (product && product.title) || variant.title || ''
+                - const title = line.title || (product && variant.isDefault ? product.title : (product && variant.title ? product.title + ' - ' + variant.title : (product && product.title) || variant.title || ''))
                 - const isRestrictedEventLine = !!(event && event.id)
                 li(class="cart-drawer-item" data-product-variant-id=productVariantId data-quantity=qty data-price=price)
                   span(class="cart-drawer-item-title")= title

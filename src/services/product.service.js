@@ -166,6 +166,19 @@ module.exports = {
       }
     }
 
+    // Update existing variants whose ID is in both sets
+    for (const v of (submittedVariants || [])) {
+      if (v.id && existingIds.has(v.id)) {
+        await productVariantRepo.update(v.id, {
+          title: v.title,
+          quantity: v.quantity,
+          sku: v.sku || null,
+          active: v.active,
+        }, options);
+        await productVariantRepo.updateDefaultPrice(v.id, { amount: v.priceAmount }, options);
+      }
+    }
+
     // Create variants that have no ID (new) or an ID not in the current existing set
     for (const v of (submittedVariants || [])) {
       if (!v.id || !existingIds.has(v.id)) {

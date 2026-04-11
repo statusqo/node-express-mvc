@@ -22,9 +22,9 @@ const { REFUND_REQUEST_STATUS } = require("../constants/refundRequest");
 function formatEventVariantTitle(startDate, startTime) {
   const d = startDate ? String(startDate).substring(0, 10) : "";
   const t = startTime != null ? String(startTime).substring(0, 5) : "";
-  if (d && t) return `Event ${d} ${t}`;
-  if (d) return `Event ${d}`;
-  return "Event";
+  if (d && t) return `${d} ${t}`;
+  if (d) return d;
+  return "TBD";
 }
 
 module.exports = {

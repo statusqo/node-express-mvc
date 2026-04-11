@@ -7,7 +7,7 @@ const defaultLineInclude = [
   {
     model: ProductVariant,
     as: "ProductVariant",
-    attributes: ["id", "title", "productId"],
+    attributes: ["id", "title", "productId", "isDefault"],
     required: false,
     include: [
       { model: Product, as: "Product", attributes: ["id", "title", "slug", "isPhysical"] },

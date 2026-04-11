@@ -1679,12 +1679,21 @@ async function getAdminOrderEditPayload(orderId) {
 
   // Annotate each order line with its refund state.
   const orderLinesPlain = (lines || []).map((l) => {
+    const variant = l.ProductVariant || null;
+    const product = variant?.Product || null;
+    const displayTitle = variant && product
+      ? (variant.isDefault
+          ? product.title
+          : `${product.title} - ${variant.title}`)
+      : (l.title || null);
+
     const plain = l.get ? l.get({ plain: true }) : l;
     const summary = lineRefundSummary[plain.id];
     const refundedQty = summary ? summary.refundedQty : 0;
     const qty = Number(plain.quantity) || 1;
     return {
       ...plain,
+      displayTitle,
       refundedQty,
       fullyRefunded: refundedQty >= qty,
       partiallyRefunded: refundedQty > 0 && refundedQty < qty,

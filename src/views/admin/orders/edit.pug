@@ -122,7 +122,7 @@ block content
                                                     - var lineRowClass = line.fullyRefunded ? 'da-row--refunded' : ''
                                                     tr(class=lineRowClass)
                                                         td
-                                                            = line.title || '—'
+                                                            = line.displayTitle || line.title || '—'
                                                             if !isEventLine && line.partiallyRefunded
                                                                 span.da-refund-pill #{line.refundedQty} of #{line.quantity} refunded
                                                             if isEventLine && hasAttendees

@@ -135,7 +135,9 @@ module.exports = {
     const priceRow = variant.ProductPrices?.[0] || (await this.getDefaultPrice(variantId, sequelizeOpts));
     const base = {
       productVariantId: variant.id,
-      title: product?.title || variant.title || "Product",
+      title: variant.isDefault
+        ? (product?.title || "Product")
+        : `${product?.title || "Product"} - ${variant.title}`,
       price: priceRow ? Number(priceRow.amount) : 0,
       currency: DEFAULT_CURRENCY,
       sku: variant.sku || null,
