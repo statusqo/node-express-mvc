@@ -1,0 +1,138 @@
+extends ../../layouts/admin
+
+block append links
+    link(rel='stylesheet' href='/css/admin-dark.css')
+
+block content
+    - var fmtDate = function(d){ return d ? new Date(d).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'; }
+    - var fmtTime = function(d){ return d ? new Date(d).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}) : ''; }
+    - var EVENT_LABELS = { payment_finalized:'Payment Finalized', payment_refunded:'Full Refund', partial_refund_issued:'Partial Refund', confirmation_email_sent:'Confirmation Email Sent', zoom_sync_completed:'Zoom Sync', fulfillment_status_changed:'Fulfillment Status Changed', refund_requested:'Refund Requested', refund_request_approved:'Refund Approved', refund_request_rejected:'Refund Rejected', order_cancelled:'Order Cancelled', order_updated:'Order Updated', post_commit_retried:'Post-Commit Retried' }
+    - var eventLabel = function(e){ return EVENT_LABELS[e] || (e || '—'); }
+    - var BADGE_DANGER = ['order_cancelled','refund_request_rejected']
+    - var BADGE_WARNING = ['partial_refund_issued','refund_requested']
+    - var BADGE_INFO = ['payment_refunded','confirmation_email_sent','zoom_sync_completed','post_commit_retried','order_updated','fulfillment_status_changed']
+    - var eventBadge = function(e, s){ if(s===false) return 'danger'; if(s===true && e==='partial_refund_issued') return 'warning'; if(s===true && e==='payment_refunded') return 'info'; if(s===true && (e==='order_cancelled'||e==='refund_request_rejected')) return 'danger'; if(s===true) return 'success'; if(BADGE_DANGER.indexOf(e)!==-1) return 'danger'; if(BADGE_WARNING.indexOf(e)!==-1) return 'warning'; if(BADGE_INFO.indexOf(e)!==-1) return 'info'; return 'neutral'; }
+    - var buildUrl = function(p){ var f = {}; if(filters.orderNumber) f.orderNumber=filters.orderNumber; if(filters.event) f.event=filters.event; if(filters.dateFrom) f.dateFrom=filters.dateFrom; if(filters.dateTo) f.dateTo=filters.dateTo; f.page=p; var q = new URLSearchParams(f); return (adminPrefix||'')+'/order-history?'+q.toString(); }
+
+    .da-page
+
+        //- ── Page header ───────────────────────────────────────────────
+        - var subtitle = total + ' event' + (total !== 1 ? 's' : '') + (filters.orderId ? ' for order' : '')
+        +pageHeader('Order History', subtitle)
+
+        //- ── Filter bar ────────────────────────────────────────────────
+        form.da-filter-bar(method='get' action=(adminPrefix || '') + '/order-history')
+            .da-filter-head
+                span.da-filter-head-label Filters
+                a.da-filter-clear(href=(adminPrefix || '') + '/order-history') Clear all
+
+            .da-filter-group
+                label.da-filter-group-label(for='filter-event') Event type
+                select#filter-event.da-form-select(name='event')
+                    option(value='' selected=(!filters.event)) All events
+                    each e in validEvents
+                        option(value=e selected=(filters.event === e))= eventLabel(e)
+
+            .da-filter-group
+                label.da-filter-group-label(for='filter-order') Order #
+                input#filter-order.da-form-input(
+                    type='number'
+                    name='orderNumber'
+                    value=filters.orderNumber
+                    placeholder='e.g. 100001'
+                    style='max-width:160px'
+                )
+
+            .da-filter-group
+                label.da-filter-group-label(for='filter-date-from') Date from
+                input#filter-date-from.da-form-input(type='date' name='dateFrom' value=filters.dateFrom style='color-scheme:dark')
+
+            .da-filter-group
+                label.da-filter-group-label(for='filter-date-to') Date to
+                input#filter-date-to.da-form-input(type='date' name='dateTo' value=filters.dateTo style='color-scheme:dark')
+
+            .da-filter-actions
+                button.da-btn.da-btn--primary(type='submit')
+                    svg(xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                        polygon(points='22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3')
+                    | Apply
+
+        //- ── Table ─────────────────────────────────────────────────────
+        .da-panel
+            .da-table-scroll
+                table.da-table(role='table' aria-label='Order history events')
+                    thead
+                        tr
+                            th(scope='col') Event
+                            th(scope='col') Status
+                            th(scope='col') Order
+                            th.da-col-created(scope='col') Date
+                            th(scope='col') Actor
+                            th(scope='col') Details
+                    tbody
+                        if entries && entries.length
+                            each entry in entries
+                                - var variant = eventBadge(entry.event, entry.success)
+                                tr
+                                    //- Event type
+                                    td
+                                        span.da-badge(class='da-badge--' + variant style='white-space:nowrap')= eventLabel(entry.event)
+
+                                    //- Success flag
+                                    td
+                                        if entry.success === true
+                                            span.da-badge.da-badge--success OK
+                                        else if entry.success === false
+                                            span.da-badge.da-badge--danger Failed
+                                        else
+                                            span.da-cell-muted —
+
+                                    //- Order link
+                                    td
+                                        if entry.Order && entry.Order.orderNumber
+                                            a.da-cell-mono(
+                                                href=(adminPrefix || '') + '/orders/' + entry.orderId + '/edit'
+                                                title=entry.orderId
+                                            )= '#' + entry.Order.orderNumber
+                                        else if entry.orderId
+                                            a.da-cell-mono(
+                                                href=(adminPrefix || '') + '/orders/' + entry.orderId + '/edit'
+                                                title=entry.orderId
+                                            )= entry.orderId.slice(0, 8) + '…'
+                                        else
+                                            span.da-cell-muted —
+
+                                    //- Date
+                                    td.da-col-created
+                                        .da-date-cell
+                                            span.da-cell-muted= fmtDate(entry.createdAt)
+                                            if entry.createdAt
+                                                span.da-date-time= fmtTime(entry.createdAt)
+
+                                    //- Actor
+                                    td
+                                        if entry.Actor
+                                            - var actorName = ((entry.Actor.forename || '') + ' ' + (entry.Actor.surname || '')).trim()
+                                            span(title=entry.Actor.id)= actorName || entry.Actor.email
+                                        else
+                                            span.da-cell-muted system
+
+                                    //- Meta details
+                                    td
+                                        if entry.meta && Object.keys(entry.meta).length
+                                            details(style='max-width:320px')
+                                                summary(style='cursor:pointer;color:var(--ds-accent);font-size:0.8rem') View details
+                                                pre(style='margin:0.5rem 0 0;font-size:0.75rem;color:var(--ds-text-2);white-space:pre-wrap;word-break:break-all')= JSON.stringify(entry.meta, null, 2)
+                                        else
+                                            span.da-cell-muted —
+                        else
+                            +tableEmpty(filters.event ? 'No ' + eventLabel(filters.event) + ' events found.' : 'No order history events found.', 6)
+
+        //- ── Pagination ────────────────────────────────────────────────
+        if totalPages > 1
+            .da-pagination(style='display:flex;gap:0.5rem;align-items:center;margin-top:1.25rem;flex-wrap:wrap')
+                if page > 1
+                    a.da-btn.da-btn--secondary(href=buildUrl(page - 1)) Previous
+                span(style='color:var(--ds-text-2);font-size:0.85rem') Page #{page} of #{totalPages}
+                if page < totalPages
+                    a.da-btn.da-btn--secondary(href=buildUrl(page + 1)) Next

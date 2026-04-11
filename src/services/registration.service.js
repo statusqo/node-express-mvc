@@ -13,6 +13,8 @@ const { getMeetingProvider } = require("../gateways/meeting.interface");
 const { PAYMENT_STATUS, FULFILLMENT_STATUS } = require("../constants/order");
 const { TRANSACTION_STATUS } = require("../constants/transaction");
 const { REFUND_TRANSACTION_SCOPE, REFUND_TRANSACTION_STATUS } = require("../constants/refundTransaction");
+const orderHistoryService = require("./orderHistory.service");
+const { ORDER_HISTORY_EVENT } = require("../constants/orderHistory");
 
 const MONEY_EPS = 0.0001;
 
@@ -272,14 +274,17 @@ module.exports = {
         if (!orderLine) {
           throw new Error("Order line not found for this registration.");
         }
-        const refundAmount = Number(orderLine.price) || 0;
-        if (refundAmount <= 0) {
+        const linePrice = Number(orderLine.price) || 0;
+        if (linePrice <= 0) {
           throw new Error("Invalid refund amount for this registration.");
         }
         const remainingRefundable = await orderService.getRemainingRefundableAmount(order.id);
-        if (remainingRefundable === null || remainingRefundable + MONEY_EPS < refundAmount) {
-          throw new Error("Refund amount exceeds remaining refundable balance for this order.");
+        if (remainingRefundable === null || remainingRefundable <= MONEY_EPS) {
+          throw new Error("No refundable balance remains for this order.");
         }
+        // Cap at remaining balance: order-level discounts reduce order.total below
+        // the sum of line prices, so the raw line price may exceed what was collected.
+        const refundAmount = Math.min(linePrice, remainingRefundable);
         const transactions = await orderService.getTransactionsForOrder(order.id);
         const successTx = transactions.find(
           (t) => t.gatewayReference === order.stripePaymentIntentId && t.status === TRANSACTION_STATUS.SUCCESS
@@ -352,12 +357,24 @@ module.exports = {
         if (refund.status === "succeeded") {
           handledByRefundTransaction = true;
           logger.info("cancelRegistration: seat refund completed", { registrationId, orderId: order.id, refundId: refund.id });
+          const isFullRefund = remainingRefundable != null && Math.abs(refundAmount - remainingRefundable) <= MONEY_EPS;
+          const refundEvent = isFullRefund ? ORDER_HISTORY_EVENT.PAYMENT_REFUNDED : ORDER_HISTORY_EVENT.PARTIAL_REFUND_ISSUED;
+          orderHistoryService.record(order.id, refundEvent, {
+            success: true,
+            meta: { registrationId, stripeRefundId: refund.id, amount: refundAmount, currency: order.currency, scopeType: "event_attendee" },
+          });
         } else {
           refundPending = true;
           logger.info("cancelRegistration: seat refund pending — registration will complete when Stripe succeeds", {
             registrationId,
             orderId: order.id,
             refundId: refund.id,
+          });
+          const isFullRefundPending = remainingRefundable != null && Math.abs(refundAmount - remainingRefundable) <= MONEY_EPS;
+          const refundEventPending = isFullRefundPending ? ORDER_HISTORY_EVENT.PAYMENT_REFUNDED : ORDER_HISTORY_EVENT.PARTIAL_REFUND_ISSUED;
+          orderHistoryService.record(order.id, refundEventPending, {
+            success: null,
+            meta: { registrationId, stripeRefundId: refund.id, stripeStatus: refund.status, amount: refundAmount, currency: order.currency, scopeType: "event_attendee" },
           });
         }
       } else if (order.paymentStatus === PAYMENT_STATUS.PENDING) {
@@ -370,6 +387,10 @@ module.exports = {
         });
         handledByRefundTransaction = true;
         logger.info("cancelRegistration: pending order voided and registration removed", { registrationId, orderId: order.id });
+        orderHistoryService.record(order.id, ORDER_HISTORY_EVENT.ORDER_CANCELLED, {
+          success: true,
+          meta: { registrationId, reason: "pending_order_voided_on_registration_cancel" },
+        });
       }
       // Already refunded/cancelled — proceed without further financial action.
     }

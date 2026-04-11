@@ -13,7 +13,7 @@ block content
     - var cancelMsg = fullName !== '—' ? 'Remove ' + fullName + ' from this event?' : 'Remove this registrant from this event?'
     - var cancelBullets = ['The registration will be permanently removed']
     - var isRefundableOrder = registration.Order && (registration.Order.paymentStatus === 'paid' || registration.Order.paymentStatus === 'partially_refunded')
-    - if (isRefundableOrder) cancelBullets.push('A full or partial Stripe refund will be issued for this seat (this order line’s amount, within the remaining refundable balance)')
+    - if (isRefundableOrder) cancelBullets.push('A full or partial Stripe refund will be issued for this seat (this order line\'s amount, within the remaining refundable balance)')
     - if (eventRow.isOnline) cancelBullets.push('The attendee will be removed from the Zoom meeting')
     - var zoomLinked = !!registration.zoomRegistrantId
     - var canEditDetails = !zoomLinked
@@ -22,7 +22,7 @@ block content
     - var zoomStatusLabel = zoomLinked ? 'Linked' : (eventRow.isOnline && !meeting ? 'No meeting on event' : !eventRow.isOnline ? 'N/A (in-person)' : 'Not linked — use Add Registrant')
 
     .da-page
-        +pageHeader('Edit registrant', fullName)
+        +pageHeader('Edit Registrant', fullName)
             +backBtn(registrantsListUrl, 'Back to registrants')
 
         .da-panel(style='margin-bottom: 1.5rem')
@@ -74,9 +74,12 @@ block content
                                 +readonlyField('Registered')
                                     | #{fmtDate(registration.createdAt)} #{registration.createdAt ? fmtTime(registration.createdAt) : ''}
                                 +readonlyField('Order')
-                                    if registration.orderId
+                                    if registration.Order && registration.Order.orderNumber
                                         a.da-order-link(href=(adminPrefix || '') + '/orders/' + registration.orderId + '/edit')
-                                            span.da-cell-mono= registration.orderId.slice(0, 8) + '…'
+                                            span.da-cell-mono= '#' + registration.Order.orderNumber
+                                    else if registration.orderId
+                                        a.da-order-link(href=(adminPrefix || '') + '/orders/' + registration.orderId + '/edit')
+                                            span.da-cell-mono= registration.orderId.slice(0, 8) + '...'
                                     else
                                         span.da-cell-muted —
                                 if registration.Order && registration.Order.paymentStatus
@@ -115,21 +118,6 @@ block content
                             else if !eventRow.isOnline
                                 p.da-refund-empty(style='margin:0') Zoom does not apply to in-person events.
 
-                .da-card
-                    .da-card-header
-                        h2.da-card-title Danger zone
-                    .da-card-body
-                        p.da-refund-empty(style='margin-top:0') Cancel removes this registration from the event. For paid or partially refunded orders, Stripe will refund this seat’s amount (full or partial vs the original charge, depending on line price and prior refunds).
-                        form(id=cancelFormId method='post' action=cancelUrl style='display:none')
-                        button.da-btn.da-btn--danger(
-                            type='button'
-                            data-confirm-modal
-                            data-confirm-title='Cancel Registration'
-                            data-confirm-msg=cancelMsg
-                            data-confirm-bullets=JSON.stringify(cancelBullets)
-                            data-form-id=cancelFormId
-                        ) Cancel registration
-
             .da-form-aside
                 .da-card
                     .da-card-header
@@ -139,3 +127,18 @@ block content
                             span.da-cell-mono= registration.id
                         +readonlyField('Event')
                             span.da-cell-mono= event.id
+
+                .da-card
+                    .da-card-header
+                        h2.da-card-title Danger zone
+                    .da-card-body(style='display:flex;flex-direction:column;align-items:center;text-align:center')
+                        p.da-refund-empty(style='margin-top:0') Cancel removes this registration from the event. For paid or partially refunded orders, Stripe will refund this seat's amount (full or partial vs the original charge, depending on line price and prior refunds).
+                        form(id=cancelFormId method='post' action=cancelUrl style='display:none')
+                        button.da-btn.da-btn--danger(
+                            type='button'
+                            data-confirm-modal
+                            data-confirm-title='Cancel Registration'
+                            data-confirm-msg=cancelMsg
+                            data-confirm-bullets=JSON.stringify(cancelBullets)
+                            data-form-id=cancelFormId
+                        ) Cancel Registration

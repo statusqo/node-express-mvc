@@ -19,7 +19,7 @@ module.exports = {
         {
           model: Order,
           as: "Order",
-          attributes: ["id", "paymentStatus", "fulfillmentStatus", "total", "currency", "stripePaymentIntentId"],
+          attributes: ["id", "orderNumber", "paymentStatus", "fulfillmentStatus", "total", "currency", "stripePaymentIntentId"],
           required: false,
         },
       ],
@@ -44,7 +44,7 @@ module.exports = {
         {
           model: Order,
           as: "Order",
-          attributes: ["id", "paymentStatus", "total", "currency"],
+          attributes: ["id", "orderNumber", "paymentStatus", "total", "currency"],
           required: false,
         },
         {

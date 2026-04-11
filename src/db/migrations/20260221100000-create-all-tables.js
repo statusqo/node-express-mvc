@@ -531,10 +531,45 @@ module.exports = {
       ...ts,
     });
     await queryInterface.addIndex("order_discounts", ["orderId"]);
+
+    // --- order_histories (append-only audit log of order lifecycle events) ---
+    await queryInterface.createTable("order_histories", {
+      id: uuid,
+      orderId: { type: Sequelize.UUID, allowNull: false, references: { model: "orders", key: "id" }, onUpdate: "CASCADE", onDelete: "CASCADE" },
+      event: {
+        type: Sequelize.ENUM(
+          "payment_finalized",
+          "payment_refunded",
+          "partial_refund_issued",
+          "confirmation_email_sent",
+          "zoom_sync_completed",
+          "fulfillment_status_changed",
+          "refund_requested",
+          "refund_request_approved",
+          "refund_request_rejected",
+          "order_cancelled",
+          "order_updated",
+          "post_commit_retried"
+        ),
+        allowNull: false,
+      },
+      // true = action succeeded, false = action failed, null = informational
+      success: { type: Sequelize.BOOLEAN, allowNull: true },
+      // Free-form context: error messages, changed fields, Stripe IDs, counts, etc.
+      meta: { type: Sequelize.JSON, allowNull: true },
+      // Admin who triggered this (null for system-generated events)
+      actorId: { type: Sequelize.UUID, allowNull: true, references: { model: "users", key: "id" }, onUpdate: "CASCADE", onDelete: "SET NULL" },
+      createdAt: { type: Sequelize.DATE, allowNull: false },
+      // No updatedAt — append-only table
+    });
+    await queryInterface.addIndex("order_histories", ["orderId"]);
+    await queryInterface.addIndex("order_histories", ["event"]);
+    await queryInterface.addIndex("order_histories", ["createdAt"]);
   },
 
   async down(queryInterface) {
     // Drop in reverse dependency order
+    await queryInterface.dropTable("order_histories");
     await queryInterface.dropTable("order_discounts");
     await queryInterface.dropTable("discounts");
     await queryInterface.dropTable("processed_stripe_events");

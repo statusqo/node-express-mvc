@@ -98,9 +98,10 @@ mixin eventSummaryCard(event, registrantCount)
     - var _date = _dp && _dp.length === 3 ? _dp[2] + '/' + _dp[1] + '/' + _dp[0] : '—'
     - var _time = event.startTime ? String(event.startTime).substring(0,5) : '—'
     - var _product = event.Product ? event.Product.title : '—'
-    - var _type = event.Product && event.Product.ProductType ? event.Product.ProductType.name : '—'
     - var _statusClass = ({active:'success', cancelled:'danger', orphaned:'warning'})[event.eventStatus] || 'neutral'
     - var _statusLabel = event.eventStatus ? event.eventStatus.charAt(0).toUpperCase() + event.eventStatus.slice(1) : '—'
+    - var _count = registrantCount != null ? registrantCount : 0
+    - var _remaining = event.capacity != null ? Math.max(0, event.capacity - _count) : null
     .da-event-summary-scroll
       .da-event-summary
         .da-event-summary__item
@@ -112,9 +113,6 @@ mixin eventSummaryCard(event, registrantCount)
         .da-event-summary__item
             span.da-event-summary__label Product
             span.da-event-summary__value= _product
-        .da-event-summary__item
-            span.da-event-summary__label Type
-            span.da-event-summary__value= _type
         .da-event-summary__item
             span.da-event-summary__label Status
             span.da-event-summary__value
@@ -132,4 +130,13 @@ mixin eventSummaryCard(event, registrantCount)
                 span.da-event-summary__value= event.capacity
         .da-event-summary__item
             span.da-event-summary__label Registrants
-            span.da-event-summary__value= registrantCount != null ? registrantCount : 0
+            span.da-event-summary__value= _count
+        .da-event-summary__item
+            span.da-event-summary__label Remaining Seats
+            span.da-event-summary__value
+                if _remaining === null
+                    span.da-cell-muted —
+                else if _remaining === 0
+                    span.da-badge.da-badge--danger Full
+                else
+                    span(style='color:var(--ds-success)')= _remaining

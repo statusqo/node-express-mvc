@@ -60,6 +60,7 @@ module.exports = {
       prDiscount: crypto.randomUUID(),
       orRef: crypto.randomUUID(),
       orTx: crypto.randomUUID(),
+      orHistory: crypto.randomUUID(),
       meMi: crypto.randomUUID(),
       seZoom: crypto.randomUUID(),
     };
@@ -106,6 +107,7 @@ module.exports = {
       row(I.prDiscount, "Discounts", "/discounts", 4, I.products),
       row(I.orRef, "Refund Requests", "/refund-requests", 0, I.orders),
       row(I.orTx, "Refund Transactions", "/refund-transactions", 1, I.orders),
+      row(I.orHistory, "Order History", "/order-history", 2, I.orders),
       row(I.meMi, "Menu Items", "/menu-items", 0, I.menus),
       row(I.seZoom, "Connect Zoom", "/zoom/connect", 0, I.settings),
     ];

@@ -23,6 +23,7 @@ const eventsRoutes = require("./events.routes");
 const zoomController = require("../../controllers/admin/zoom.controller");
 const settingsController = require("../../controllers/admin/settings.controller");
 const discountsController = require("../../controllers/admin/discounts.controller");
+const orderHistoryController = require("../../controllers/admin/orderHistory.controller");
 const { requireAuth } = require("../../middlewares/auth.middleware");
 const { uploadMedia } = require("../../middlewares/uploadMedia.middleware");
 
@@ -90,6 +91,7 @@ router.get("/zoom/callback", asyncHandler(zoomController.callback));
 router.get("/orders", asyncHandler(ordersController.index));
 router.get("/refund-requests", asyncHandler(refundRequestsController.index));
 router.get("/refund-transactions", asyncHandler(refundTransactionsController.index));
+router.get("/order-history", asyncHandler(orderHistoryController.index));
 router.get("/orders/:id/edit", asyncHandler(ordersController.editForm));
 router.post("/orders/:id/edit", asyncHandler(ordersController.update));
 router.post("/orders/:id/cancel-and-refund", asyncHandler(ordersController.cancelAndRefundOrder));

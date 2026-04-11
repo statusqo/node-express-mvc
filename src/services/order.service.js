@@ -20,6 +20,8 @@ const emailService = require("./email.service");
 const storeSettingService = require("./storeSetting.service");
 const discountService = require("./discount.service");
 const orderDiscountRepo = require("../repos/orderDiscount.repo");
+const orderHistoryService = require("./orderHistory.service");
+const { ORDER_HISTORY_EVENT } = require("../constants/orderHistory");
 // stripeGateway is required lazily to avoid circular dependency with stripe.gateway
 
 const { DEFAULT_CURRENCY } = require("../config/constants");
@@ -194,8 +196,10 @@ async function runPostCommitPaidFulfillment(orderId, options = {}) {
   if (!skipZoom) {
     try {
       await syncZoomForPaidOrder(orderId);
+      orderHistoryService.record(orderId, ORDER_HISTORY_EVENT.ZOOM_SYNC_COMPLETED, { success: true });
     } catch (zoomErr) {
       logger.warn("syncZoomForPaidOrder outer failure (non-fatal)", { orderId, error: zoomErr.message });
+      orderHistoryService.record(orderId, ORDER_HISTORY_EVENT.ZOOM_SYNC_COMPLETED, { success: false, meta: { error: zoomErr.message } });
     }
   }
 
@@ -209,7 +213,10 @@ async function runPostCommitPaidFulfillment(orderId, options = {}) {
         vatRate: l.vatRate != null ? Number(l.vatRate) : null,
       }));
       await emailService.sendOrderConfirmationEmail(orderPlain, linesPlain);
-    } catch (_) {}
+      orderHistoryService.record(orderId, ORDER_HISTORY_EVENT.CONFIRMATION_EMAIL_SENT, { success: true, meta: { to: orderPlain.email || null } });
+    } catch (emailErr) {
+      orderHistoryService.record(orderId, ORDER_HISTORY_EVENT.CONFIRMATION_EMAIL_SENT, { success: false, meta: { error: emailErr.message } });
+    }
   }
 
   const allNonPhysical =
@@ -354,6 +361,10 @@ async function finalizeOrderAfterPayment(orderId, gatewayEvidence = {}, meta = {
         paymentTransactionId: paymentTransactionId || null,
         source: meta.source || "(unspecified)",
       });
+      orderHistoryService.record(orderId, ORDER_HISTORY_EVENT.PAYMENT_FINALIZED, {
+        success: true,
+        meta: { freeOrder, source: meta.source || null },
+      });
     }
   } catch (e) {
     await t.rollback();
@@ -417,7 +428,7 @@ async function retryFinalizeStaleOrderForAdmin(orderId) {
 /**
  * Admin recovery: re-run post-commit only (Zoom, confirmation email, digital delivered) for an already-paid order.
  */
-async function retryPostCommitFulfillmentForAdmin(orderId) {
+async function retryPostCommitFulfillmentForAdmin(orderId, options = {}) {
   const order = await orderRepo.findById(orderId);
   if (!order) {
     const err = new Error("Order not found.");
@@ -429,6 +440,11 @@ async function retryPostCommitFulfillmentForAdmin(orderId) {
     err.status = 400;
     throw err;
   }
+  orderHistoryService.record(orderId, ORDER_HISTORY_EVENT.POST_COMMIT_RETRIED, {
+    success: null,
+    meta: { triggeredBy: "admin" },
+    actorId: options.actorId || null,
+  });
   return runPostCommitPaidFulfillment(orderId, { skipZoom: true });
 }
 
@@ -1069,6 +1085,11 @@ async function refundCancelledEventPortionForOrder(orderId, eventId) {
       }
     });
     logger.info("refundCancelledEventPortionForOrder: completed without Stripe PI", { orderId, eventId });
+    const noStripeTotal = lineGroups.reduce((s, g) => s + g.want, 0);
+    orderHistoryService.record(orderId, ORDER_HISTORY_EVENT.PARTIAL_REFUND_ISSUED, {
+      success: true,
+      meta: { eventId, amount: noStripeTotal, currency: order.currency, scopeType: "line_quantity", source: "event_cancellation", stripe: false },
+    });
     return { refunded: true };
   }
 
@@ -1129,6 +1150,11 @@ async function refundCancelledEventPortionForOrder(orderId, eventId) {
   }
 
   logger.info("refundCancelledEventPortionForOrder: complete", { orderId, eventId });
+  const totalRefunded = lineGroups.reduce((s, g) => s + g.want, 0);
+  orderHistoryService.record(orderId, ORDER_HISTORY_EVENT.PARTIAL_REFUND_ISSUED, {
+    success: true,
+    meta: { eventId, amount: totalRefunded, currency: order.currency, scopeType: "line_quantity", source: "event_cancellation" },
+  });
   return { refunded: true };
 }
 
@@ -1176,6 +1202,10 @@ async function refundOrderForEventCancellation(orderId) {
       await applyRefundTransactionEffects(refundTx.id, { transaction: t });
     });
     logger.info("refundOrderForEventCancellation: marked refunded (no Stripe PI)", { orderId });
+    orderHistoryService.record(orderId, ORDER_HISTORY_EVENT.PAYMENT_REFUNDED, {
+      success: true,
+      meta: { amount: remaining, currency: order.currency, source: "event_cancellation", stripe: false },
+    });
     return { refunded: true };
   }
 
@@ -1217,6 +1247,10 @@ async function refundOrderForEventCancellation(orderId) {
     }
   });
   logger.info("refundOrderForEventCancellation: refund complete", { orderId });
+  orderHistoryService.record(orderId, ORDER_HISTORY_EVENT.PAYMENT_REFUNDED, {
+    success: true,
+    meta: { amount: remaining, currency: order.currency, source: "event_cancellation", stripeRefundId: refund?.id || null },
+  });
   return { refunded: true };
 }
 
@@ -1279,6 +1313,8 @@ async function cancelAndRefundOrderForAdmin(orderId, options = {}) {
       await applyRefundTransactionEffects(refundTx.id, { transaction: t });
     });
     logger.info("cancelAndRefundOrderForAdmin: completed without Stripe PI", { orderId });
+    orderHistoryService.record(orderId, ORDER_HISTORY_EVENT.ORDER_CANCELLED, { success: true, meta: { source: "admin_cancel_refund", stripe: false }, actorId: processedByUserId });
+    orderHistoryService.record(orderId, ORDER_HISTORY_EVENT.PAYMENT_REFUNDED, { success: true, meta: { amount: remaining, currency: order.currency, stripe: false }, actorId: processedByUserId });
     return { refunded: true, remaining, currency: order.currency };
   }
 
@@ -1338,8 +1374,11 @@ async function cancelAndRefundOrderForAdmin(orderId, options = {}) {
   logger.info("cancelAndRefundOrderForAdmin: Stripe refund recorded", { orderId, refundId: refund.id, status: refund.status });
 
   if (refund.status === "succeeded") {
+    orderHistoryService.record(orderId, ORDER_HISTORY_EVENT.ORDER_CANCELLED, { success: true, meta: { source: "admin_cancel_refund", stripeRefundId: refund.id }, actorId: processedByUserId });
+    orderHistoryService.record(orderId, ORDER_HISTORY_EVENT.PAYMENT_REFUNDED, { success: true, meta: { amount: remaining, currency: order.currency, stripeRefundId: refund.id }, actorId: processedByUserId });
     return { refunded: true, remaining, currency: order.currency };
   }
+  orderHistoryService.record(orderId, ORDER_HISTORY_EVENT.ORDER_CANCELLED, { success: null, meta: { source: "admin_cancel_refund", stripeRefundId: refund.id, status: refund.status }, actorId: processedByUserId });
   return { refunded: false, pending: true, remaining, currency: order.currency };
 }
 
@@ -1581,6 +1620,7 @@ async function updateOrderForAdmin(orderId, updates = {}) {
     err.status = 404;
     throw err;
   }
+  orderHistoryService.record(orderId, ORDER_HISTORY_EVENT.ORDER_UPDATED, { success: true, meta: { changes: data } });
   return order;
 }
 

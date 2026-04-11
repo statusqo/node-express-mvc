@@ -36,6 +36,7 @@ const ProcessedStripeEvent = require("./ProcessedStripeEvent");
 const StoreSetting = require("./StoreSetting");
 const Discount = require("./Discount");
 const OrderDiscount = require("./OrderDiscount");
+const OrderHistory = require("./OrderHistory");
 
 // --- Menu <-> MenuItem ---
 Menu.hasMany(MenuItem, { foreignKey: "menuId" });
@@ -187,6 +188,12 @@ OrderDiscount.belongsTo(Order, { foreignKey: "orderId" });
 Discount.hasMany(OrderDiscount, { foreignKey: "discountId", as: "OrderDiscounts" });
 OrderDiscount.belongsTo(Discount, { foreignKey: "discountId", as: "Discount" });
 
+// --- OrderHistory (append-only audit log) ---
+Order.hasMany(OrderHistory, { foreignKey: "orderId", as: "OrderHistories" });
+OrderHistory.belongsTo(Order, { foreignKey: "orderId" });
+User.hasMany(OrderHistory, { foreignKey: "actorId", as: "OrderHistoryActions" });
+OrderHistory.belongsTo(User, { foreignKey: "actorId", as: "Actor" });
+
 module.exports = {
   User,
   Menu,
@@ -225,4 +232,5 @@ module.exports = {
   StoreSetting,
   Discount,
   OrderDiscount,
+  OrderHistory,
 };

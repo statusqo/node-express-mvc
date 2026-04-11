@@ -44,12 +44,18 @@ block content
                                     td
                                         span.da-cell-muted= email
                                     td
-                                        if r.Order
+                                        if r.Order && r.Order.orderNumber
                                             a.da-order-link(
                                                 href=(adminPrefix || '') + '/orders/' + r.Order.id + '/edit'
-                                                aria-label='View order ' + r.Order.id.slice(0, 8)
+                                                aria-label='View order #' + r.Order.orderNumber
                                             )
-                                                span.da-cell-mono= r.Order.id.slice(0, 8) + '…'
+                                                span.da-cell-mono= '#' + r.Order.orderNumber
+                                        else if r.Order
+                                            a.da-order-link(
+                                                href=(adminPrefix || '') + '/orders/' + r.Order.id + '/edit'
+                                                aria-label='View order'
+                                            )
+                                                span.da-cell-mono= r.Order.id.slice(0, 8) + '...'
                                         else
                                             span.da-cell-muted —
                                     td

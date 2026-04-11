@@ -230,14 +230,12 @@
     box-shadow: var(--evt-card-shadow);
     cursor: default;
     transition:
-        transform 0.2s var(--ds-ease),
         border-color 0.2s var(--ds-ease),
         box-shadow 0.2s var(--ds-ease);
 }
 
 .da-events-card:hover {
     cursor: pointer;
-    transform: translateY(-2px);
     border-color: rgba(45, 212, 191, 0.25);
     box-shadow:
         0 12px 36px rgba(0, 0, 0, 0.45),

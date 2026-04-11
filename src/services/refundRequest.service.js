@@ -10,6 +10,8 @@ const { TRANSACTION_STATUS } = require("../constants/transaction");
 const { FULFILLMENT_STATUS } = require("../constants/order");
 const { REFUND_REQUEST_STATUS } = require("../constants/refundRequest");
 const { REFUND_TRANSACTION_STATUS, REFUND_TRANSACTION_SCOPE } = require("../constants/refundTransaction");
+const orderHistoryService = require("./orderHistory.service");
+const { ORDER_HISTORY_EVENT } = require("../constants/orderHistory");
 
 const PENDING = REFUND_REQUEST_STATUS.PENDING;
 const APPROVED = REFUND_REQUEST_STATUS.APPROVED;
@@ -65,6 +67,10 @@ async function createRefundRequest(orderId, requestedByUserId, reason = null) {
     await orderRepo.update(orderId, { fulfillmentStatus: FULFILLMENT_STATUS.REFUND_REQUESTED }, { transaction: t });
   });
   logger.info("Refund request created", { requestId: request.id, orderId, requestedByUserId });
+  orderHistoryService.record(orderId, ORDER_HISTORY_EVENT.REFUND_REQUESTED, {
+    success: true,
+    meta: { requestId: request.id, requestedByUserId: requestedByUserId || null },
+  });
   return request;
 }
 
@@ -183,6 +189,8 @@ async function approveRefundRequest(requestId, processedByUserId) {
       await orderService.markRefundRequestApprovedIfPendingAfterEffects(refundTx.id, { transaction: t });
     });
     logger.info("approveRefundRequest: completed without Stripe PI", { requestId, orderId: order.id });
+    orderHistoryService.record(order.id, ORDER_HISTORY_EVENT.REFUND_REQUEST_APPROVED, { success: true, meta: { requestId, stripe: false }, actorId: processedByUserId });
+    orderHistoryService.record(order.id, ORDER_HISTORY_EVENT.PAYMENT_REFUNDED, { success: true, meta: { amount: remaining, currency: order.currency, requestId, stripe: false }, actorId: processedByUserId });
     return await refundRequestRepo.findById(requestId);
   }
 
@@ -247,6 +255,13 @@ async function approveRefundRequest(requestId, processedByUserId) {
   });
 
   logger.info("Refund approval complete", { requestId, orderId: order.id, refundStatus: refund.status });
+  if (refund.status === "succeeded") {
+    orderHistoryService.record(order.id, ORDER_HISTORY_EVENT.REFUND_REQUEST_APPROVED, { success: true, meta: { requestId, stripeRefundId: refund.id }, actorId: processedByUserId });
+    orderHistoryService.record(order.id, ORDER_HISTORY_EVENT.PAYMENT_REFUNDED, { success: true, meta: { amount: remaining, currency: order.currency, requestId, stripeRefundId: refund.id }, actorId: processedByUserId });
+  } else {
+    // Stripe refund pending — request stays pending; completion happens via webhook
+    orderHistoryService.record(order.id, ORDER_HISTORY_EVENT.REFUND_REQUEST_APPROVED, { success: null, meta: { requestId, stripeRefundId: refund.id, stripeStatus: refund.status }, actorId: processedByUserId });
+  }
   return await refundRequestRepo.findById(requestId);
 }
 
@@ -275,6 +290,7 @@ async function rejectRefundRequest(requestId, processedByUserId) {
     await orderRepo.update(request.orderId, { fulfillmentStatus: FULFILLMENT_STATUS.DELIVERED }, { transaction: t });
   });
   logger.info("Refund request rejected", { requestId, orderId: request.orderId, processedByUserId });
+  orderHistoryService.record(request.orderId, ORDER_HISTORY_EVENT.REFUND_REQUEST_REJECTED, { success: true, meta: { requestId }, actorId: processedByUserId });
   return await refundRequestRepo.findById(requestId);
 }
 
