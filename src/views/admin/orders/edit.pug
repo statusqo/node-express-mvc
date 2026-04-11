@@ -13,17 +13,6 @@ block content
 
         +formError(error)
 
-        //- ── Active registrations warning banner ─────────────────────
-        if hasActiveRegistrations
-            - var bannerMsg = 'This order has ' + activeRegistrationCount + ' event registration' + (activeRegistrationCount !== 1 ? 's' : '') + '. Use Cancel & Refund Order to remove Zoom access, refund the remaining balance, and clear registrations (or cancel seats individually from the event registrant page first if you need partial refunds only).'
-            .da-alert.da-alert--warning(role='alert')
-                span.da-alert__icon
-                    svg(width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
-                        path(d='M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z')
-                        line(x1='12' y1='9' x2='12' y2='13')
-                        line(x1='12' y1='17' x2='12.01' y2='17')
-                span= bannerMsg
-
         //- ── Two-column grid: form main + refund aside ───────────────
         .da-form-grid
 
@@ -251,82 +240,98 @@ block content
                         button.da-btn.da-btn--primary(type='submit' form='orderEditForm') Save Changes
                         a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/orders') Back
 
-            //- ── Aside: refund transactions + refund requests ─────────
+            //- ── Aside: alerts + actions + refund requests + danger ───
             .da-form-aside
 
-                - var _hasActions = canRetryFinalize || canRetryPostCommit
-                .da-card(style=_hasActions ? 'border-color:var(--ds-warning,#F59E0B)' : '')
-                    .da-card-header(style=_hasActions ? 'background:rgba(245,158,11,0.08)' : '')
-                        h2.da-card-title(style=_hasActions ? 'color:var(--ds-warning,#F59E0B)' : '') Actions
-                    .da-card-body
+                //- ── Order Alerts card ────────────────────────────────
+                - var _orderAlerts = []
+                - if (hasActiveRegistrations) _orderAlerts.push('This order has ' + activeRegistrationCount + ' active event registration' + (activeRegistrationCount !== 1 ? 's' : '') + '.')
+                if _orderAlerts.length
+                    .da-card
+                        .da-card-header
+                            h2.da-card-title Alerts
+                            span.da-count= _orderAlerts.length
+                        .da-card-body
+                            ul(style='list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:0.65rem')
+                                each alertMsg in _orderAlerts
+                                    li(style='display:flex;align-items:flex-start;gap:0.5rem;font-size:0.8125rem;line-height:1.5;color:var(--ds-warning,#F59E0B)')
+                                        span(aria-hidden='true' style='flex-shrink:0;line-height:1.3') ●
+                                        span= alertMsg
+
+                - var _hasAlert = canRetryFinalize || canRetryZoom || (canResendEmail && !emailSent)
+                - var _hasActions = canRetryFinalize || canRetryZoom || canResendEmail
+                .da-card(style=_hasAlert ? 'border-color:var(--ds-warning,#F59E0B)' : '')
+                    .da-card-header(style=_hasAlert ? 'background:rgba(245,158,11,0.08)' : '')
+                        h2.da-card-title(style=_hasAlert ? 'color:var(--ds-warning,#F59E0B)' : '') Actions
+                    .da-card-body(style='display:flex;flex-direction:column;align-items:center;gap:1rem')
                         if canRetryFinalize
-                            p.da-form-hint(style='margin-bottom:0.75rem')
-                                | Stripe charged the customer but the order stayed pending. Finalising will update inventory, create registrations, and mark the order as paid.
-                            - var finalizeFormId = 'finalize-payment-form-' + order.id
-                            form(id=finalizeFormId method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/finalize-payment')
-                                button.da-btn.da-btn--secondary(
-                                    type='button'
-                                    data-confirm-modal
-                                    data-confirm-title='Finalize Payment'
-                                    data-confirm-msg='Mark this order as paid and run inventory and registration fulfillment. Only use this if you have confirmed the customer was charged in Stripe.'
-                                    data-form-id=finalizeFormId
-                                    style='width:100%;margin-bottom:' + (canRetryPostCommit ? '1rem' : '0')
-                                ) Finalize payment
-                        if canRetryPostCommit
-                            p.da-form-hint(style='margin-bottom:0.75rem')
-                                | Confirmation email or digital fulfillment (Zoom) did not complete after payment. For Zoom, retry per registration from the event Registrants page.
-                            - var postCommitFormId = 'retry-post-commit-form-' + order.id
-                            form(id=postCommitFormId method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/retry-post-commit')
-                                button.da-btn.da-btn--secondary(
-                                    type='button'
-                                    data-confirm-modal
-                                    data-confirm-title='Retry Digital Fulfillment'
-                                    data-confirm-msg='Re-send the confirmation email and re-run digital fulfillment for this order. Safe to run more than once.'
-                                    data-form-id=postCommitFormId
-                                    style='width:100%'
-                                ) Retry digital fulfillment
-                        if !canRetryFinalize && !canRetryPostCommit
+                            .da-action-item(style='width:100%;display:flex;flex-direction:column;align-items:center;gap:0.5rem')
+                                p.da-form-hint(style='margin:0;text-align:center')
+                                    | Stripe charged the customer but the order stayed pending. Finalising will update inventory, create registrations, and mark the order as paid.
+                                - var finalizeFormId = 'finalize-payment-form-' + order.id
+                                form(id=finalizeFormId method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/finalize-payment')
+                                    button.da-btn.da-btn--warning(
+                                        type='button'
+                                        data-confirm-modal
+                                        data-confirm-title='Finalize Payment'
+                                        data-confirm-msg='Mark this order as paid and run inventory and registration fulfillment. Only use this if you have confirmed the customer was charged in Stripe.'
+                                        data-form-id=finalizeFormId
+                                    ) Finalize payment
+                        if canRetryZoom
+                            .da-action-item(style='width:100%;display:flex;flex-direction:column;align-items:center;gap:0.5rem')
+                                p.da-form-hint(style='margin:0;text-align:center')
+                                    | Zoom sync did not complete after payment. Click to retry adding this order's registrants to their Zoom meetings.
+                                - var retryZoomFormId = 'retry-zoom-form-' + order.id
+                                form(id=retryZoomFormId method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/retry-zoom')
+                                    button.da-btn.da-btn--warning(
+                                        type='button'
+                                        data-confirm-modal
+                                        data-confirm-title='Retry Zoom Sync'
+                                        data-confirm-msg='Re-run Zoom sync for all registrants on this order. Safe to run more than once.'
+                                        data-form-id=retryZoomFormId
+                                    ) Retry Zoom Sync
+                        if canResendEmail
+                            .da-action-item(style='width:100%;display:flex;flex-direction:column;align-items:center;gap:0.5rem')
+                                if !emailSent
+                                    p.da-form-hint(style='margin:0;text-align:center;color:var(--ds-warning,#F59E0B)')
+                                        | Confirmation email was not sent after payment.
+                                - var resendEmailFormId = 'resend-email-form-' + order.id
+                                form(id=resendEmailFormId method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/resend-confirmation-email')
+                                    button(
+                                        class='da-btn ' + (!emailSent ? 'da-btn--warning' : 'da-btn--secondary')
+                                        type='button'
+                                        data-confirm-modal
+                                        data-confirm-title='Resend Confirmation Email'
+                                        data-confirm-msg='Send the order confirmation email to the customer again. Safe to run more than once.'
+                                        data-form-id=resendEmailFormId
+                                    ) Resend Confirmation Email
+                        if !_hasActions
                             p.da-refund-empty(style='margin-top:0') No actions to perform for this order.
 
                 .da-card
                     .da-card-header
                         h2.da-card-title Refund Requests
                         if refundRequests && refundRequests.length
-                            span.da-count= refundRequests.length + ' request' + (refundRequests.length !== 1 ? 's' : '')
+                            span.da-count= refundRequests.length
                     .da-card-body
                         if refundRequests && refundRequests.length
-                            if orderHasEventLines
-                                - var approveConfirmMsg = 'Issue a Stripe refund for the remaining balance and complete this request. This order includes event lines: Zoom registrants are removed first, then Stripe refunds; registrations are cleared and inventory restored when the refund succeeds.'
-                                - var approveConfirmBullets = JSON.stringify(['Remove Zoom access for online events (before Stripe)', 'Stripe refund for the remaining capture balance', 'Clear registrations and restore inventory when Stripe confirms'])
-                            else
-                                - var approveConfirmMsg = 'Issue a Stripe refund for the remaining balance and complete this request. Inventory and order records update when the refund succeeds.'
-                                - var approveConfirmBullets = JSON.stringify(['Stripe refund for the remaining capture balance', 'Inventory and order updated when the refund completes'])
-                            each r in refundRequests
-                                - var rClass = ({pending:'warning',approved:'success',rejected:'danger'})[r.status] || 'neutral'
-                                .da-refund-card
-                                    .da-refund-card-header
-                                        span.da-badge(class='da-badge--' + rClass)= r.status.charAt(0).toUpperCase() + r.status.slice(1)
-
-                                    if r.reason
+                            - var _pendingRR = refundRequests.filter(function(r){ return r.status === 'pending' })
+                            - var _resolvedRR = refundRequests.filter(function(r){ return r.status !== 'pending' })
+                            if _pendingRR.length
+                                if orderHasEventLines
+                                    - var approveConfirmMsg = 'Issue a Stripe refund for the remaining balance and complete this request. This order includes event lines: Zoom registrants are removed first, then Stripe refunds; registrations are cleared and inventory restored when the refund succeeds.'
+                                    - var approveConfirmBullets = JSON.stringify(['Remove Zoom access for online events (before Stripe)', 'Stripe refund for the remaining capture balance', 'Clear registrations and restore inventory when Stripe confirms'])
+                                else
+                                    - var approveConfirmMsg = 'Issue a Stripe refund for the remaining balance and complete this request. Inventory and order records update when the refund succeeds.'
+                                    - var approveConfirmBullets = JSON.stringify(['Stripe refund for the remaining capture balance', 'Inventory and order updated when the refund completes'])
+                                each r in _pendingRR
+                                    .da-refund-card
+                                        .da-refund-card-header
+                                            span.da-badge.da-badge--warning Pending
                                         p.da-refund-meta
-                                            strong Reason:&nbsp;
-                                            | #{r.reason}
-                                    p.da-refund-meta
-                                        strong Requested:&nbsp;
-                                        | #{r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'}
-                                    if r.processedAt
-                                        p.da-refund-meta
-                                            strong Processed:&nbsp;
-                                            | #{new Date(r.processedAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'})}
-                                    if r.status === 'approved'
-                                        p.da-refund-meta
-                                            strong Amount:&nbsp;
-                                            | #{order.total != null ? Number(order.total).toFixed(2) : '—'} #{order.currency || 'EUR'} (full refund)
-
-                                    if r.status === 'pending'
+                                            strong Requested:&nbsp;
+                                            | #{r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'}
                                         .da-refund-actions
-
-                                            //- Approve
                                             - var approveFormId = 'approve-refund-form-' + r.id
                                             form(id=approveFormId method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/refund-request/' + r.id + '/approve')
                                                 button.da-btn.da-btn--primary(
@@ -337,8 +342,6 @@ block content
                                                     data-confirm-bullets=approveConfirmBullets
                                                     data-form-id=approveFormId
                                                 ) Approve
-
-                                            //- Reject
                                             - var rejectFormId = 'reject-refund-form-' + r.id
                                             form(id=rejectFormId method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/refund-request/' + r.id + '/reject')
                                                 button.da-btn.da-btn--danger(
@@ -348,6 +351,17 @@ block content
                                                     data-confirm-msg='This will reject the refund request and return the order to delivered status.'
                                                     data-form-id=rejectFormId
                                                 ) Reject
+                            if _resolvedRR.length
+                                if _pendingRR.length
+                                    hr(style='margin:0.85rem 0;border:none;border-top:1px solid var(--ds-border)')
+                                ul(style='list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:0.5rem')
+                                    each r in _resolvedRR
+                                        - var _rApproved = r.status === 'approved'
+                                        - var _rDate = r.processedAt ? new Date(r.processedAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'}) : (r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—')
+                                        li(style='display:flex;align-items:center;gap:0.5rem;font-size:0.8125rem;line-height:1.4')
+                                            span(aria-hidden='true' style='flex-shrink:0;color:' + (_rApproved ? 'var(--ds-success,#22C55E)' : 'var(--ds-danger,#EF4444)')) ●
+                                            span(style='color:' + (_rApproved ? 'var(--ds-success,#22C55E)' : 'var(--ds-danger,#EF4444)') + ';font-weight:600')= r.status.charAt(0).toUpperCase() + r.status.slice(1)
+                                            span(style='color:var(--ds-text-3)') &mdash; #{_rDate}
                         else
                             p.da-refund-empty No refund requests for this order.
 

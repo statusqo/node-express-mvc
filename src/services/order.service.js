@@ -219,18 +219,6 @@ async function runPostCommitPaidFulfillment(orderId, options = {}) {
     }
   }
 
-  const allNonPhysical =
-    lines.length > 0 &&
-    lines.every(
-      (line) =>
-        line.ProductVariant &&
-        line.ProductVariant.Product &&
-        line.ProductVariant.Product.isPhysical === false,
-    );
-  if (allNonPhysical) {
-    await orderRepo.update(orderAfter.id, { fulfillmentStatus: FULFILLMENT_STATUS.DELIVERED });
-    return await orderRepo.findById(orderAfter.id);
-  }
   return orderAfter;
 }
 
@@ -290,6 +278,19 @@ async function fulfillPaidOrderWithinTransaction(orderId, t, { paymentTransactio
   }
 
   await createRegistrationsForPaidOrderInTransaction(orderId, t);
+
+  const allNonPhysical =
+    lines.length > 0 &&
+    lines.every(
+      (line) =>
+        line.ProductVariant &&
+        line.ProductVariant.Product &&
+        line.ProductVariant.Product.isPhysical === false,
+    );
+  if (allNonPhysical) {
+    await orderInTx.update({ fulfillmentStatus: FULFILLMENT_STATUS.DELIVERED }, { transaction: t });
+  }
+
   return { alreadyDone: false };
 }
 
@@ -426,9 +427,10 @@ async function retryFinalizeStaleOrderForAdmin(orderId) {
 }
 
 /**
- * Admin recovery: re-run post-commit only (Zoom, confirmation email, digital delivered) for an already-paid order.
+ * Admin action: retry Zoom sync for a paid order that has event lines.
+ * Records zoom_sync_completed (success or failure) in OrderHistory.
  */
-async function retryPostCommitFulfillmentForAdmin(orderId, options = {}) {
+async function retryZoomSyncForAdmin(orderId, options = {}) {
   const order = await orderRepo.findById(orderId);
   if (!order) {
     const err = new Error("Order not found.");
@@ -436,16 +438,77 @@ async function retryPostCommitFulfillmentForAdmin(orderId, options = {}) {
     throw err;
   }
   if (order.paymentStatus !== PAYMENT_STATUS.PAID) {
-    const err = new Error('Order is not paid; use "Finalize payment" first if checkout left the order pending.');
+    const err = new Error("Order is not paid.");
     err.status = 400;
     throw err;
   }
-  orderHistoryService.record(orderId, ORDER_HISTORY_EVENT.POST_COMMIT_RETRIED, {
-    success: null,
-    meta: { triggeredBy: "admin" },
-    actorId: options.actorId || null,
-  });
-  return runPostCommitPaidFulfillment(orderId, { skipZoom: true });
+  const lines = await orderRepo.getLines(orderId);
+  const hasEventLines = lines.some((l) => l.eventId != null && String(l.eventId).trim() !== "");
+  if (!hasEventLines) {
+    const err = new Error("This order has no event lines; Zoom sync is not applicable.");
+    err.status = 400;
+    throw err;
+  }
+  try {
+    await syncZoomForPaidOrder(orderId);
+    orderHistoryService.record(orderId, ORDER_HISTORY_EVENT.ZOOM_SYNC_COMPLETED, {
+      success: true,
+      actorId: options.actorId || null,
+    });
+  } catch (zoomErr) {
+    orderHistoryService.record(orderId, ORDER_HISTORY_EVENT.ZOOM_SYNC_COMPLETED, {
+      success: false,
+      meta: { error: zoomErr.message },
+      actorId: options.actorId || null,
+    });
+    throw zoomErr;
+  }
+}
+
+/**
+ * Admin action: resend the order confirmation email for a paid order.
+ * Records confirmation_email_sent (success or failure) in OrderHistory.
+ */
+async function resendOrderConfirmationEmailForAdmin(orderId, options = {}) {
+  const orderAfter = await orderRepo.findById(orderId);
+  if (!orderAfter) {
+    const err = new Error("Order not found.");
+    err.status = 404;
+    throw err;
+  }
+  if (orderAfter.paymentStatus !== PAYMENT_STATUS.PAID) {
+    const err = new Error("Order is not paid.");
+    err.status = 400;
+    throw err;
+  }
+  if (!emailService.sendOrderConfirmationEmail || !emailService.isMailConfigured || !emailService.isMailConfigured()) {
+    const err = new Error("Email is not configured on this server.");
+    err.status = 400;
+    throw err;
+  }
+  const lines = await orderRepo.getLines(orderId);
+  const orderPlain = orderAfter.get ? orderAfter.get({ plain: true }) : orderAfter;
+  const linesPlain = (lines || []).map((l) => ({
+    title: l.title,
+    quantity: l.quantity,
+    price: l.price,
+    vatRate: l.vatRate != null ? Number(l.vatRate) : null,
+  }));
+  try {
+    await emailService.sendOrderConfirmationEmail(orderPlain, linesPlain);
+    orderHistoryService.record(orderId, ORDER_HISTORY_EVENT.CONFIRMATION_EMAIL_SENT, {
+      success: true,
+      meta: { to: orderPlain.email || null },
+      actorId: options.actorId || null,
+    });
+  } catch (emailErr) {
+    orderHistoryService.record(orderId, ORDER_HISTORY_EVENT.CONFIRMATION_EMAIL_SENT, {
+      success: false,
+      meta: { error: emailErr.message },
+      actorId: options.actorId || null,
+    });
+    throw emailErr;
+  }
 }
 
 /**
@@ -1757,6 +1820,18 @@ async function getAdminOrderEditPayload(orderId) {
     ? (orderDiscountRow.get ? orderDiscountRow.get({ plain: true }) : orderDiscountRow)
     : null;
 
+  // ── Derive digital fulfillment status from OrderHistory ────────────────────
+  const isPaid = orderPlain.paymentStatus === PAYMENT_STATUS.PAID;
+  const zoomSyncSucceeded = isPaid && orderHasEventLines
+    ? await orderHistoryService.hasSuccessfulEvent(orderId, ORDER_HISTORY_EVENT.ZOOM_SYNC_COMPLETED)
+    : false;
+  const emailSent = isPaid
+    ? await orderHistoryService.hasSuccessfulEvent(orderId, ORDER_HISTORY_EVENT.CONFIRMATION_EMAIL_SENT)
+    : false;
+  const canRetryZoom = isPaid && orderHasEventLines && !zoomSyncSucceeded;
+  const canResendEmail = isPaid;
+  // ───────────────────────────────────────────────────────────────────────────
+
   return {
     order: orderPlain,
     orderLines: orderLinesPlain,
@@ -1772,6 +1847,10 @@ async function getAdminOrderEditPayload(orderId) {
     activeRegistrationCount,
     orderHasEventLines,
     orderDiscount,
+    zoomSyncSucceeded,
+    emailSent,
+    canRetryZoom,
+    canResendEmail,
   };
 }
 
@@ -1779,7 +1858,8 @@ module.exports = {
   INSUFFICIENT_STOCK_AT_FULFILLMENT,
   finalizeOrderAfterPayment,
   retryFinalizeStaleOrderForAdmin,
-  retryPostCommitFulfillmentForAdmin,
+  retryZoomSyncForAdmin,
+  resendOrderConfirmationEmailForAdmin,
   getCartTotalForPayment,
   createOrderFromCart,
   createOrderFromEvent,

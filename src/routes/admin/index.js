@@ -98,7 +98,8 @@ router.post("/orders/:id/cancel-and-refund", asyncHandler(ordersController.cance
 router.post("/orders/:id/refund-request/:requestId/approve", asyncHandler(ordersController.approveRefundRequest));
 router.post("/orders/:id/refund-request/:requestId/reject", asyncHandler(ordersController.rejectRefundRequest));
 router.post("/orders/:id/finalize-payment", asyncHandler(ordersController.retryFinalizePayment));
-router.post("/orders/:id/retry-post-commit", asyncHandler(ordersController.retryPostCommitFulfillment));
+router.post("/orders/:id/retry-zoom", asyncHandler(ordersController.retryZoom));
+router.post("/orders/:id/resend-confirmation-email", asyncHandler(ordersController.resendConfirmationEmail));
 // Users CRUD
 router.get("/users", asyncHandler(usersController.index));
 router.get("/users/new", asyncHandler(usersController.newForm));

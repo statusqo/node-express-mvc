@@ -598,6 +598,18 @@ tr.da-row--entering {
     border-color: var(--ds-danger);
 }
 
+.da-page .da-btn--warning {
+    background: var(--ds-warning-dim);
+    color: var(--ds-warning);
+    border-color: rgba(245, 158, 11, 0.3);
+}
+.da-page .da-btn--warning:hover {
+    background: rgba(245, 158, 11, 0.22);
+    color: var(--ds-warning);
+    border-color: var(--ds-warning);
+    box-shadow: 0 2px 12px rgba(245, 158, 11, 0.18);
+}
+
 /* Dashboard home (.dash-page) uses .da-btn for integrations; mirror .da-page button styles */
 .dash-page .da-btn {
     display: inline-flex;

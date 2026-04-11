@@ -77,8 +77,6 @@ module.exports = {
     const pendingTx = txs.find((t) => t.status === "pending");
     const canRetryFinalize =
       order.paymentStatus === "pending" && (pendingTx != null || Number(order.total) === 0);
-    const canRetryPostCommit =
-      order.paymentStatus === "paid" && order.fulfillmentStatus === "pending";
     res.render("admin/orders/edit", {
       title: "Edit Order",
       order: payload.order,
@@ -98,7 +96,9 @@ module.exports = {
       refundRequests: refundRequestsPlain,
       validFulfillmentStatuses: FULFILLMENT_STATUS_LIST,
       canRetryFinalize,
-      canRetryPostCommit,
+      canRetryZoom: payload.canRetryZoom || false,
+      canResendEmail: payload.canResendEmail || false,
+      emailSent: payload.emailSent || false,
     });
   },
 
@@ -120,8 +120,6 @@ module.exports = {
       const pendingTx = txs.find((t) => t.status === "pending");
       const canRetryFinalize =
         order.paymentStatus === "pending" && (pendingTx != null || Number(order.total) === 0);
-      const canRetryPostCommit =
-        order.paymentStatus === "paid" && order.fulfillmentStatus === "pending";
       return res.status(400).render("admin/orders/edit", {
         title: "Edit Order",
         order: payload.order,
@@ -141,7 +139,9 @@ module.exports = {
         refundRequests: refundRequestsPlain,
         validFulfillmentStatuses: FULFILLMENT_STATUS_LIST,
         canRetryFinalize,
-        canRetryPostCommit,
+        canRetryZoom: payload.canRetryZoom || false,
+        canResendEmail: payload.canResendEmail || false,
+        emailSent: payload.emailSent || false,
         error: result.errors[0].message,
       });
     }
@@ -160,9 +160,6 @@ module.exports = {
       const canRetryFinalize = payload
         ? payload.order.paymentStatus === "pending" &&
           ((payload.transactions || []).some((t) => t.status === "pending") || Number(payload.order.total) === 0)
-        : false;
-      const canRetryPostCommit = payload
-        ? payload.order.paymentStatus === "paid" && payload.order.fulfillmentStatus === "pending"
         : false;
       return res.status(status).render("admin/orders/edit", {
         title: "Edit Order",
@@ -183,7 +180,9 @@ module.exports = {
         refundRequests: refundRequestsPlain,
         validFulfillmentStatuses: FULFILLMENT_STATUS_LIST,
         canRetryFinalize,
-        canRetryPostCommit,
+        canRetryZoom: payload ? payload.canRetryZoom || false : false,
+        canResendEmail: payload ? payload.canResendEmail || false : false,
+        emailSent: payload ? payload.emailSent || false : false,
         error: message,
       });
     }
@@ -231,14 +230,29 @@ module.exports = {
     return res.redirect(302, prefix);
   },
 
-  async retryPostCommitFulfillment(req, res) {
+  async retryZoom(req, res) {
     const { id: orderId } = req.params;
     const prefix = (req.adminPrefix || "") + "/orders/" + orderId + "/edit";
+    const actorId = req.user && req.user.id;
     try {
-      await orderService.retryPostCommitFulfillmentForAdmin(orderId);
-      res.setFlash("success", "Confirmation email and digital fulfillment were run again. Retry Zoom from the event Registrants page if needed.");
+      await orderService.retryZoomSyncForAdmin(orderId, { actorId });
+      res.setFlash("success", "Zoom sync completed successfully.");
     } catch (err) {
-      const msg = err.status === 404 ? "Order not found." : err.message || "Could not run post-payment steps.";
+      const msg = err.status === 404 ? "Order not found." : err.message || "Zoom sync failed.";
+      res.setFlash("error", msg);
+    }
+    return res.redirect(302, prefix);
+  },
+
+  async resendConfirmationEmail(req, res) {
+    const { id: orderId } = req.params;
+    const prefix = (req.adminPrefix || "") + "/orders/" + orderId + "/edit";
+    const actorId = req.user && req.user.id;
+    try {
+      await orderService.resendOrderConfirmationEmailForAdmin(orderId, { actorId });
+      res.setFlash("success", "Confirmation email sent successfully.");
+    } catch (err) {
+      const msg = err.status === 404 ? "Order not found." : err.message || "Could not send confirmation email.";
       res.setFlash("error", msg);
     }
     return res.redirect(302, prefix);

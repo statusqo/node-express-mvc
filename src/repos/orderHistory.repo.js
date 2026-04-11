@@ -95,4 +95,14 @@ module.exports = {
     const where = buildWhere(filters);
     return await OrderHistory.count({ where: Object.keys(where).length ? where : undefined });
   },
+
+  /**
+   * Returns true if at least one successful (success = true) event of the given type
+   * exists for the given order.
+   */
+  async hasSuccessfulEvent(orderId, eventType) {
+    if (!orderId || !eventType) return false;
+    const count = await OrderHistory.count({ where: { orderId, event: eventType, success: true } });
+    return count > 0;
+  },
 };

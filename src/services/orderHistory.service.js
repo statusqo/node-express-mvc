@@ -23,4 +23,17 @@ function record(orderId, event, opts = {}) {
     });
 }
 
-module.exports = { record };
+/**
+ * Returns true if at least one success=true entry exists for the given order and event type.
+ * Returns false on error so callers can degrade gracefully.
+ */
+async function hasSuccessfulEvent(orderId, eventType) {
+  try {
+    return await orderHistoryRepo.hasSuccessfulEvent(orderId, eventType);
+  } catch (err) {
+    console.error("[orderHistory] hasSuccessfulEvent error:", err?.message || err);
+    return false;
+  }
+}
+
+module.exports = { record, hasSuccessfulEvent };
