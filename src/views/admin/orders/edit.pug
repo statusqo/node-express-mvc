@@ -157,6 +157,25 @@ block content
                                                 | Full order refund —&nbsp;
                                                 strong #{Number(fr.amount).toFixed(2)} #{fr.currency || order.currency || 'EUR'}
                                                 | &nbsp;issued on #{new Date(fr.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'})}
+                                    - var _partialRefundTxs = order.paymentStatus !== 'refunded' ? (refundTransactions || []).filter(function(rt){ return rt.status === 'succeeded' && rt.scopeType !== 'full_order' }) : []
+                                    each pr in _partialRefundTxs
+                                        .da-partial-refund-notice
+                                            svg(width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                                                circle(cx='12' cy='12' r='10')
+                                                line(x1='12' y1='8' x2='12' y2='12')
+                                                line(x1='12' y1='16' x2='12.01' y2='16')
+                                            | Partial refund —&nbsp;
+                                            strong #{Number(pr.amount).toFixed(2)} #{pr.currency || order.currency || 'EUR'}
+                                            | &nbsp;issued on #{new Date(pr.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'})}
+                                    if order.paymentStatus === 'refunded' && !(fullOrderRefunds && fullOrderRefunds.length)
+                                        .da-full-refund-notice
+                                            svg(width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                                                circle(cx='12' cy='12' r='10')
+                                                line(x1='12' y1='8' x2='12' y2='12')
+                                                line(x1='12' y1='16' x2='12.01' y2='16')
+                                            | Full order refund —&nbsp;
+                                            strong #{Number(orderRefundedTotal || 0).toFixed(2)} #{order.currency || 'EUR'}
+                                            | &nbsp;total refunded
                                 else
                                     p.da-refund-empty No line items for this order.
 
@@ -246,17 +265,20 @@ block content
                 //- ── Order Alerts card ────────────────────────────────
                 - var _orderAlerts = []
                 - if (hasActiveRegistrations) _orderAlerts.push('This order has ' + activeRegistrationCount + ' active event registration' + (activeRegistrationCount !== 1 ? 's' : '') + '.')
-                if _orderAlerts.length
-                    .da-card
-                        .da-card-header
-                            h2.da-card-title Alerts
+                .da-card
+                    .da-card-header
+                        h2.da-card-title Alerts
+                        if _orderAlerts.length
                             span.da-count= _orderAlerts.length
-                        .da-card-body
+                    .da-card-body
+                        if _orderAlerts.length
                             ul(style='list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:0.65rem')
                                 each alertMsg in _orderAlerts
                                     li(style='display:flex;align-items:flex-start;gap:0.5rem;font-size:0.8125rem;line-height:1.5;color:var(--ds-warning,#F59E0B)')
                                         span(aria-hidden='true' style='flex-shrink:0;line-height:1.3') ●
                                         span= alertMsg
+                        else
+                            p.da-refund-empty(style='margin-top:0') No alerts for this order.
 
                 - var _hasAlert = canRetryFinalize || canRetryZoom || (canResendEmail && !emailSent)
                 - var _hasActions = canRetryFinalize || canRetryZoom || canResendEmail

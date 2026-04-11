@@ -3175,3 +3175,21 @@ tr.da-row--pending {
     color: var(--ds-text-1);
     font-weight: 600;
 }
+
+.da-partial-refund-notice {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    padding: 0.625rem 0.875rem;
+    background: rgba(56, 189, 248, 0.07);
+    border: 1px solid rgba(56, 189, 248, 0.2);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--ds-info, #38BDF8);
+    line-height: 1.4;
+}
+.da-partial-refund-notice strong {
+    color: var(--ds-text-1);
+    font-weight: 600;
+}

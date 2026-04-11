@@ -20,11 +20,13 @@ const refundRequestRepo = require("../repos/refundRequest.repo");
 const { REFUND_REQUEST_STATUS } = require("../constants/refundRequest");
 
 function formatEventVariantTitle(startDate, startTime) {
-  const d = startDate ? String(startDate).substring(0, 10) : "";
+  const raw = startDate ? String(startDate).substring(0, 10) : "";
   const t = startTime != null ? String(startTime).substring(0, 5) : "";
-  if (d && t) return `${d} ${t}`;
-  if (d) return d;
-  return "TBD";
+  if (!raw) return "TBD";
+  const parts = raw.split("-");
+  const d = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : raw;
+  if (t) return `${d} @ ${t}`;
+  return d;
 }
 
 module.exports = {
