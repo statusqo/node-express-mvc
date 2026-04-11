@@ -5,6 +5,7 @@ const eventService = require("./event.service");
 const eventMeetingRepo = require("../repos/eventMeeting.repo");
 const orderRepo = require("../repos/order.repo");
 const orderLineRepo = require("../repos/orderLine.repo");
+const orderDiscountRepo = require("../repos/orderDiscount.repo");
 const refundTransactionRepo = require("../repos/refundTransaction.repo");
 const orderService = require("./order.service");
 const stripeGateway = require("../gateways/stripe.gateway");
@@ -233,14 +234,15 @@ module.exports = {
         const meeting = await eventMeetingRepo.findByEventId(eventId);
         if (meeting) {
           const provider = getMeetingProvider();
-          if (provider) {
-            const meetingPlain = meeting.get ? meeting.get({ plain: true }) : meeting;
-            await provider.removeRegistrant(meetingPlain, registration.zoomRegistrantId);
-            logger.info("cancelRegistration: Zoom registrant removed", {
-              registrationId,
-              zoomRegistrantId: registration.zoomRegistrantId,
-            });
+          if (!provider) {
+            throw new Error("Meeting provider is not configured; cannot remove Zoom registrant. Cancellation aborted — please check Zoom configuration and retry.");
           }
+          const meetingPlain = meeting.get ? meeting.get({ plain: true }) : meeting;
+          await provider.removeRegistrant(meetingPlain, registration.zoomRegistrantId);
+          logger.info("cancelRegistration: Zoom registrant removed", {
+            registrationId,
+            zoomRegistrantId: registration.zoomRegistrantId,
+          });
         }
       } catch (zoomErr) {
         if (zoomErr.status === 404 || zoomErr.statusCode === 404) {
@@ -282,9 +284,32 @@ module.exports = {
         if (remainingRefundable === null || remainingRefundable <= MONEY_EPS) {
           throw new Error("No refundable balance remains for this order.");
         }
-        // Cap at remaining balance: order-level discounts reduce order.total below
-        // the sum of line prices, so the raw line price may exceed what was collected.
-        const refundAmount = Math.min(linePrice, remainingRefundable);
+        // Apply discount factor so the per-seat refund matches what was actually paid.
+        // Without this, a discounted order refunds at gross price, exhausting the budget
+        // unevenly and causing the "Process Refunds & Clean Up" flow to fail.
+        let effectiveLinePrice = linePrice;
+        const orderDiscount = await orderDiscountRepo.findByOrder(order.id);
+        if (orderDiscount && Number(orderDiscount.amountDeducted) > MONEY_EPS) {
+          const amountDeducted = Number(orderDiscount.amountDeducted);
+          const applicableTo = orderDiscount.applicableTo || "all";
+          if (applicableTo === "all") {
+            const grossTotal = Number(order.total) + amountDeducted;
+            if (grossTotal > MONEY_EPS) {
+              effectiveLinePrice = Math.round(linePrice * (Number(order.total) / grossTotal) * 100) / 100;
+            }
+          } else if (applicableTo === "events") {
+            const allLines = await orderLineRepo.findByOrder(order.id);
+            const grossEventTotal = allLines
+              .filter((l) => l.eventId != null)
+              .reduce((s, l) => s + (Number(l.price) || 0) * (Number(l.quantity) || 1), 0);
+            if (grossEventTotal > MONEY_EPS) {
+              const factor = Math.max(0, grossEventTotal - amountDeducted) / grossEventTotal;
+              effectiveLinePrice = Math.round(linePrice * factor * 100) / 100;
+            }
+          }
+          // applicableTo === "products": event lines are not discounted — no adjustment.
+        }
+        const refundAmount = Math.min(effectiveLinePrice, remainingRefundable);
         const transactions = await orderService.getTransactionsForOrder(order.id);
         const successTx = transactions.find(
           (t) => t.gatewayReference === order.stripePaymentIntentId && t.status === TRANSACTION_STATUS.SUCCESS

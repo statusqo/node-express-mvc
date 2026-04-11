@@ -91,9 +91,9 @@ module.exports = {
   },
 
   async delete(req, res) {
-    const deleted = await productTypeService.delete(req.params.id);
-    if (deleted) res.setFlash("success", "Product type deleted.");
-    else res.setFlash("error", "Product type not found.");
+    const result = await productTypeService.delete(req.params.id);
+    if (result.deleted) res.setFlash("success", "Product type deleted.");
+    else res.setFlash("error", result.error || "Product type not found.");
     res.redirect((req.adminPrefix || "") + "/product-types");
   },
 };

@@ -66,10 +66,9 @@
         if (!btn) return;
         e.preventDefault();
 
-        var form = btn.closest('form');
-        if (!form && btn.dataset.formId) {
-            form = document.getElementById(btn.dataset.formId);
-        }
+        var form = btn.dataset.formId
+            ? document.getElementById(btn.dataset.formId)
+            : btn.closest('form');
 
         var title   = btn.dataset.confirmTitle   || 'Confirm';
         var msg     = btn.dataset.confirmMsg     || '';

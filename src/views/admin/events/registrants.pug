@@ -60,7 +60,7 @@ block content
                                             span.da-cell-muted —
                                     td
                                         if r.Order && r.Order.paymentStatus
-                                            span.da-badge(class='da-badge--' + payClass)= r.Order.paymentStatus.charAt(0).toUpperCase() + r.Order.paymentStatus.slice(1)
+                                            span.da-badge(class='da-badge--' + payClass)= r.Order.paymentStatus.split('_').map(function(w){ return w.charAt(0).toUpperCase() + w.slice(1) }).join(' ')
                                         else
                                             span.da-cell-muted —
                                     td.da-col-created

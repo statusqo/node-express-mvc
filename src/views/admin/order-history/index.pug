@@ -1,7 +1,7 @@
 extends ../../layouts/admin
 
 block append links
-    link(rel='stylesheet' href='/css/admin-dark.css')
+    link(rel='stylesheet' href='/public/css/admin-dark.css')
 
 block content
     - var fmtDate = function(d){ return d ? new Date(d).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'}) : '—'; }

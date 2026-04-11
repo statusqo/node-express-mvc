@@ -95,9 +95,9 @@ module.exports = {
   },
 
   async delete(req, res) {
-    const deleted = await productCategoryService.delete(req.params.id);
-    if (deleted) res.setFlash("success", "Product category deleted.");
-    else res.setFlash("error", "Product category not found.");
+    const result = await productCategoryService.delete(req.params.id);
+    if (result.deleted) res.setFlash("success", "Product category deleted.");
+    else res.setFlash("error", result.error || "Product category not found.");
     res.redirect((req.adminPrefix || "") + "/product-categories");
   },
 };

@@ -784,6 +784,18 @@ tr.da-row--entering {
     background: var(--ds-surface-2);
 }
 
+/* ── Standalone form footer bar (same look as card footer, outside cards) ── */
+.da-form-footer-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    background: var(--ds-surface-2);
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius-lg);
+    box-shadow: var(--ds-shadow-card);
+}
+
 /* ── Form layout grid ─────────────────────────────────────────────── */
 .da-form-grid {
     display: grid;
@@ -1465,14 +1477,6 @@ tr.da-row--entering {
     max-width: 780px;
 }
 
-/* Actions row at bottom of form */
-.da-product-form-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-    padding: 0.5rem 0 1.5rem;
-}
 
 /* Product edit — optional extra variants (not default / not event-linked) */
 .da-card--variants .da-variant-add--panel {
@@ -3098,6 +3102,27 @@ tr.da-row--pending {
     letter-spacing: 0.01em;
 }
 
+/* ── Attendee cell layout (flex: info left, actions right) ──────────────── */
+.da-attendee-cell {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+.da-attendee-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+.da-attendee-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
 /* ── Attendee expand toggle button ──────────────────────────────────────── */
 .da-expand-btn {
     display: inline-flex;
@@ -3153,7 +3178,6 @@ tr.da-row--pending {
 }
 .da-attendee-email {
     color: var(--ds-text-2);
-    margin-left: 0.5rem;
     font-size: 12px;
 }
 
@@ -3176,6 +3200,23 @@ tr.da-row--pending {
     font-weight: 600;
 }
 
+/* ── Action items (Actions aside card) ───────────────────────────────────── */
+.da-action-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.625rem;
+    padding: 0.875rem 1rem;
+    background: var(--ds-surface-2);
+    border: 1px solid var(--ds-border);
+    border-radius: 8px;
+}
+.da-action-desc {
+    font-size: 12.5px;
+    line-height: 1.5;
+    margin: 0;
+}
+
 .da-partial-refund-notice {
     display: flex;
     align-items: center;
@@ -3192,4 +3233,101 @@ tr.da-row--pending {
 .da-partial-refund-notice strong {
     color: var(--ds-text-1);
     font-weight: 600;
+}
+
+/* ── Event form aside: Zoom status indicator ──────────────────────── */
+.da-event-zoom-status {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.da-event-zoom-status__icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    margin-top: 1px;
+}
+
+.da-event-zoom-status__content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.da-event-zoom-status__label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ds-text-1);
+    line-height: 1.4;
+}
+
+.da-event-zoom-status__hint {
+    font-size: 12px;
+    color: var(--ds-text-3);
+    line-height: 1.5;
+}
+
+.da-event-zoom-status .da-btn {
+    margin-top: 0.75rem;
+}
+
+/* ── Event form aside: Danger Zone card ───────────────────────────── */
+.da-danger-zone .da-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.da-danger-zone-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.875rem 0;
+}
+
+.da-danger-zone-item:first-child {
+    padding-top: 0;
+}
+
+.da-danger-zone-item:last-child {
+    padding-bottom: 0;
+}
+
+.da-danger-zone-sep {
+    border: none;
+    border-top: 1px solid var(--ds-border);
+    margin: 0;
+    width: 100%;
+}
+
+.da-danger-zone-desc {
+    font-size: 12px;
+    color: var(--ds-text-3);
+    line-height: 1.5;
+    margin: 0;
+    padding-left: 0.875rem;
+    position: relative;
+}
+
+.da-danger-zone-desc::before {
+    content: '•';
+    position: absolute;
+    left: 0;
+    color: var(--ds-text-3);
+}
+
+.da-danger-zone .da-card-body form {
+    display: block;
+}
+
+/* ── Event form aside: Actions card warning accent (no meeting) ────── */
+.da-card--warning-accent {
+    border-color: rgba(245, 158, 11, 0.3);
+}
+
+.da-card--warning-accent .da-card-header {
+    background: rgba(245, 158, 11, 0.06);
+    border-bottom-color: rgba(245, 158, 11, 0.2);
 }

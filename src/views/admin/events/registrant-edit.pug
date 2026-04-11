@@ -85,7 +85,7 @@ block content
                                 if registration.Order && registration.Order.paymentStatus
                                     +readonlyField('Order payment')
                                         - var payClass = ({paid:'success', pending:'warning', failed:'danger', refunded:'info', voided:'neutral'})[registration.Order.paymentStatus] || 'neutral'
-                                        span.da-badge(class='da-badge--' + payClass)= registration.Order.paymentStatus.charAt(0).toUpperCase() + registration.Order.paymentStatus.slice(1)
+                                        span.da-badge(class='da-badge--' + payClass)= registration.Order.paymentStatus.split('_').map(function(w){ return w.charAt(0).toUpperCase() + w.slice(1) }).join(' ')
                             .da-form-section
                                 span.da-form-section-label Zoom
                                 +readonlyField('Session type')

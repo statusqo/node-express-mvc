@@ -21,14 +21,14 @@ block content
                 select#filter-paymentStatus.da-form-select(name='paymentStatus')
                     option(value='' selected=(!filters.paymentStatus)) All
                     each s in validPaymentStatuses
-                        option(value=s selected=(filters.paymentStatus === s))= s.charAt(0).toUpperCase() + s.slice(1)
+                        option(value=s selected=(filters.paymentStatus === s))= s.split('_').map(function(w){ return w.charAt(0).toUpperCase() + w.slice(1) }).join(' ')
 
             .da-filter-group
                 label.da-filter-group-label(for='filter-fulfillmentStatus') Fulfillment
                 select#filter-fulfillmentStatus.da-form-select(name='fulfillmentStatus')
                     option(value='' selected=(!filters.fulfillmentStatus)) All
                     each s in validFulfillmentStatuses
-                        option(value=s selected=(filters.fulfillmentStatus === s))= s.charAt(0).toUpperCase() + s.slice(1)
+                        option(value=s selected=(filters.fulfillmentStatus === s))= s.split('_').map(function(w){ return w.charAt(0).toUpperCase() + w.slice(1) }).join(' ')
 
             .da-filter-group
                 label.da-filter-group-label(for='filter-refundRequest') Refund
@@ -83,12 +83,12 @@ block content
                                         span.da-cell-secondary= order.email || (order.userId ? 'User #' + order.userId : 'Guest')
                                     td
                                         if order.paymentStatus
-                                            span.da-badge(class='da-badge--' + payClass)= order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)
+                                            span.da-badge(class='da-badge--' + payClass)= order.paymentStatus.split('_').map(function(w){ return w.charAt(0).toUpperCase() + w.slice(1) }).join(' ')
                                         else
                                             span.da-cell-muted —
                                     td
                                         if order.fulfillmentStatus
-                                            span.da-fulfillment(class='da-fulfillment--' + fulClass)= order.fulfillmentStatus.charAt(0).toUpperCase() + order.fulfillmentStatus.slice(1).replace(/_/g, ' ')
+                                            span.da-fulfillment(class='da-fulfillment--' + fulClass)= order.fulfillmentStatus.split('_').map(function(w){ return w.charAt(0).toUpperCase() + w.slice(1) }).join(' ')
                                         else
                                             span.da-cell-muted —
                                     td.da-col-created

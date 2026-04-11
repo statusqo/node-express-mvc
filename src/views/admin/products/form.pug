@@ -15,6 +15,10 @@ block content
 
         +formError(error)
 
+        //- ── Delete form (outside productForm to avoid nested forms) ────
+        if isEdit
+            form#delete-product-form(method='post' action=(adminPrefix || '') + '/products/' + product.id + '/delete')
+
         //- ── Product form (single stacked-card layout) ────────────────
         form#productForm(
             method='post'
@@ -288,19 +292,18 @@ block content
                             p.da-form-hint(style='margin-top:0.5rem') Make this product visible to customers.
 
                 //- ── Form actions ─────────────────────────────────────
-                .da-product-form-actions
+                .da-form-footer-bar
                     button.da-btn.da-btn--primary(type='submit')= isEdit ? 'Update Product' : 'Create Product'
                     a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/products') Cancel
                     if isEdit
                         div(style='margin-left:auto')
-                            form#delete-product-form(method='post' action=(adminPrefix || '') + '/products/' + product.id + '/delete')
-                                button.da-btn.da-btn--danger(
-                                    type='button'
-                                    data-confirm-modal
-                                    data-confirm-title='Delete Product'
-                                    data-confirm-msg='Are you sure you want to delete this product? This cannot be undone.'
-                                    data-form-id='delete-product-form'
-                                ) Delete Product
+                            button.da-btn.da-btn--danger(
+                                type='button'
+                                data-confirm-modal
+                                data-confirm-title='Delete Product'
+                                data-confirm-msg='Are you sure you want to delete this product? This cannot be undone.'
+                                data-form-id='delete-product-form'
+                            ) Delete Product
 
 block append scripts
     script(src='/public/js/admin-product-form.js')

@@ -49,16 +49,17 @@ block content
                             )
                             p.da-form-hint NKD/KPD classification code required for Croatian Fiscalization 2.0 (B2B e-invoices). Leave blank if not applicable.
 
+                if isEdit
+                    form#delete-category-form(method='post' action=(adminPrefix || '') + '/product-categories/' + productCategory.id + '/delete')
                 .da-card-footer
                     button.da-btn.da-btn--primary(type='submit' form='catForm')= isEdit ? 'Save Changes' : 'Create Category'
                     a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/product-categories') Cancel
                     if isEdit
                         div(style='margin-left:auto')
-                            form#delete-category-form(method='post' action=(adminPrefix || '') + '/product-categories/' + productCategory.id + '/delete')
-                                button.da-btn.da-btn--danger(
-                                    type='button'
-                                    data-confirm-modal
-                                    data-confirm-title='Delete Product Category'
-                                    data-confirm-msg='Are you sure you want to delete this category? This cannot be undone.'
-                                    data-form-id='delete-category-form'
-                                ) Delete Category
+                            button.da-btn.da-btn--danger(
+                                type='button'
+                                data-confirm-modal
+                                data-confirm-title='Delete Product Category'
+                                data-confirm-msg='Are you sure you want to delete this category? This cannot be undone.'
+                                data-form-id='delete-category-form'
+                            ) Delete Category

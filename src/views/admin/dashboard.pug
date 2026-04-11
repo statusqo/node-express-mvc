@@ -64,7 +64,7 @@ block content
                                     td.da-cell-primary= order.forename ? (order.forename + ' ' + (order.surname || '')).trim() : (order.email || '—')
                                     td.da-cell-primary €#{parseFloat(order.total || 0).toFixed(2)}
                                     td
-                                        span.da-badge(class='da-badge--' + statusCls)= order.fulfillmentStatus.replace('_', ' ')
+                                        span.da-badge(class='da-badge--' + statusCls)= order.fulfillmentStatus.split('_').map(function(w){ return w.charAt(0).toUpperCase() + w.slice(1) }).join(' ')
                                     td.da-cell-muted= ageLabel
                                     td
                                         .da-cell-actions

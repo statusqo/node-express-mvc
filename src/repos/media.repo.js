@@ -28,8 +28,15 @@ module.exports = {
 
   async destroy(id, options = {}) {
     const row = await Media.findByPk(id, options);
-    if (!row) return false;
-    await row.destroy(options);
-    return true;
+    if (!row) return { deleted: false, error: "Media not found." };
+    try {
+      await row.destroy(options);
+      return { deleted: true };
+    } catch (err) {
+      if (err.name === "SequelizeForeignKeyConstraintError") {
+        return { deleted: false, error: "Cannot delete: this media file is in use by one or more records." };
+      }
+      throw err;
+    }
   },
 };

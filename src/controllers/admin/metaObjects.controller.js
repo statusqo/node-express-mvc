@@ -119,9 +119,9 @@ module.exports = {
   },
 
   async delete(req, res) {
-    const deleted = await metaObjectService.delete(req.params.id);
-    if (deleted) res.setFlash("success", "Meta object deleted.");
-    else res.setFlash("error", "Meta object not found.");
+    const result = await metaObjectService.delete(req.params.id);
+    if (result.deleted) res.setFlash("success", "Meta object deleted.");
+    else res.setFlash("error", result.error || "Meta object not found.");
     res.redirect((req.adminPrefix || "") + "/meta-objects");
   },
 };

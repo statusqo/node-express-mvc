@@ -16,248 +16,260 @@ block content
         //- ── Two-column grid: form main + refund aside ───────────────
         .da-form-grid
 
-            //- ── Main column: order details ──────────────────────────
+            //- ── Main column: order sections ─────────────────────────
             .da-form-main
 
+                //- ── Card 1: Order ───────────────────────────────────
                 .da-card
                     .da-card-header
-                        h2.da-card-title Order Details
+                        h2.da-card-title Order
+                    .da-card-body
+                        .da-form-section
+                            span.da-form-section-label Identity
+                            +readonlyField('Order Number')
+                                span.da-cell-mono= order.orderNumber ? '#' + order.orderNumber : '—'
+                            +readonlyField('Internal ID')
+                                span.da-cell-mono= order.id || '—'
+                            +readonlyField('Date')
+                                | #{order.createdAt ? new Date(order.createdAt).toLocaleString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'}) : '—'}
+                            +readonlyField('Source')
+                                if order.source === 'event'
+                                    span.da-badge.da-badge--info Event checkout
+                                else
+                                    span Cart
+                        .da-form-section
+                            span.da-form-section-label Customer
+                            +readonlyField('Name / Email')
+                                | #{order.email || (order.forename || order.surname ? (order.forename || '') + ' ' + (order.surname || '') : order.userId ? 'User #' + order.userId : 'Guest') || '—'}
+                            +readonlyField('Person Type')
+                                if order.personType === 'legal'
+                                    span.da-badge.da-badge--info Legal person
+                                else
+                                    span Private person
+                            if order.personType === 'legal'
+                                +readonlyField('Company Name')
+                                    | #{order.companyName || '—'}
+                                +readonlyField('OIB')
+                                    | #{order.companyOib || '—'}
+
+                //- ── Card 2: Payment ─────────────────────────────────
+                .da-card
+                    .da-card-header
+                        h2.da-card-title Payment
+                    .da-card-body
+                        .da-form-section
+                            span.da-form-section-label Status &amp; Totals
+                            +readonlyField('Payment Status')
+                                - var payClass = ({paid:'success',pending:'warning',failed:'danger',refunded:'info',partially_refunded:'info',voided:'neutral',cancelled:'neutral'})[order.paymentStatus] || 'neutral'
+                                if order.paymentStatus
+                                    span.da-badge(class='da-badge--' + payClass)= order.paymentStatus.split('_').map(function(w){ return w.charAt(0).toUpperCase() + w.slice(1) }).join(' ')
+                                else
+                                    span —
+                            +readonlyField('Total')
+                                | #{order.total != null ? Number(order.total).toFixed(2) + ' ' + (order.currency || 'EUR') : '—'}
+                            +readonlyField('Refunded to date')
+                                | #{orderRefundedTotal != null ? Number(orderRefundedTotal).toFixed(2) + ' ' + (order.currency || 'EUR') : '—'}
+                            +readonlyField('Remaining refundable')
+                                | #{orderRemainingRefundable != null ? Number(orderRemainingRefundable).toFixed(2) + ' ' + (order.currency || 'EUR') : '—'}
+                            +readonlyField('Stripe PaymentIntent')
+                                if order.stripePaymentIntentId
+                                    span.da-cell-mono= order.stripePaymentIntentId
+                                else
+                                    span.da-cell-muted —
+                        if transactions && transactions.length
+                            .da-form-section
+                                span.da-form-section-label Transactions
+                                .da-table-scroll(style='margin-top:0.5rem')
+                                    table.da-table(role='table' aria-label='Transactions')
+                                        thead
+                                            tr
+                                                th(scope='col') Status
+                                                th(scope='col') Amount
+                                                th(scope='col') Gateway reference
+                                                th.da-col-created(scope='col') Created
+                                        tbody
+                                            each tx in transactions
+                                                tr
+                                                    td
+                                                        if tx.status
+                                                            span.da-badge(class='da-badge--' + ({success:'success',pending:'warning',failed:'danger',refunded:'info'})[tx.status] || 'neutral')= tx.status.charAt(0).toUpperCase() + tx.status.slice(1)
+                                                        else
+                                                            span —
+                                                    td= tx.amount != null ? Number(tx.amount).toFixed(2) + ' ' + (tx.currency || order.currency || 'EUR') : '—'
+                                                    td
+                                                        span.da-cell-mono= tx.gatewayReference || '—'
+                                                    td.da-col-created
+                                                        span.da-cell-muted= tx.createdAt ? new Date(tx.createdAt).toLocaleString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'}) : '—'
+                        if orderDiscount
+                            .da-form-section
+                                span.da-form-section-label Discount
+                                .da-table-scroll(style='margin-top:0.5rem')
+                                    table.da-table(role='table' aria-label='Discount')
+                                        thead
+                                            tr
+                                                th(scope='col') Code
+                                                th(scope='col') Type &amp; value
+                                                th(scope='col') Applies to
+                                                th(scope='col') Amount deducted
+                                        tbody
+                                            tr
+                                                td
+                                                    code(style='font-size:0.9rem;letter-spacing:0.04em')= orderDiscount.code
+                                                td= orderDiscount.type === 'percentage' ? Number(orderDiscount.value) + '% off' : '€' + Number(orderDiscount.value).toFixed(2) + ' off'
+                                                td
+                                                    if orderDiscount.applicableTo === 'events'
+                                                        span.da-badge.da-badge--info Events only
+                                                    else if orderDiscount.applicableTo === 'products'
+                                                        span.da-badge.da-badge--neutral Products only
+                                                    else
+                                                        span All products &amp; events
+                                                td(style='font-weight:600;color:var(--ds-success,#22C55E)')
+                                                    | −€#{Number(orderDiscount.amountDeducted).toFixed(2)}
+
+                //- ── Card 3: Line Items ──────────────────────────────
+                .da-card
+                    .da-card-header
+                        h2.da-card-title Line Items
+                    .da-card-body
+                        if orderLines && orderLines.length
+                            - var _eventLines = orderLines.filter(function(l){ return l.eventId != null && String(l.eventId).trim() !== '' })
+                            - var _productLines = orderLines.filter(function(l){ return !(l.eventId != null && String(l.eventId).trim() !== '') })
+                            - var _hasBoth = _eventLines.length > 0 && _productLines.length > 0
+
+                            //- ── Event registrations ─────────────────────
+                            if _eventLines.length
+                                .da-table-scroll
+                                    table.da-table(role='table' aria-label='Event registrations')
+                                        thead
+                                            tr
+                                                th(scope='col') Event Lines
+                                                th(scope='col') Qty
+                                                th(scope='col') Unit price
+                                                th(scope='col') SKU
+                                        tbody
+                                            each line in _eventLines
+                                                - var lineAttendees = attendeesByLine[line.id] || []
+                                                - var lineRowClass = line.fullyRefunded ? 'da-row--refunded' : ''
+                                                tr(class=lineRowClass)
+                                                    td= line.displayTitle || line.title || '—'
+                                                    td= line.quantity != null ? line.quantity : '—'
+                                                    td= line.price != null ? Number(line.price).toFixed(2) + ' ' + (order.currency || 'EUR') : '—'
+                                                    td
+                                                        span.da-cell-mono= line.sku || '—'
+                                                each attendee in lineAttendees
+                                                    - var attName = ((attendee.forename || '') + ' ' + (attendee.surname || '')).trim()
+                                                    - var _attCancelled = attendee.refunded || attendee.registrationCancelled
+                                                    - var attClass = 'da-attendee-row' + (_attCancelled ? ' da-row--refunded' : '')
+                                                    tr(class=attClass)
+                                                        td(colspan='4')
+                                                            .da-attendee-cell
+                                                                .da-attendee-info
+                                                                    span.da-attendee-name= attName || '—'
+                                                                    if attendee.email
+                                                                        span.da-attendee-email= attendee.email
+                                                                .da-attendee-actions
+                                                                    if attendee.refunded
+                                                                        span.da-badge.da-badge--danger(style='font-size:11px') Refunded
+                                                                    else if attendee.registrationCancelled
+                                                                        span.da-badge.da-badge--warning(style='font-size:11px') Cancelled
+                                                                    if attendee.registrationId && !attendee.registrationCancelled
+                                                                        a.da-row-btn.da-row-btn--edit(
+                                                                            href=(adminPrefix || '') + '/events/' + attendee.eventId + '/registrants/' + attendee.registrationId + '/edit'
+                                                                        ) Edit
+
+                            //- ── Divider ─────────────────────────────────
+                            if _hasBoth
+                                hr(style='margin:1.25rem 0;border:none;border-top:1px solid var(--ds-border)')
+
+                            //- ── Product lines ───────────────────────────
+                            if _productLines.length
+                                .da-table-scroll
+                                    table.da-table(role='table' aria-label='Product lines')
+                                        thead
+                                            tr
+                                                th(scope='col') Product Lines
+                                                th(scope='col') Qty
+                                                th(scope='col') Unit price
+                                                th(scope='col') SKU
+                                        tbody
+                                            each line in _productLines
+                                                - var lineRowClass = line.fullyRefunded ? 'da-row--refunded' : ''
+                                                tr(class=lineRowClass)
+                                                    td
+                                                        = line.displayTitle || line.title || '—'
+                                                        if line.partiallyRefunded
+                                                            span.da-refund-pill #{line.refundedQty} of #{line.quantity} refunded
+                                                    td= line.quantity != null ? line.quantity : '—'
+                                                    td= line.price != null ? Number(line.price).toFixed(2) + ' ' + (order.currency || 'EUR') : '—'
+                                                    td
+                                                        span.da-cell-mono= line.sku || '—'
+
+                            //- ── Refund notices ──────────────────────────
+                            if fullOrderRefunds && fullOrderRefunds.length
+                                each fr in fullOrderRefunds
+                                    .da-full-refund-notice
+                                        svg(width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                                            circle(cx='12' cy='12' r='10')
+                                            line(x1='12' y1='8' x2='12' y2='12')
+                                            line(x1='12' y1='16' x2='12.01' y2='16')
+                                        | Full order refund —&nbsp;
+                                        strong #{Number(fr.amount).toFixed(2)} #{fr.currency || order.currency || 'EUR'}
+                                        | &nbsp;issued on #{new Date(fr.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'})}
+                            - var _partialRefundTxs = order.paymentStatus !== 'refunded' ? (refundTransactions || []).filter(function(rt){ return rt.status === 'succeeded' && rt.scopeType !== 'full_order' }) : []
+                            each pr in _partialRefundTxs
+                                .da-partial-refund-notice
+                                    svg(width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                                        circle(cx='12' cy='12' r='10')
+                                        line(x1='12' y1='8' x2='12' y2='12')
+                                        line(x1='12' y1='16' x2='12.01' y2='16')
+                                    | Partial refund —&nbsp;
+                                    strong #{Number(pr.amount).toFixed(2)} #{pr.currency || order.currency || 'EUR'}
+                                    | &nbsp;issued on #{new Date(pr.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'})}
+                            if order.paymentStatus === 'refunded' && !(fullOrderRefunds && fullOrderRefunds.length)
+                                .da-full-refund-notice
+                                    svg(width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                                        circle(cx='12' cy='12' r='10')
+                                        line(x1='12' y1='8' x2='12' y2='12')
+                                        line(x1='12' y1='16' x2='12.01' y2='16')
+                                    | Full order refund —&nbsp;
+                                    strong #{Number(orderRefundedTotal || 0).toFixed(2)} #{order.currency || 'EUR'}
+                                    | &nbsp;total refunded
+                        else
+                            p.da-refund-empty No line items for this order.
+
+                //- ── Card 4: Addresses ───────────────────────────────
+                .da-card
+                    .da-card-header
+                        h2.da-card-title Addresses
+                    .da-card-body
+                        +readonlyField('Delivery Address')
+                            - var delivery = [order.deliveryLine1, order.deliveryLine2, [order.deliveryCity, order.deliveryState, order.deliveryPostcode].filter(Boolean).join(', '), order.deliveryCountry].filter(Boolean).join(' · ')
+                            | #{delivery || '—'}
+                        +readonlyField('Billing Address')
+                            - var billing = [order.billingLine1, order.billingLine2, [order.billingCity, order.billingState, order.billingPostcode].filter(Boolean).join(', '), order.billingCountry].filter(Boolean).join(' · ')
+                            | #{billing || '—'}
+
+                //- ── Card 5: Fulfillment ─────────────────────────────
+                .da-card
+                    .da-card-header
+                        h2.da-card-title Fulfillment
                     .da-card-body
                         form#orderEditForm(
                             method='post'
                             action=(adminPrefix || '') + '/orders/' + order.id + '/edit'
                         )
-                            .da-form-section
-                                span.da-form-section-label Identity
+                            .da-form-group
+                                label.da-form-label(for='fulfillmentStatus')
+                                    | Fulfillment Status
+                                    span.req *
+                                select#fulfillmentStatus.da-form-select(name='fulfillmentStatus' required)
+                                    each s in validFulfillmentStatuses
+                                        option(value=s selected=(order.fulfillmentStatus === s))= s.split('_').map(function(w){ return w.charAt(0).toUpperCase() + w.slice(1) }).join(' ')
 
-                                //- Order number (read-only)
-                                +readonlyField('Order Number')
-                                    span.da-cell-mono= order.orderNumber ? '#' + order.orderNumber : '—'
-
-                                //- Internal UUID (read-only)
-                                +readonlyField('Internal ID')
-                                    span.da-cell-mono= order.id || '—'
-
-                                //- Customer (read-only)
-                                +readonlyField('Customer')
-                                    | #{order.email || (order.forename || order.surname ? (order.forename || '') + ' ' + (order.surname || '') : order.userId ? 'User #' + order.userId : 'Guest') || '—'}
-
-                                //- Person type
-                                +readonlyField('Person Type')
-                                    if order.personType === 'legal'
-                                        span.da-badge.da-badge--info Legal person
-                                    else
-                                        span Private person
-
-                                //- Company info (legal persons only)
-                                if order.personType === 'legal'
-                                    +readonlyField('Company Name')
-                                        | #{order.companyName || '—'}
-                                    +readonlyField('OIB')
-                                        | #{order.companyOib || '—'}
-
-                                //- Payment status (read-only with badge)
-                                +readonlyField('Payment Status')
-                                    - var payClass = ({paid:'success',pending:'warning',failed:'danger',refunded:'info',partially_refunded:'info',voided:'neutral',cancelled:'neutral'})[order.paymentStatus] || 'neutral'
-                                    if order.paymentStatus
-                                        span.da-badge(class='da-badge--' + payClass)= order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)
-                                    else
-                                        span —
-
-                                //- Total (read-only)
-                                +readonlyField('Total')
-                                    | #{order.total != null ? Number(order.total).toFixed(2) + ' ' + (order.currency || 'EUR') : '—'}
-
-                                +readonlyField('Refunded to date')
-                                    | #{orderRefundedTotal != null ? Number(orderRefundedTotal).toFixed(2) + ' ' + (order.currency || 'EUR') : '—'}
-
-                                +readonlyField('Remaining refundable')
-                                    | #{orderRemainingRefundable != null ? Number(orderRemainingRefundable).toFixed(2) + ' ' + (order.currency || 'EUR') : '—'}
-
-                                //- Date (read-only)
-                                +readonlyField('Date')
-                                    | #{order.createdAt ? new Date(order.createdAt).toLocaleString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'}) : '—'}
-
-                                +readonlyField('Order source')
-                                    if order.source === 'event'
-                                        span.da-badge.da-badge--info Event checkout
-                                    else
-                                        span Cart
-
-                                +readonlyField('Stripe PaymentIntent')
-                                    if order.stripePaymentIntentId
-                                        span.da-cell-mono= order.stripePaymentIntentId
-                                    else
-                                        span.da-cell-muted —
-
-                            .da-form-section
-                                span.da-form-section-label Line items
-
-                                if orderLines && orderLines.length
-                                    .da-table-scroll(style='margin-top:0.5rem')
-                                        table.da-table(role='table' aria-label='Order lines')
-                                            thead
-                                                tr
-                                                    th(scope='col') Title
-                                                    th(scope='col') Qty
-                                                    th(scope='col') Unit price
-                                                    th(scope='col') SKU
-                                                    th(scope='col') Event
-                                            tbody
-                                                each line in orderLines
-                                                    - var isEventLine = line.eventId != null && String(line.eventId).trim() !== ''
-                                                    - var lineAttendees = isEventLine ? (attendeesByLine[line.id] || []) : []
-                                                    - var hasAttendees = lineAttendees.length > 0
-                                                    - var lineRowClass = line.fullyRefunded ? 'da-row--refunded' : ''
-                                                    tr(class=lineRowClass)
-                                                        td
-                                                            = line.displayTitle || line.title || '—'
-                                                            if !isEventLine && line.partiallyRefunded
-                                                                span.da-refund-pill #{line.refundedQty} of #{line.quantity} refunded
-                                                            if isEventLine && hasAttendees
-                                                                button.da-expand-btn(
-                                                                    type='button'
-                                                                    data-expand-line=line.id
-                                                                    aria-expanded='false'
-                                                                    aria-label='Toggle attendees'
-                                                                )
-                                                                    svg(width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
-                                                                        polyline(points='6 9 12 15 18 9')
-                                                                    = lineAttendees.length + ' attendee' + (lineAttendees.length !== 1 ? 's' : '')
-                                                        td= line.quantity != null ? line.quantity : '—'
-                                                        td= line.price != null ? Number(line.price).toFixed(2) + ' ' + (order.currency || 'EUR') : '—'
-                                                        td
-                                                            span.da-cell-mono= line.sku || '—'
-                                                        td
-                                                            if isEventLine
-                                                                a.da-row-btn.da-row-btn--edit(
-                                                                    href=(adminPrefix || '') + '/events/' + line.eventId + '/registrants'
-                                                                ) Registrants
-                                                            else
-                                                                span.da-cell-muted —
-                                                    if isEventLine && hasAttendees
-                                                        each attendee in lineAttendees
-                                                            - var attName = ((attendee.forename || '') + ' ' + (attendee.surname || '')).trim()
-                                                            - var attClass = 'da-attendee-row' + (attendee.refunded ? ' da-row--refunded' : '')
-                                                            tr(class=attClass data-attendee-line=line.id style='display:none')
-                                                                td(colspan='5')
-                                                                    span.da-attendee-name= attName || '—'
-                                                                    if attendee.email
-                                                                        span.da-attendee-email= attendee.email
-                                                                    if attendee.refunded
-                                                                        span.da-badge.da-badge--danger(style='margin-left:0.75rem;font-size:11px') Refunded
-
-                                    if fullOrderRefunds && fullOrderRefunds.length
-                                        each fr in fullOrderRefunds
-                                            .da-full-refund-notice
-                                                svg(width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
-                                                    circle(cx='12' cy='12' r='10')
-                                                    line(x1='12' y1='8' x2='12' y2='12')
-                                                    line(x1='12' y1='16' x2='12.01' y2='16')
-                                                | Full order refund —&nbsp;
-                                                strong #{Number(fr.amount).toFixed(2)} #{fr.currency || order.currency || 'EUR'}
-                                                | &nbsp;issued on #{new Date(fr.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'})}
-                                    - var _partialRefundTxs = order.paymentStatus !== 'refunded' ? (refundTransactions || []).filter(function(rt){ return rt.status === 'succeeded' && rt.scopeType !== 'full_order' }) : []
-                                    each pr in _partialRefundTxs
-                                        .da-partial-refund-notice
-                                            svg(width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
-                                                circle(cx='12' cy='12' r='10')
-                                                line(x1='12' y1='8' x2='12' y2='12')
-                                                line(x1='12' y1='16' x2='12.01' y2='16')
-                                            | Partial refund —&nbsp;
-                                            strong #{Number(pr.amount).toFixed(2)} #{pr.currency || order.currency || 'EUR'}
-                                            | &nbsp;issued on #{new Date(pr.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'})}
-                                    if order.paymentStatus === 'refunded' && !(fullOrderRefunds && fullOrderRefunds.length)
-                                        .da-full-refund-notice
-                                            svg(width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
-                                                circle(cx='12' cy='12' r='10')
-                                                line(x1='12' y1='8' x2='12' y2='12')
-                                                line(x1='12' y1='16' x2='12.01' y2='16')
-                                            | Full order refund —&nbsp;
-                                            strong #{Number(orderRefundedTotal || 0).toFixed(2)} #{order.currency || 'EUR'}
-                                            | &nbsp;total refunded
-                                else
-                                    p.da-refund-empty No line items for this order.
-
-                            if transactions && transactions.length
-                                .da-form-section
-                                    span.da-form-section-label Payment transactions
-
-                                    .da-table-scroll(style='margin-top:0.5rem')
-                                        table.da-table(role='table' aria-label='Transactions')
-                                            thead
-                                                tr
-                                                    th(scope='col') Status
-                                                    th(scope='col') Amount
-                                                    th(scope='col') Gateway reference
-                                                    th.da-col-created(scope='col') Created
-                                            tbody
-                                                each tx in transactions
-                                                    tr
-                                                        td
-                                                            if tx.status
-                                                                span.da-badge(class='da-badge--' + ({success:'success',pending:'warning',failed:'danger',refunded:'info'})[tx.status] || 'neutral')= tx.status.charAt(0).toUpperCase() + tx.status.slice(1)
-                                                            else
-                                                                span —
-                                                        td= tx.amount != null ? Number(tx.amount).toFixed(2) + ' ' + (tx.currency || order.currency || 'EUR') : '—'
-                                                        td
-                                                            span.da-cell-mono= tx.gatewayReference || '—'
-                                                        td.da-col-created
-                                                            span.da-cell-muted= tx.createdAt ? new Date(tx.createdAt).toLocaleString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'}) : '—'
-
-                            if orderDiscount
-                                .da-form-section
-                                    span.da-form-section-label Discount applied
-                                    .da-detail-list(style='margin-top:0.5rem')
-                                        .da-detail-item
-                                            span.da-detail-label Code
-                                            span.da-detail-line
-                                                code(style='font-size:0.9rem;letter-spacing:0.04em')= orderDiscount.code
-                                        .da-detail-item
-                                            span.da-detail-label Type &amp; value
-                                            span.da-detail-line= orderDiscount.type === 'percentage' ? Number(orderDiscount.value) + '% off' : '€' + Number(orderDiscount.value).toFixed(2) + ' off'
-                                        .da-detail-item
-                                            span.da-detail-label Applies to
-                                            span.da-detail-line
-                                                if orderDiscount.applicableTo === 'events'
-                                                    span.da-badge.da-badge--info Events only
-                                                else if orderDiscount.applicableTo === 'products'
-                                                    span.da-badge.da-badge--neutral Products only
-                                                else
-                                                    span All products &amp; events
-                                        .da-detail-item
-                                            span.da-detail-label Amount deducted
-                                            span.da-detail-line(style='font-weight:600;color:var(--ds-success,#22C55E)')
-                                                | −€#{Number(orderDiscount.amountDeducted).toFixed(2)}
-
-                            .da-form-section
-                                span.da-form-section-label Fulfillment
-
-                                //- Fulfillment status (editable)
-                                .da-form-group
-                                    label.da-form-label(for='fulfillmentStatus')
-                                        | Fulfillment Status
-                                        span.req *
-                                    select#fulfillmentStatus.da-form-select(name='fulfillmentStatus' required)
-                                        each s in validFulfillmentStatuses
-                                            option(value=s selected=(order.fulfillmentStatus === s))= s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ')
-
-                            .da-form-section
-                                span.da-form-section-label Addresses
-
-                                //- Delivery address (read-only)
-                                +readonlyField('Delivery Address')
-                                    - var delivery = [order.deliveryLine1, order.deliveryLine2, [order.deliveryCity, order.deliveryState, order.deliveryPostcode].filter(Boolean).join(', '), order.deliveryCountry].filter(Boolean).join(' · ')
-                                    | #{delivery || '—'}
-
-                                //- Billing address (read-only)
-                                +readonlyField('Billing Address')
-                                    - var billing = [order.billingLine1, order.billingLine2, [order.billingCity, order.billingState, order.billingPostcode].filter(Boolean).join(', '), order.billingCountry].filter(Boolean).join(' · ')
-                                    | #{billing || '—'}
-
-                    .da-card-footer
-                        button.da-btn.da-btn--primary(type='submit' form='orderEditForm') Save Changes
-                        a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/orders') Back
+                //- ── Form footer bar ─────────────────────────────────
+                .da-form-footer-bar
+                    button.da-btn.da-btn--primary(type='submit' form='orderEditForm') Save Changes
+                    a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/orders') Cancel
 
             //- ── Aside: alerts + actions + refund requests + danger ───
             .da-form-aside
@@ -285,10 +297,10 @@ block content
                 .da-card(style=_hasAlert ? 'border-color:var(--ds-warning,#F59E0B)' : '')
                     .da-card-header(style=_hasAlert ? 'background:rgba(245,158,11,0.08)' : '')
                         h2.da-card-title(style=_hasAlert ? 'color:var(--ds-warning,#F59E0B)' : '') Actions
-                    .da-card-body(style='display:flex;flex-direction:column;align-items:center;gap:1rem')
+                    .da-card-body(style='display:flex;flex-direction:column;gap:0.75rem')
                         if canRetryFinalize
-                            .da-action-item(style='width:100%;display:flex;flex-direction:column;align-items:center;gap:0.5rem')
-                                p.da-form-hint(style='margin:0;text-align:center')
+                            .da-action-item
+                                p.da-action-desc(style='color:var(--ds-warning,#F59E0B)')
                                     | Stripe charged the customer but the order stayed pending. Finalising will update inventory, create registrations, and mark the order as paid.
                                 - var finalizeFormId = 'finalize-payment-form-' + order.id
                                 form(id=finalizeFormId method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/finalize-payment')
@@ -300,8 +312,8 @@ block content
                                         data-form-id=finalizeFormId
                                     ) Finalize payment
                         if canRetryZoom
-                            .da-action-item(style='width:100%;display:flex;flex-direction:column;align-items:center;gap:0.5rem')
-                                p.da-form-hint(style='margin:0;text-align:center')
+                            .da-action-item
+                                p.da-action-desc(style='color:var(--ds-warning,#F59E0B)')
                                     | Zoom sync did not complete after payment. Click to retry adding this order's registrants to their Zoom meetings.
                                 - var retryZoomFormId = 'retry-zoom-form-' + order.id
                                 form(id=retryZoomFormId method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/retry-zoom')
@@ -313,10 +325,9 @@ block content
                                         data-form-id=retryZoomFormId
                                     ) Retry Zoom Sync
                         if canResendEmail
-                            .da-action-item(style='width:100%;display:flex;flex-direction:column;align-items:center;gap:0.5rem')
-                                if !emailSent
-                                    p.da-form-hint(style='margin:0;text-align:center;color:var(--ds-warning,#F59E0B)')
-                                        | Confirmation email was not sent after payment.
+                            .da-action-item
+                                p.da-action-desc(style='color:' + (!emailSent ? 'var(--ds-warning,#F59E0B)' : 'var(--ds-text-3)'))
+                                    | #{!emailSent ? 'Confirmation email was not sent after payment.' : 'Resend the order confirmation email to the customer.'}
                                 - var resendEmailFormId = 'resend-email-form-' + order.id
                                 form(id=resendEmailFormId method='post' action=(adminPrefix || '') + '/orders/' + order.id + '/resend-confirmation-email')
                                     button(
@@ -422,18 +433,3 @@ block content
                             p.da-refund-empty(style='margin-top:0')
                                 | No remaining balance to refund, or the order is not in a refundable payment state.
 
-block append scripts
-    script.
-        (function () {
-            document.querySelectorAll('.da-expand-btn').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    var lineId = btn.getAttribute('data-expand-line');
-                    var expanded = btn.getAttribute('aria-expanded') === 'true';
-                    var rows = document.querySelectorAll('tr[data-attendee-line="' + lineId + '"]');
-                    rows.forEach(function (row) {
-                        row.style.display = expanded ? 'none' : 'table-row';
-                    });
-                    btn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
-                });
-            });
-        }());

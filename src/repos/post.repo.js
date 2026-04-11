@@ -42,9 +42,16 @@ module.exports = {
 
   async delete(id, options = {}) {
     const post = await Post.findByPk(id, options);
-    if (!post) return false;
-    await post.destroy(options);
-    return true;
+    if (!post) return { deleted: false, error: "Post not found." };
+    try {
+      await post.destroy(options);
+      return { deleted: true };
+    } catch (err) {
+      if (err.name === "SequelizeForeignKeyConstraintError") {
+        return { deleted: false, error: "Cannot delete: this post is referenced by other records." };
+      }
+      throw err;
+    }
   },
 
   async count(options = {}) {

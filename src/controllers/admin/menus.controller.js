@@ -86,9 +86,9 @@ module.exports = {
   },
 
   async delete(req, res) {
-    const deleted = await menuService.deleteMenu(req.params.id);
-    if (deleted) res.setFlash("success", "Menu deleted.");
-    else res.setFlash("error", "Menu not found.");
+    const result = await menuService.deleteMenu(req.params.id);
+    if (result.deleted) res.setFlash("success", "Menu deleted.");
+    else res.setFlash("error", result.error || "Menu not found.");
     res.redirect((req.adminPrefix || "") + "/menus");
   },
 };

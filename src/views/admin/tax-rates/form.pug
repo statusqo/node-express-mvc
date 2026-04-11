@@ -8,8 +8,8 @@ block content
 
         +formError(error)
 
-        form(method='post' action=isEdit ? (adminPrefix || '') + '/tax-rates/' + taxRate.id + '/edit' : (adminPrefix || '') + '/tax-rates/new')
-            .da-card
+        .da-card
+            form#taxRateForm(method='post' action=isEdit ? (adminPrefix || '') + '/tax-rates/' + taxRate.id + '/edit' : (adminPrefix || '') + '/tax-rates/new')
                 .da-card-header
                     h2.da-card-title Details
                 .da-card-body
@@ -48,16 +48,17 @@ block content
                             option(value='13' selected=(currentPct === 13)) 13%
                             option(value='25' selected=(currentPct === 25)) 25%
                         p.da-form-hint Must match the percentage configured on the Stripe Tax Rate object.
-                .da-card-footer
-                    button.da-btn.da-btn--primary(type='submit')= isEdit ? 'Update Tax Rate' : 'Create Tax Rate'
-                    a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/tax-rates') Cancel
-                    if isEdit
-                        div(style='margin-left:auto')
-                            form#delete-tax-rate-form(method='post' action=(adminPrefix || '') + '/tax-rates/' + taxRate.id + '/delete')
-                                button.da-btn.da-btn--danger(
-                                    type='button'
-                                    data-confirm-modal
-                                    data-confirm-title='Delete Tax Rate'
-                                    data-confirm-msg='Are you sure you want to delete this tax rate? Products using it will lose their VAT assignment.'
-                                    data-form-id='delete-tax-rate-form'
-                                ) Delete Tax Rate
+            if isEdit
+                form#delete-tax-rate-form(method='post' action=(adminPrefix || '') + '/tax-rates/' + taxRate.id + '/delete')
+            .da-card-footer
+                button.da-btn.da-btn--primary(type='submit' form='taxRateForm')= isEdit ? 'Update Tax Rate' : 'Create Tax Rate'
+                a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/tax-rates') Cancel
+                if isEdit
+                    div(style='margin-left:auto')
+                        button.da-btn.da-btn--danger(
+                            type='button'
+                            data-confirm-modal
+                            data-confirm-title='Delete Tax Rate'
+                            data-confirm-msg='Are you sure you want to delete this tax rate? Products using it will lose their VAT assignment.'
+                            data-form-id='delete-tax-rate-form'
+                        ) Delete Tax Rate

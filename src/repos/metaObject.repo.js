@@ -48,9 +48,16 @@ module.exports = {
 
   async delete(id, options = {}) {
     const metaObject = await MetaObject.findByPk(id, options);
-    if (!metaObject) return false;
-    await metaObject.destroy(options);
-    return true;
+    if (!metaObject) return { deleted: false, error: "Meta object not found." };
+    try {
+      await metaObject.destroy(options);
+      return { deleted: true };
+    } catch (err) {
+      if (err.name === "SequelizeForeignKeyConstraintError") {
+        return { deleted: false, error: "Cannot delete: this meta object is assigned to one or more products." };
+      }
+      throw err;
+    }
   },
 
   async count(options = {}) {

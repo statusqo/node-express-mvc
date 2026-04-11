@@ -119,9 +119,9 @@ module.exports = {
   },
 
   async delete(req, res) {
-    const deleted = await collectionService.delete(req.params.id);
-    if (deleted) res.setFlash("success", "Collection deleted.");
-    else res.setFlash("error", "Collection not found.");
+    const result = await collectionService.delete(req.params.id);
+    if (result.deleted) res.setFlash("success", "Collection deleted.");
+    else res.setFlash("error", result.error || "Collection not found.");
     res.redirect((req.adminPrefix || "") + "/collections");
   },
 };

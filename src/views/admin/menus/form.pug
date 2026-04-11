@@ -15,7 +15,7 @@ block content
 
         //- ── Form ─────────────────────────────────────────────────────
         .da-card(style='max-width: 640px;')
-            form(
+            form#menuForm(
                 method='post'
                 action=isEdit ? (adminPrefix || '') + '/menus/' + menu.id + '/edit' : (adminPrefix || '') + '/menus/new'
             )
@@ -70,16 +70,17 @@ block content
                                 input(type='checkbox' name='active' value='on' checked=(menu === null || menu.active))
                                 | Active
 
-                .da-card-footer
-                    button.da-btn.da-btn--primary(type='submit')= isEdit ? 'Update' : 'Create'
-                    a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/menus') Cancel
-                    if isEdit
-                        div(style='margin-left:auto')
-                            form#delete-menu-form(method='post' action=(adminPrefix || '') + '/menus/' + menu.id + '/delete')
-                                button.da-btn.da-btn--danger(
-                                    type='button'
-                                    data-confirm-modal
-                                    data-confirm-title='Delete Menu'
-                                    data-confirm-msg='Are you sure you want to delete this menu? All its items will also be deleted.'
-                                    data-form-id='delete-menu-form'
-                                ) Delete Menu
+            if isEdit
+                form#delete-menu-form(method='post' action=(adminPrefix || '') + '/menus/' + menu.id + '/delete')
+            .da-card-footer
+                button.da-btn.da-btn--primary(type='submit' form='menuForm')= isEdit ? 'Update' : 'Create'
+                a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/menus') Cancel
+                if isEdit
+                    div(style='margin-left:auto')
+                        button.da-btn.da-btn--danger(
+                            type='button'
+                            data-confirm-modal
+                            data-confirm-title='Delete Menu'
+                            data-confirm-msg='Are you sure you want to delete this menu? All its items will also be deleted.'
+                            data-form-id='delete-menu-form'
+                        ) Delete Menu

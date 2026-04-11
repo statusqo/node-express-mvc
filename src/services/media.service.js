@@ -22,7 +22,7 @@ module.exports = {
    */
   async delete(id, options = {}) {
     const media = await mediaRepo.findById(id, options);
-    if (!media) return false;
+    if (!media) return { deleted: false, error: "Media not found." };
     const uploadsDir = config.uploads.dir;
     const filePath = path.join(uploadsDir, media.path);
     try {

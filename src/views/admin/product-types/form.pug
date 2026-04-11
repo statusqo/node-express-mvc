@@ -45,16 +45,17 @@ block content
                             )
                             p.da-form-hint Used in URLs and API identifiers. Lowercase letters, numbers, and hyphens only.
 
+                if isEdit
+                    form#delete-product-type-form(method='post' action=(adminPrefix || '') + '/product-types/' + productType.id + '/delete')
                 .da-card-footer
                     button.da-btn.da-btn--primary(type='submit' form='ptForm')= isEdit ? 'Save Changes' : 'Create Product Type'
                     a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/product-types') Cancel
                     if isEdit
                         div(style='margin-left:auto')
-                            form#delete-product-type-form(method='post' action=(adminPrefix || '') + '/product-types/' + productType.id + '/delete')
-                                button.da-btn.da-btn--danger(
-                                    type='button'
-                                    data-confirm-modal
-                                    data-confirm-title='Delete Product Type'
-                                    data-confirm-msg='Are you sure you want to delete this product type? This cannot be undone.'
-                                    data-form-id='delete-product-type-form'
-                                ) Delete Product Type
+                            button.da-btn.da-btn--danger(
+                                type='button'
+                                data-confirm-modal
+                                data-confirm-title='Delete Product Type'
+                                data-confirm-msg='Are you sure you want to delete this product type? This cannot be undone.'
+                                data-form-id='delete-product-type-form'
+                            ) Delete Product Type

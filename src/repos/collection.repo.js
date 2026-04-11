@@ -146,9 +146,16 @@ module.exports = {
 
   async delete(id, options = {}) {
     const collection = await Collection.findByPk(id, options);
-    if (!collection) return false;
-    await collection.destroy(options);
-    return true;
+    if (!collection) return { deleted: false, error: "Collection not found." };
+    try {
+      await collection.destroy(options);
+      return { deleted: true };
+    } catch (err) {
+      if (err.name === "SequelizeForeignKeyConstraintError") {
+        return { deleted: false, error: "Cannot delete: this collection is referenced by other records." };
+      }
+      throw err;
+    }
   },
 
   async count(options = {}) {

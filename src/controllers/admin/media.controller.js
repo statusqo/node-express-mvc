@@ -58,9 +58,9 @@ module.exports = {
 
   async delete(req, res, next) {
     try {
-      const deleted = await mediaService.delete(req.params.id);
-      if (deleted) res.setFlash("success", "Media deleted.");
-      else res.setFlash("error", "Media not found.");
+      const result = await mediaService.delete(req.params.id);
+      if (result.deleted) res.setFlash("success", "Media deleted.");
+      else res.setFlash("error", result.error || "Media not found.");
     } catch (err) {
       next(err);
       return;

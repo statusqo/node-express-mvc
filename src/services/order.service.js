@@ -154,6 +154,7 @@ async function syncZoomForPaidOrder(orderId) {
   const lines = await orderRepo.getLines(orderId);
   const provider = getMeetingProvider();
   if (!provider) return;
+  const failures = [];
   for (const line of lines || []) {
     if (!line.eventId) continue;
     const attendees = await orderAttendeeRepo.findAllByOrderLineId(line.id);
@@ -176,9 +177,17 @@ async function syncZoomForPaidOrder(orderId) {
             eventId: line.eventId,
             error: zoomErr.message,
           });
+          failures.push({ registrationId: reg.id, error: zoomErr.message });
         }
       }
     }
+  }
+  if (failures.length > 0) {
+    const err = new Error(
+      `Zoom sync incomplete: ${failures.length} registrant(s) failed. ${failures[0].error}`
+    );
+    err.failures = failures;
+    throw err;
   }
 }
 
@@ -1096,6 +1105,40 @@ async function refundCancelledEventPortionForOrder(orderId, eventId) {
     return { refunded: true };
   }
 
+  // Scale down each group's want to reflect the discounted amount actually paid.
+  // OrderLine.price is the original (pre-discount) unit price; the discount lives on
+  // order.total and OrderDiscount.amountDeducted, not on the line prices themselves.
+  const orderDiscount = await orderDiscountRepo.findByOrder(orderId);
+  if (orderDiscount && toMoneyNumber(orderDiscount.amountDeducted) > ADMIN_REFUND_MONEY_EPS) {
+    const amountDeducted = toMoneyNumber(orderDiscount.amountDeducted);
+    const applicableTo = orderDiscount.applicableTo || "all";
+
+    if (applicableTo === "all") {
+      // Discount was spread across all lines proportionally.
+      // grossTotal = order.total + amountDeducted (order.total is set once at creation and never modified).
+      const grossTotal = toMoneyNumber(order.total) + amountDeducted;
+      if (grossTotal > ADMIN_REFUND_MONEY_EPS) {
+        const factor = toMoneyNumber(order.total) / grossTotal;
+        for (const g of lineGroups) {
+          g.want = Math.round(g.want * factor * 100) / 100;
+        }
+      }
+    } else if (applicableTo === "events") {
+      // Discount was applied only to event lines.
+      const allLines = await orderLineRepo.findByOrder(orderId);
+      const grossEventTotal = allLines
+        .filter((l) => l.eventId != null)
+        .reduce((s, l) => s + toMoneyNumber(l.price) * (Number(l.quantity) || 1), 0);
+      if (grossEventTotal > ADMIN_REFUND_MONEY_EPS) {
+        const factor = Math.max(0, grossEventTotal - amountDeducted) / grossEventTotal;
+        for (const g of lineGroups) {
+          g.want = Math.round(g.want * factor * 100) / 100;
+        }
+      }
+    }
+    // applicableTo === "products": events are not discounted — no adjustment needed.
+  }
+
   const remainingBudget = await getRemainingRefundableAmount(orderId);
   if (remainingBudget === null || remainingBudget <= ADMIN_REFUND_MONEY_EPS) {
     return { refunded: false, error: "No refundable amount remaining." };
@@ -1807,11 +1850,24 @@ async function getAdminOrderEditPayload(orderId) {
 
   // Fetch attendees for event lines and annotate each with its refunded flag.
   const attendeeRows = await orderAttendeeRepo.findAllByOrderId(orderId);
+  // Fetch all registrations for this order (including soft-deleted cancelled ones) to get registrationId for edit links.
+  const allRegRows = await registrationRepo.findAllByOrderId(orderId, { paranoid: false });
+  const regByAttendeeId = {};
+  for (const r of allRegRows || []) {
+    const rp = r.get ? r.get({ plain: true }) : r;
+    regByAttendeeId[rp.orderAttendeeId] = rp;
+  }
   const attendeesByLine = {};
   for (const a of attendeeRows) {
     const plain = a.get ? a.get({ plain: true }) : a;
+    const reg = regByAttendeeId[plain.id] || null;
     if (!attendeesByLine[plain.orderLineId]) attendeesByLine[plain.orderLineId] = [];
-    attendeesByLine[plain.orderLineId].push({ ...plain, refunded: refundedAttendeeIds.has(plain.id) });
+    attendeesByLine[plain.orderLineId].push({
+      ...plain,
+      refunded: refundedAttendeeIds.has(plain.id),
+      registrationId: reg ? reg.id : null,
+      registrationCancelled: reg != null && reg.deletedAt != null,
+    });
   }
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -1821,7 +1877,8 @@ async function getAdminOrderEditPayload(orderId) {
     : null;
 
   // ── Derive digital fulfillment status from OrderHistory ────────────────────
-  const isPaid = orderPlain.paymentStatus === PAYMENT_STATUS.PAID;
+  // Treat partially_refunded as paid: the order was fulfilled, email/zoom still apply.
+  const isPaid = orderPlain.paymentStatus === PAYMENT_STATUS.PAID || orderPlain.paymentStatus === PAYMENT_STATUS.PARTIALLY_REFUNDED;
   const zoomSyncSucceeded = isPaid && orderHasEventLines
     ? await orderHistoryService.hasSuccessfulEvent(orderId, ORDER_HISTORY_EVENT.ZOOM_SYNC_COMPLETED)
     : false;

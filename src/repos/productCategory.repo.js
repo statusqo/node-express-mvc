@@ -25,9 +25,16 @@ module.exports = {
 
   async delete(id, options = {}) {
     const category = await ProductCategory.findByPk(id, options);
-    if (!category) return false;
-    await category.destroy(options);
-    return true;
+    if (!category) return { deleted: false, error: "Product category not found." };
+    try {
+      await category.destroy(options);
+      return { deleted: true };
+    } catch (err) {
+      if (err.name === "SequelizeForeignKeyConstraintError") {
+        return { deleted: false, error: "Cannot delete: this category is assigned to one or more products." };
+      }
+      throw err;
+    }
   },
 
   async count(options = {}) {

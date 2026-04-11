@@ -17,7 +17,8 @@
       "Bash(node src/scripts/test-fiscalization-storno.js)",
       "Bash(ls -la d:/DEFY/projects/node-express-mvc/src/views/admin/*/index.pug)",
       "Bash(node -e ':*)",
-      "Bash(grep -n \"createLineFromVariant\" /d/DEFY/projects/node-express-mvc/src/repos/*.js)"
+      "Bash(grep -n \"createLineFromVariant\" /d/DEFY/projects/node-express-mvc/src/repos/*.js)",
+      "Bash(grep -r \"/delete\\\\|\\\\.delete\" /d/DEFY/projects/node-express-mvc/src/controllers/admin/*.js)"
     ]
   }
 }

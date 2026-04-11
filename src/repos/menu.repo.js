@@ -26,9 +26,16 @@ module.exports = {
 
   async deleteMenu(id, options = {}) {
     const menu = await Menu.findByPk(id, options);
-    if (!menu) return false;
-    await menu.destroy(options);
-    return true;
+    if (!menu) return { deleted: false, error: "Menu not found." };
+    try {
+      await menu.destroy(options);
+      return { deleted: true };
+    } catch (err) {
+      if (err.name === "SequelizeForeignKeyConstraintError") {
+        return { deleted: false, error: "Cannot delete: this menu is referenced by other records." };
+      }
+      throw err;
+    }
   },
 
   async countMenuItems(menuId, options = {}) {
@@ -65,8 +72,15 @@ module.exports = {
 
   async deleteMenuItem(id, options = {}) {
     const item = await MenuItem.findByPk(id, options);
-    if (!item) return false;
-    await item.destroy(options);
-    return true;
+    if (!item) return { deleted: false, error: "Menu item not found." };
+    try {
+      await item.destroy(options);
+      return { deleted: true };
+    } catch (err) {
+      if (err.name === "SequelizeForeignKeyConstraintError") {
+        return { deleted: false, error: "Cannot delete: this menu item is referenced by other records." };
+      }
+      throw err;
+    }
   },
 };

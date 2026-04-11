@@ -169,9 +169,9 @@ module.exports = {
   async delete(req, res) {
     const item = await menuService.findMenuItemById(req.params.id);
     const menuId = item ? item.menuId : null;
-    const deleted = await menuService.deleteMenuItem(req.params.id);
-    if (deleted) res.setFlash("success", "Menu item deleted.");
-    else res.setFlash("error", "Menu item not found.");
+    const result = await menuService.deleteMenuItem(req.params.id);
+    if (result.deleted) res.setFlash("success", "Menu item deleted.");
+    else res.setFlash("error", result.error || "Menu item not found.");
     const menu = menuId ? await menuService.findMenuById(menuId) : null;
     const slug = menu ? menu.slug : null;
     res.redirect((req.adminPrefix || "") + "/menu-items?menu=" + (slug || menuId || ""));

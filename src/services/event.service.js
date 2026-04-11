@@ -349,10 +349,11 @@ module.exports = {
   },
 
   /**
-   * Flow 1 — Cancel event: remove Zoom registrants, delete the Zoom meeting, then mark as cancelled.
-   * Works for both active and orphaned events. No registration, order, or refund changes.
-   * Zoom errors are propagated to the caller — event is only marked cancelled after full Zoom success.
-   * 404 responses from Zoom are treated as success (idempotent retries).
+   * Flow 1 — Cancel event: delete the Zoom meeting (Zoom auto-removes registrants), then
+   * atomically mark the event as cancelled, clear zoomRegistrantId on all registrations,
+   * destroy the EventMeeting record, deactivate the variant, and remove cart lines.
+   * Works for both active and orphaned events. No registration order or refund changes.
+   * Zoom 404 is treated as success (idempotent retry). DB changes only happen after Zoom succeeds.
    * @param {string} eventId
    * @returns {Promise<{ cancelled: boolean, error?: string }>}
    */
@@ -363,28 +364,45 @@ module.exports = {
       return { cancelled: false, error: "Only active or orphaned events can be cancelled." };
     }
 
-    const registrations = event.Registrations || [];
     const meeting = event.EventMeeting;
     const provider = getMeetingProvider();
 
+    // Delete the Zoom meeting. Zoom automatically removes all registrants when a meeting
+    // is deleted, so no per-registrant removeRegistrant calls are needed.
+    // 404 is treated as success by the gateway (idempotent retry).
     if (provider && meeting && meeting.zoomMeetingId) {
       const meetingPlain = meeting.get ? meeting.get({ plain: true }) : meeting;
+      await provider.deleteMeeting(meetingPlain);
+    }
+
+    // All DB changes in a single transaction so there is no partial-cancel state.
+    const t = await sequelize.transaction();
+    try {
+      // Clear each registration's Zoom registrant ID — the meeting is gone so these
+      // IDs are dead. Clearing them now means rescheduleEvent can re-add registrants
+      // to a new meeting without skipping anyone.
+      const registrations = event.Registrations || [];
       for (const reg of registrations) {
         if (reg.zoomRegistrantId) {
-          await provider.removeRegistrant(meetingPlain, reg.zoomRegistrantId);
+          await registrationRepo.update(reg.id, { zoomRegistrantId: null }, { transaction: t });
         }
       }
-      await provider.deleteMeeting(meetingPlain);
-      await eventMeetingRepo.destroyByEventId(eventId);
+
+      await eventMeetingRepo.destroyByEventId(eventId, { transaction: t });
+
+      if (event.productVariantId) {
+        await productVariantRepo.update(event.productVariantId, { active: false }, { transaction: t });
+        await cartRepo.removeLinesByVariantId(event.productVariantId, { transaction: t });
+        logger.info("cancelEvent: variant deactivated and cart lines removed", { eventId, variantId: event.productVariantId });
+      }
+
+      await eventRepo.update(eventId, { eventStatus: "cancelled" }, { transaction: t });
+      await t.commit();
+    } catch (e) {
+      await t.rollback();
+      throw e;
     }
 
-    if (event.productVariantId) {
-      await productVariantRepo.update(event.productVariantId, { active: false });
-      await cartRepo.removeLinesByVariantId(event.productVariantId);
-      logger.info("cancelEvent: variant deactivated and cart lines removed", { eventId, variantId: event.productVariantId });
-    }
-
-    await eventRepo.update(eventId, { eventStatus: "cancelled" });
     return { cancelled: true };
   },
 
@@ -507,6 +525,138 @@ module.exports = {
       }
     }
     return { ok: true };
+  },
+
+  /**
+   * Reschedule a cancelled event: update its details, create a new Zoom meeting, re-add
+   * existing registrants, and set the event back to active.
+   *
+   * Idempotent and safely retryable at every stage:
+   *   - DB details update (step 1) is always re-applied with the same values on retry.
+   *   - Zoom creation (step 2) is skipped if an EventMeeting already exists from a prior attempt.
+   *   - Registrant re-add (step 3) skips registrants that already have a zoomRegistrantId.
+   *   - Activation (step 4) is a no-op if the event is already active.
+   *
+   * @param {string} eventId
+   * @param {object} data - Validated form data: startDate, startTime, durationMinutes, location, capacity, timezone
+   * @param {string} userId - Admin user id (must have a connected meeting provider)
+   * @returns {Promise<{ rescheduled: boolean, zoomErrors?: string[], error?: string }>}
+   */
+  async rescheduleEvent(eventId, data, userId) {
+    const event = await eventRepo.findByIdWithRegistrationsAndMeeting(eventId);
+    if (!event) return { rescheduled: false, error: "Event not found." };
+    if (event.eventStatus !== "cancelled") {
+      return { rescheduled: false, error: "Only cancelled events can be rescheduled." };
+    }
+    if (event.isOnline && data.isOnline === false) {
+      return { rescheduled: false, error: "Cannot convert an online event to offline when rescheduling." };
+    }
+
+    // Registrations are paranoid — only non-deleted rows are returned
+    const registrations = event.Registrations || [];
+    const registrationCount = registrations.length;
+    const capacityNum = data.capacity != null ? parseInt(data.capacity, 10) : null;
+    if (capacityNum !== null && !Number.isNaN(capacityNum) && capacityNum < registrationCount) {
+      return {
+        rescheduled: false,
+        error: `Capacity (${capacityNum}) cannot be less than current registrant count (${registrationCount}).`,
+      };
+    }
+
+    const { startDate, startTime, durationMinutes, location, timezone } = data;
+
+    // ── Step 1: DB transaction — update event details & variant (keep eventStatus=cancelled) ──
+    const t1 = await sequelize.transaction();
+    try {
+      const eventPayload = {};
+      if (startDate !== undefined) eventPayload.startDate = startDate || null;
+      if (startTime !== undefined) eventPayload.startTime = startTime || null;
+      if (durationMinutes !== undefined) eventPayload.durationMinutes = durationMinutes ?? null;
+      if (location !== undefined) eventPayload.location = location ? String(location).trim() : null;
+      if (timezone !== undefined) eventPayload.timezone = timezone ? String(timezone).trim() || null : null;
+      // isOnline is locked for online events — do not allow it to change
+      await eventRepo.update(eventId, eventPayload, { transaction: t1 });
+
+      if (event.productVariantId) {
+        const variantPayload = {
+          title: formatEventVariantTitle(
+            startDate !== undefined ? startDate : event.startDate,
+            startTime !== undefined ? startTime : event.startTime
+          ),
+        };
+        if (capacityNum !== null && !Number.isNaN(capacityNum)) {
+          variantPayload.quantity = capacityNum;
+        }
+        await productVariantRepo.update(event.productVariantId, variantPayload, { transaction: t1 });
+      }
+
+      await t1.commit();
+    } catch (e) {
+      await t1.rollback();
+      throw e;
+    }
+
+    // ── Step 2: Zoom meeting — idempotent: skip if EventMeeting already exists ──
+    if (event.isOnline) {
+      const existingMeeting = await eventMeetingRepo.findByEventId(eventId);
+      if (!existingMeeting) {
+        const meetingResult = await this.ensureMeetingForOnlineEvent(eventId, userId, { skipStatusCheck: true });
+        if (!meetingResult.created && meetingResult.error) {
+          return { rescheduled: false, error: `Zoom meeting could not be created: ${meetingResult.error}` };
+        }
+      }
+
+      // ── Step 3: Re-add registrants to new meeting — best-effort, skip already-synced ──
+      const zoomErrors = [];
+      const newMeetingRow = await eventMeetingRepo.findByEventId(eventId);
+      const provider = getMeetingProvider();
+      if (provider && newMeetingRow) {
+        const meetingPlain = newMeetingRow.get ? newMeetingRow.get({ plain: true }) : newMeetingRow;
+        for (const reg of registrations) {
+          if (reg.zoomRegistrantId) continue; // already re-added in a prior attempt
+          try {
+            const regPlain = reg.get ? reg.get({ plain: true }) : reg;
+            const { zoomRegistrantId } = await provider.addRegistrant(meetingPlain, regPlain);
+            if (zoomRegistrantId) {
+              await registrationRepo.update(reg.id, { zoomRegistrantId });
+            }
+          } catch (e) {
+            logger.warn("rescheduleEvent: failed to add registrant to Zoom", { registrationId: reg.id, error: e.message });
+            zoomErrors.push(`Registrant ${reg.email}: ${e.message}`);
+          }
+        }
+      }
+
+      // ── Step 4: DB transaction — activate event & variant ──
+      const t4 = await sequelize.transaction();
+      try {
+        await eventRepo.update(eventId, { eventStatus: "active" }, { transaction: t4 });
+        if (event.productVariantId) {
+          await productVariantRepo.update(event.productVariantId, { active: true }, { transaction: t4 });
+        }
+        await t4.commit();
+      } catch (e) {
+        await t4.rollback();
+        throw e;
+      }
+
+      return { rescheduled: true, zoomErrors };
+    }
+
+    // ── Offline event: no Zoom steps, just activate ──
+    const t4 = await sequelize.transaction();
+    try {
+      await eventRepo.update(eventId, { eventStatus: "active" }, { transaction: t4 });
+      if (event.productVariantId) {
+        await productVariantRepo.update(event.productVariantId, { active: true }, { transaction: t4 });
+      }
+      await t4.commit();
+    } catch (e) {
+      await t4.rollback();
+      throw e;
+    }
+
+    return { rescheduled: true, zoomErrors: [] };
   },
 
   /**

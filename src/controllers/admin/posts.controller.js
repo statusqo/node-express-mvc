@@ -79,9 +79,9 @@ module.exports = {
   },
 
   async delete(req, res) {
-    const deleted = await postService.delete(req.params.id);
-    if (deleted) res.setFlash("success", "Post deleted.");
-    else res.setFlash("error", "Post not found.");
+    const result = await postService.delete(req.params.id);
+    if (result.deleted) res.setFlash("success", "Post deleted.");
+    else res.setFlash("error", result.error || "Post not found.");
     res.redirect((req.adminPrefix || "") + "/blog");
   },
 };

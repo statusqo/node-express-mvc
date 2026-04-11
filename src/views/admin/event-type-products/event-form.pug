@@ -4,7 +4,8 @@ block append links
     link(rel='preconnect' href='https://fonts.googleapis.com')
     link(rel='preconnect' href='https://fonts.gstatic.com' crossorigin)
 
-mixin fieldRows(disabled)
+mixin fieldRows(disabled, lockIsOnline)
+    - var onlineLocked = !disabled && lockIsOnline && (event && event.isOnline)
     .da-form-section
         h2.da-form-section-label Date & time
         .da-form-group
@@ -73,17 +74,35 @@ mixin fieldRows(disabled)
                 value=event && event.capacity != null ? event.capacity : ''
             )
             if !disabled
-                p.da-form-hint Maximum attendees. Leave 0 for unlimited.
+                - var regCount = event && event.registrationCount ? event.registrationCount : 0
+                if regCount > 0
+                    p.da-form-hint Must be at least #{regCount} (current registrant count).
+                else
+                    p.da-form-hint Maximum attendees. Leave 0 for unlimited.
         .da-form-group
+            if onlineLocked
+                input(type='hidden' name='isOnline' value='1')
             label.admin-checkbox
                 input(
                     type='checkbox'
                     name='isOnline'
                     value='1'
                     checked=(event ? event.isOnline : false)
-                    disabled=disabled
+                    disabled=(disabled || onlineLocked)
                 )
                 | Online event (Zoom meeting can be created when syncing)
+            if onlineLocked
+                p.da-form-hint This event was created as an online event and cannot be changed to in-person.
+
+mixin zoomCheckIcon
+    svg(width='20' height='20' viewBox='0 0 20 20' fill='none' xmlns='http://www.w3.org/2000/svg' aria-hidden='true')
+        circle(cx='10' cy='10' r='9' fill='rgba(34,197,94,0.12)' stroke='#22C55E' stroke-width='1.5')
+        path(d='M6.5 10.5l2.5 2.5 4.5-5' stroke='#22C55E' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round')
+
+mixin zoomXIcon
+    svg(width='20' height='20' viewBox='0 0 20 20' fill='none' xmlns='http://www.w3.org/2000/svg' aria-hidden='true')
+        circle(cx='10' cy='10' r='9' fill='rgba(245,158,11,0.12)' stroke='#F59E0B' stroke-width='1.5')
+        path(d='M7 7l6 6M13 7l-6 6' stroke='#F59E0B' stroke-width='1.5' stroke-linecap='round')
 
 block content
     .da-page
@@ -95,13 +114,125 @@ block content
 
         +formError(error)
 
-        //- ── Read-only event details (edit mode) ─────────────────────
         if isEdit
-            .da-card(style='max-width: 640px;')
-                .da-card-body
-                    +fieldRows(true)
+            - var baseEventsUrl = (adminPrefix || '') + '/' + sectionPath + '/' + product.slug + '/events'
+            - var regCount = event.registrationCount || 0
 
-        //- ── Create form (new mode) ───────────────────────────────────
+            .da-form-grid
+
+                //- ── Main: event fields ──────────────────────────────
+                .da-form-main
+
+                    //- Read-only (active / orphaned)
+                    if event.eventStatus !== 'cancelled'
+                        .da-card
+                            .da-card-body
+                                +fieldRows(true)
+
+                    //- Reschedule form (cancelled events only)
+                    else
+                        .da-card
+                            form#reschedule-event-form(
+                                method='post'
+                                action=baseEventsUrl + '/reschedule-event'
+                            )
+                                input(type='hidden' name='eventId' value=event.id)
+                                .da-card-body
+                                    +fieldRows(false, true)
+                                .da-card-footer
+                                    button.da-btn.da-btn--primary(
+                                        type='button'
+                                        data-confirm-modal
+                                        data-confirm-title='Create Event'
+                                        data-confirm-msg='This will create a new Zoom meeting and re-add all existing registrants. The event will be set to active.'
+                                        data-form-id='reschedule-event-form'
+                                    ) Create Event
+                                    a.da-btn.da-btn--secondary(href=baseEventsUrl) Cancel
+
+                //- ── Aside: status + danger zone ─────────────────────
+                .da-form-aside
+
+                    //- Actions card (online events only)
+                    if event.isOnline
+                        .da-card(class=event.meetingLinkStatus !== 'synced' ? 'da-card--warning-accent' : '')
+                            .da-card-header
+                                h2.da-card-title Actions
+                            .da-card-body
+                                if event.meetingLinkStatus === 'synced'
+                                    .da-event-zoom-status
+                                        .da-event-zoom-status__icon
+                                            +zoomCheckIcon
+                                        .da-event-zoom-status__content
+                                            span.da-event-zoom-status__label Active Zoom meeting
+                                else
+                                    .da-event-zoom-status
+                                        .da-event-zoom-status__icon
+                                            +zoomXIcon
+                                        .da-event-zoom-status__content
+                                            span.da-event-zoom-status__label No Zoom meeting
+                                            if event.eventStatus === 'cancelled'
+                                                span.da-event-zoom-status__hint The meeting was removed when the event was cancelled. Reschedule the event to create a new one.
+                                            else if event.eventStatus === 'orphaned'
+                                                span.da-event-zoom-status__hint The meeting was deleted externally.
+                                                form#resync-zoom-form(method='post' action=baseEventsUrl + '/resync-event')
+                                                    input(type='hidden' name='eventId' value=event.id)
+                                                    button.da-btn.da-btn--secondary(type='submit') Re-sync with Zoom
+                                            else
+                                                span.da-event-zoom-status__hint No meeting has been created yet.
+
+                    //- Danger zone
+                    .da-card.da-danger-zone
+                        .da-card-header
+                            h2.da-card-title Danger Zone
+                        .da-card-body
+                            if event.eventStatus === 'active' || event.eventStatus === 'orphaned'
+                                - var cancelBullets = event.isOnline ? ['Zoom meeting will be deleted', 'Event will be marked as cancelled'] : ['Event will be marked as cancelled']
+                                .da-danger-zone-item
+                                    p.da-danger-zone-desc
+                                        | #{event.isOnline ? 'Removes the Zoom meeting and marks this event as cancelled.' : 'Marks this event as cancelled.'} Registrations and orders are not affected.
+                                    form#cancel-event-form(method='post' action=baseEventsUrl + '/cancel-event')
+                                        input(type='hidden' name='eventId' value=event.id)
+                                        input(type='hidden' name='confirm' value='1')
+                                        button.da-btn.da-btn--danger(
+                                            type='button'
+                                            data-confirm-modal
+                                            data-confirm-title='Cancel Event'
+                                            data-confirm-msg='The following will happen immediately:'
+                                            data-confirm-bullets=JSON.stringify(cancelBullets)
+                                            data-form-id='cancel-event-form'
+                                        ) Cancel Event
+
+                            if event.eventStatus === 'cancelled' && regCount > 0
+                                - var refundBullets = ['Paid orders will be refunded via Stripe', 'Unpaid orders will be voided', 'Registration records will be cleared']
+                                .da-danger-zone-item
+                                    p.da-danger-zone-desc Refunds all registrants via Stripe and clears registration records.
+                                    form#process-refunds-form(method='post' action=baseEventsUrl + '/process-refunds')
+                                        input(type='hidden' name='eventId' value=event.id)
+                                        input(type='hidden' name='confirm' value='1')
+                                        button.da-btn.da-btn--danger(
+                                            type='button'
+                                            data-confirm-modal
+                                            data-confirm-title='Refund Event'
+                                            data-confirm-msg=regCount + ' registration(s) will be processed. This cannot be undone:'
+                                            data-confirm-bullets=JSON.stringify(refundBullets)
+                                            data-form-id='process-refunds-form'
+                                        ) Refund Event
+                                hr.da-danger-zone-sep
+
+                            if event.eventStatus === 'cancelled'
+                                .da-danger-zone-item
+                                    p.da-danger-zone-desc Permanently deletes this event and all associated data.
+                                    form#remove-event-form(method='post' action=baseEventsUrl + '/remove-event')
+                                        input(type='hidden' name='eventId' value=event.id)
+                                        button.da-btn.da-btn--danger(
+                                            type='button'
+                                            data-confirm-modal
+                                            data-confirm-title='Remove Event'
+                                            data-confirm-msg='Remove this event permanently? This cannot be undone.'
+                                            data-form-id='remove-event-form'
+                                        ) Remove Event
+
+        //- ── New event form (no aside needed) ────────────────────────
         else
             .da-card(style='max-width: 640px;')
                 form(
@@ -113,67 +244,6 @@ block content
                     .da-card-footer
                         button.da-btn.da-btn--primary(type='submit') Create Event
                         a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/' + sectionPath + '/' + product.slug + '/events') Cancel
-
-        //- ── Zoom meeting status (edit only) ─────────────────────────
-        if isEdit
-            - var baseEventsUrl = (adminPrefix || '') + '/' + sectionPath + '/' + product.slug + '/events'
-            .da-card(style='max-width:640px; margin-top:1.5rem')
-                .da-card-body
-                    p.da-form-section-label(style='margin-bottom:0.5rem') Zoom Meeting
-                    if !event.isOnline
-                        p.da-aside-empty This is an in-person event — no Zoom meeting.
-                    else if event.meetingLinkStatus === 'synced'
-                        span.da-badge.da-badge--success Active Zoom meeting
-                    else
-                        .da-cell-actions(style='display:flex; justify-content: flex-start; align-items:center; gap:0.75rem; flex-wrap:wrap;')
-                            span.da-badge.da-badge--warning No Zoom meeting
-                            if event.eventStatus === 'orphaned'
-                                form#resync-zoom-form(method='post' action=baseEventsUrl + '/resync-event')
-                                    input(type='hidden' name='eventId' value=event.id)
-                                    button.da-btn.da-btn--secondary(type='submit') Re-sync with Zoom
-
-        //- ── Actions (edit only) ─────────────────────────────────────
-        if isEdit
-            - var regCount = event.registrationCount || 0
-            - var cancelBullets = event.isOnline ? ['Zoom meeting will be deleted', 'Event will be marked as cancelled'] : ['Event will be marked as cancelled']
-            - var cleanupBullets = ['Paid orders will be refunded via Stripe', 'Unpaid orders will be voided', 'Registration records will be cleared']
-
-            if event.eventStatus === 'active' || event.eventStatus === 'orphaned'
-                form#cancel-event-form(method='post' action=baseEventsUrl + '/cancel-event' style='margin-top:1.5rem;')
-                    input(type='hidden' name='eventId' value=event.id)
-                    input(type='hidden' name='confirm' value='1')
-                    button.da-btn.da-btn--danger(
-                        type='button'
-                        data-confirm-modal
-                        data-confirm-title='Cancel Event'
-                        data-confirm-msg='The following will happen immediately:'
-                        data-confirm-bullets=JSON.stringify(cancelBullets)
-                        data-form-id='cancel-event-form'
-                    ) Cancel Event
-
-            if event.eventStatus === 'cancelled' && regCount > 0
-                form#process-refunds-form(method='post' action=baseEventsUrl + '/process-refunds' style='margin-top:1.5rem;')
-                    input(type='hidden' name='eventId' value=event.id)
-                    input(type='hidden' name='confirm' value='1')
-                    button.da-btn.da-btn--danger(
-                        type='button'
-                        data-confirm-modal
-                        data-confirm-title='Process Refunds & Clean Up'
-                        data-confirm-msg='This event has ' + regCount + ' unprocessed registration(s). The following will happen:'
-                        data-confirm-bullets=JSON.stringify(cleanupBullets)
-                        data-form-id='process-refunds-form'
-                    ) Process Refunds & Clean Up
-
-            if event.eventStatus === 'cancelled'
-                form#remove-event-form(method='post' action=baseEventsUrl + '/remove-event' style='margin-top:1.5rem')
-                    input(type='hidden' name='eventId' value=event.id)
-                    button.da-btn.da-btn--danger(
-                        type='button'
-                        data-confirm-modal
-                        data-confirm-title='Remove Event'
-                        data-confirm-msg='Remove this event permanently? This cannot be undone.'
-                        data-form-id='remove-event-form'
-                    ) Remove Event
 
 block append scripts
     script(src='/public/js/admin-event-form.js')

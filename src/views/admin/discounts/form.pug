@@ -8,8 +8,8 @@ block content
 
         +formError(error)
 
-        form(method='post' action=isEdit ? (adminPrefix || '') + '/discounts/' + discount.id + '/edit' : (adminPrefix || '') + '/discounts/new')
-            .da-card
+        .da-card
+            form#discountForm(method='post' action=isEdit ? (adminPrefix || '') + '/discounts/' + discount.id + '/edit' : (adminPrefix || '') + '/discounts/new')
                 .da-card-header
                     h2.da-card-title Details
                 .da-card-body
@@ -128,19 +128,17 @@ block content
                                     placeholder='Internal note (not shown to customers)'
                                 )= discount ? (discount.description || '') : ''
 
-                .da-card-footer
-                    button.da-btn.da-btn--primary(type='submit')= isEdit ? 'Update Discount' : 'Create Discount'
-                    a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/discounts') Cancel
-                    if isEdit && discount
-                        - var canDelete = !discount.usedCount || discount.usedCount < 1
-                        div(style='margin-left:auto')
-                            form#delete-discount-form(method='post' action=(adminPrefix || '') + '/discounts/' + discount.id + '/delete')
-                                button.da-btn.da-btn--danger(
-                                    type='button'
-                                    disabled=canDelete ? undefined : true
-                                    data-confirm-modal=canDelete ? '' : undefined
-                                    data-confirm-title='Delete Discount'
-                                    data-confirm-msg='Are you sure you want to delete this discount code?'
-                                    data-form-id='delete-discount-form'
-                                    title=canDelete ? '' : ('Cannot delete: used ' + (discount.usedCount || 0) + ' time(s). Deactivate it instead.')
-                                ) Delete Discount
+            if isEdit && discount
+                form#delete-discount-form(method='post' action=(adminPrefix || '') + '/discounts/' + discount.id + '/delete')
+            .da-card-footer
+                button.da-btn.da-btn--primary(type='submit' form='discountForm')= isEdit ? 'Update Discount' : 'Create Discount'
+                a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/discounts') Cancel
+                if isEdit && discount
+                    div(style='margin-left:auto')
+                        button.da-btn.da-btn--danger(
+                            type='button'
+                            data-confirm-modal
+                            data-confirm-title='Delete Discount'
+                            data-confirm-msg='Are you sure you want to delete this discount code?'
+                            data-form-id='delete-discount-form'
+                        ) Delete Discount

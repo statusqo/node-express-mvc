@@ -430,6 +430,60 @@ module.exports = {
   },
 
   /**
+   * POST .../events/reschedule-event — Update details of a cancelled event, create a new Zoom meeting,
+   * re-add existing registrants, and set the event back to active. Body: eventId + event form fields.
+   * Idempotent: safe to retry if Zoom or DB fails mid-way.
+   */
+  async rescheduleEvent(req, res) {
+    const { productSlug } = req.params;
+    const sectionPath = req.sectionPath;
+    const eventId = req.body.eventId ? String(req.body.eventId).trim() : null;
+    if (!eventId) {
+      res.setFlash("error", "Invalid request.");
+      return res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events");
+    }
+    const product = await productService.findBySlugWithTypeAndCategoryAndDefaultVariant(productSlug);
+    if (!product) {
+      res.setFlash("error", "Product not found.");
+      return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
+    }
+    const plain = toPlain(product);
+    if (plain.ProductCategory && plain.ProductCategory.slug !== req.eventCategorySlug) {
+      res.setFlash("error", "Product does not belong to this section.");
+      return res.redirect((req.adminPrefix || "") + "/" + sectionPath);
+    }
+    const targetEvent = await eventService.findById(eventId);
+    if (!targetEvent || String(targetEvent.productId) !== String(plain.id)) {
+      res.setFlash("error", "Event not found or does not belong to this product.");
+      return res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events");
+    }
+    const result = validateEventForm(req.body);
+    if (!result.ok) {
+      res.setFlash("error", result.errors?.[0]?.message || "Validation failed.");
+      return res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events/" + eventId + "/edit");
+    }
+    try {
+      const rescheduleResult = await eventService.rescheduleEvent(eventId, result.data, req.user.id);
+      if (!rescheduleResult.rescheduled) {
+        res.setFlash("error", rescheduleResult.error || "Reschedule failed.");
+        return res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events/" + eventId + "/edit");
+      }
+      if (rescheduleResult.zoomErrors && rescheduleResult.zoomErrors.length > 0) {
+        res.setFlash(
+          "success",
+          "Event rescheduled. Some registrants could not be added to Zoom — check the registrants page to retry."
+        );
+      } else {
+        res.setFlash("success", "Event rescheduled.");
+      }
+    } catch (e) {
+      res.setFlash("error", e.message || "Reschedule failed.");
+      return res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events/" + eventId + "/edit");
+    }
+    res.redirect((req.adminPrefix || "") + "/" + sectionPath + "/" + productSlug + "/events/" + eventId + "/edit");
+  },
+
+  /**
    * POST .../events/resync-event — Re-sync an orphaned event (new meeting + add registrants). Body: eventId.
    */
   async resyncEvent(req, res) {

@@ -141,20 +141,21 @@ block content
                             if isEdit
                                 input#hiddenPassword(type='hidden' name='password' value='')
 
+                    if isEdit
+                        form#delete-user-form(method='post' action=(adminPrefix || '') + '/users/' + user.id + '/delete')
                     .da-card-footer
                         button.da-btn.da-btn--primary(type='submit' form='userEditForm')= isEdit ? 'Save Changes' : 'Create User'
                         a.da-btn.da-btn--secondary(href=(adminPrefix || '') + '/users') Cancel
                         if isEdit
                             div(style='margin-left:auto')
-                                form#delete-user-form(method='post' action=(adminPrefix || '') + '/users/' + user.id + '/delete')
-                                    button.da-btn.da-btn--danger(
-                                        type='button'
-                                        data-confirm-modal
-                                        data-confirm-title='Delete User'
-                                        data-confirm-msg='This cannot be undone. The following will be removed:'
-                                        data-confirm-bullets='["User account and login","All saved addresses","All saved payment methods"]'
-                                        data-form-id='delete-user-form'
-                                    ) Delete User
+                                button.da-btn.da-btn--danger(
+                                    type='button'
+                                    data-confirm-modal
+                                    data-confirm-title='Delete User'
+                                    data-confirm-msg='This cannot be undone. The following will be removed:'
+                                    data-confirm-bullets='["User account and login","All saved addresses","All saved payment methods"]'
+                                    data-form-id='delete-user-form'
+                                ) Delete User
 
             //- ── Aside column (edit only) ────────────────────────────
             if isEdit
@@ -258,12 +259,12 @@ block content
                                                 span.da-cell-mono= order.orderNumber ? '#' + order.orderNumber : '—'
                                             td
                                                 if order.paymentStatus
-                                                    span.da-badge(class='da-badge--' + payClass)= order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)
+                                                    span.da-badge(class='da-badge--' + payClass)= order.paymentStatus.split('_').map(function(w){ return w.charAt(0).toUpperCase() + w.slice(1) }).join(' ')
                                                 else
                                                     span.da-cell-muted —
                                             td
                                                 if order.fulfillmentStatus
-                                                    span.da-badge(class='da-badge--' + fulClass)= order.fulfillmentStatus.charAt(0).toUpperCase() + order.fulfillmentStatus.slice(1).replace(/_/g, ' ')
+                                                    span.da-badge(class='da-badge--' + fulClass)= order.fulfillmentStatus.split('_').map(function(w){ return w.charAt(0).toUpperCase() + w.slice(1) }).join(' ')
                                                 else
                                                     span.da-cell-muted —
                                             td.da-col-created

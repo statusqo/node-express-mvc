@@ -237,9 +237,12 @@
 .da-events-card:hover {
     cursor: pointer;
     border-color: rgba(45, 212, 191, 0.25);
-    box-shadow:
-        0 12px 36px rgba(0, 0, 0, 0.45),
-        0 0 0 1px rgba(167, 139, 250, 0.2);
+}
+
+.da-page .da-events-card__reg-link:hover {
+    background: rgba(45, 212, 191, 0.1);
+    color: rgb(45, 212, 191);
+    border-color: rgba(45, 212, 191, 0.35);
 }
 
 .da-events-card:focus-within {
