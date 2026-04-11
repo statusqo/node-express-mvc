@@ -1,5 +1,5 @@
 const { Op } = require("sequelize");
-const { Event, EventMeeting, Registration, ProductVariant, Product, ProductType } = require("../models");
+const { Event, EventMeeting, Registration, ProductVariant, Product, ProductType, ProductCategory } = require("../models");
 const { EVENT_STATUS } = require("../constants/event");
 
 module.exports = {
@@ -167,13 +167,16 @@ module.exports = {
   async findUpcomingWithDetails(options = {}) {
     const today = new Date().toISOString().substring(0, 10);
     return await Event.findAll({
-      where: { startDate: { [Op.gte]: today } },
+      where: { startDate: { [Op.gte]: today }, eventStatus: { [Op.ne]: EVENT_STATUS.CANCELLED } },
       include: [
         {
           model: Product,
           as: "Product",
           attributes: ["id", "title", "slug"],
-          include: [{ model: ProductType, as: "ProductType", attributes: ["id", "name", "slug"], required: false }],
+          include: [
+            { model: ProductType, as: "ProductType", attributes: ["id", "name", "slug"], required: false },
+            { model: ProductCategory, as: "ProductCategory", attributes: ["id", "slug"], required: false },
+          ],
         },
         { model: EventMeeting, as: "EventMeeting", required: false, attributes: ["id", "zoomMeetingId"] },
         { model: Registration, as: "Registrations", required: false, attributes: ["id"] },
@@ -191,13 +194,16 @@ module.exports = {
   async findPastWithDetails(options = {}) {
     const today = new Date().toISOString().substring(0, 10);
     return await Event.findAll({
-      where: { startDate: { [Op.lt]: today } },
+      where: { startDate: { [Op.lt]: today }, eventStatus: { [Op.ne]: EVENT_STATUS.CANCELLED } },
       include: [
         {
           model: Product,
           as: "Product",
           attributes: ["id", "title", "slug"],
-          include: [{ model: ProductType, as: "ProductType", attributes: ["id", "name", "slug"], required: false }],
+          include: [
+            { model: ProductType, as: "ProductType", attributes: ["id", "name", "slug"], required: false },
+            { model: ProductCategory, as: "ProductCategory", attributes: ["id", "slug"], required: false },
+          ],
         },
         { model: EventMeeting, as: "EventMeeting", required: false, attributes: ["id", "zoomMeetingId"] },
         { model: Registration, as: "Registrations", required: false, attributes: ["id"] },

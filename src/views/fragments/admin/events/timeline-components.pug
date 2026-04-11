@@ -4,19 +4,16 @@
 //- ── +eventsTimelineEventCard(ev, adminPrefix, dateFormatted) ─────────────────
 //- Single interactive event card (not a table row).
 mixin eventsTimelineEventCard(ev, adminPrefix, dateFormatted)
-    - var typeLabel = ev.Product && ev.Product.ProductType ? ev.Product.ProductType.name : '—'
     - var productTitle = ev.Product ? ev.Product.title : '—'
     - var regCount = ev.registrationCount != null ? ev.registrationCount : 0
     - var durationLabel = (ev.durationMinutes != null && ev.durationMinutes !== '') ? (String(ev.durationMinutes) + ' min') : '—'
+    - var categorySlug = ev.Product && ev.Product.ProductCategory ? ev.Product.ProductCategory.slug : null
     article.da-events-card
         .da-events-card__inner
             .da-events-card__strip(role='group' aria-label='Event summary')
                 h3.da-events-card__title= productTitle
 
                 .da-events-card__meta(aria-label='Event details')
-                    span.da-events-card__kv
-                        span.da-events-card__k Type
-                        span.da-events-card__v= typeLabel
                     span.da-events-card__kv
                         span.da-events-card__k Status
                         span.da-events-card__v
@@ -37,10 +34,16 @@ mixin eventsTimelineEventCard(ev, adminPrefix, dateFormatted)
                             else
                                 span.da-events-card__meta-muted —
 
-                a.da-row-btn.da-row-btn--edit.da-events-card__reg-link(
-                    href=(adminPrefix || '') + '/events/' + ev.id + '/registrants'
-                    aria-label='View registrants for ' + productTitle + ' on ' + dateFormatted
-                ) Registrants
+                .da-events-card__actions
+                    a.da-row-btn.da-row-btn--edit(
+                        href=(adminPrefix || '') + '/events/' + ev.id + '/registrants'
+                        aria-label='View registrants for ' + productTitle + ' on ' + dateFormatted
+                    ) Registrants
+                    if categorySlug && ev.Product && ev.Product.slug
+                        a.da-row-btn.da-row-btn--edit(
+                            href=(adminPrefix || '') + '/' + categorySlug + '/' + ev.Product.slug + '/events/' + ev.id + '/edit'
+                            aria-label='Edit event ' + productTitle + ' on ' + dateFormatted
+                        ) Edit
 
 //- ── +eventsTimelineTimeSlot(timeLabel, events, adminPrefix, dateFormatted) ───
 mixin eventsTimelineTimeSlot(timeLabel, events, adminPrefix, dateFormatted)

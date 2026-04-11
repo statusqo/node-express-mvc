@@ -280,13 +280,13 @@
     white-space: nowrap;
 }
 
-/* Fills space between title and button; five equal columns */
+/* Fills space between title and action buttons; four equal columns */
 .da-events-card__meta {
     flex: 1 1 0%;
     min-width: 0;
     align-self: stretch;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 0;
     padding: 0.15rem 0;
 }
@@ -348,8 +348,14 @@
     }
 }
 
-.da-events-card__strip .da-events-card__reg-link.da-row-btn {
+.da-events-card__actions {
     flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.da-events-card__actions .da-row-btn {
     min-height: 34px;
     padding: 0.32rem 0.85rem;
 }
@@ -375,7 +381,7 @@
         min-width: 0;
     }
 
-    .da-events-card__strip .da-events-card__reg-link.da-row-btn {
+    .da-events-card__actions {
         flex: 0 0 auto;
     }
 }
