@@ -16,7 +16,6 @@ block content
                                     th Code
                                     th Type
                                     th Value
-                                    th Applies to
                                     th Min Order
                                     th Uses
                                     th Valid From
@@ -38,13 +37,6 @@ block content
                                             code(style='font-size:0.85rem; letter-spacing:0.04em')= d.code
                                         td= d.type === 'percentage' ? 'Percentage' : 'Fixed'
                                         td= d.type === 'percentage' ? d.value + '%' : '€' + Number(d.value).toFixed(2)
-                                        td
-                                            if d.applicableTo === 'events'
-                                                span.da-badge.da-badge--info Events only
-                                            else if d.applicableTo === 'products'
-                                                span.da-badge.da-badge--neutral Products only
-                                            else
-                                                span All
                                         td= d.minOrderAmount != null ? '€' + Number(d.minOrderAmount).toFixed(2) : '—'
                                         td= d.maxUses != null ? (d.usedCount + ' / ' + d.maxUses) : d.usedCount
                                         td(style='font-size:0.85rem')= d.validFrom ? new Date(d.validFrom).toLocaleDateString('hr') : '—'

@@ -1,5 +1,5 @@
 const { z } = require("zod");
-const { DISCOUNT_TYPE_LIST, DISCOUNT_APPLIES_TO_LIST } = require("../constants/discount");
+const { DISCOUNT_TYPE_LIST } = require("../constants/discount");
 
 const AdminDiscountSchema = z
   .object({
@@ -29,9 +29,6 @@ const AdminDiscountSchema = z
       .union([z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Valid until must be a date (YYYY-MM-DD)."), z.literal(""), z.null()])
       .optional()
       .transform((v) => (v && v.trim() ? v.trim() : null)),
-    applicableTo: z.enum(DISCOUNT_APPLIES_TO_LIST, {
-      errorMap: () => ({ message: "Invalid applicableTo value." }),
-    }).default("all"),
     active: z.union([z.boolean(), z.string(), z.number()]).transform((v) => {
       if (typeof v === "boolean") return v;
       if (v === "1" || v === "true" || v === "on") return true;

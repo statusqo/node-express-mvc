@@ -98,18 +98,6 @@ block content
                                 )
 
                             .da-form-group
-                                label.da-form-label(for='applicableTo')
-                                    | Applies to
-                                    span.req *
-                                select#applicableTo.da-form-select(name='applicableTo' required)
-                                    - var currentAppliesTo = discount ? (discount.applicableTo || 'all') : 'all'
-                                    option(value='all'      selected=(currentAppliesTo === 'all'))      All products &amp; events
-                                    option(value='events'   selected=(currentAppliesTo === 'events'))   Events only
-                                    option(value='products' selected=(currentAppliesTo === 'products')) Products only (non-event)
-                                p.da-form-hint
-                                    | &ldquo;Events only&rdquo; applies the discount exclusively to event registration lines. &ldquo;Products only&rdquo; excludes event registrations.
-
-                            .da-form-group
                                 label.da-form-label Active
                                 label.da-checkbox
                                     input(

@@ -25,7 +25,9 @@
       "Bash(mv \"d:/DEFY/projects/node-express-mvc/src/public/js/admin-events-timeline.js\" \"d:/DEFY/projects/node-express-mvc/src/public/js/admin-event-timeline.js\")",
       "Bash(mv \"d:/DEFY/projects/node-express-mvc/src/views/admin/events\" \"d:/DEFY/projects/node-express-mvc/src/views/admin/event-timeline\")",
       "Bash(xargs ls:*)",
-      "Bash(grep -E \"\\\\.js$\")"
+      "Bash(grep -E \"\\\\.js$\")",
+      "Bash(grep -E \"\\\\.\\(js|pug\\)$\")",
+      "Bash(grep -r \"Post\" /d/DEFY/projects/node-express-mvc/src/db/migrations/*.js)"
     ]
   }
 }

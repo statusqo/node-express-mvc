@@ -1,6 +1,5 @@
 const discountService = require("../../services/discount.service");
 const { validateDiscount } = require("../../validators/discount.schema");
-const { DISCOUNT_APPLIES_TO_LIST } = require("../../constants/discount");
 
 function toPlain(obj) {
   return obj && typeof obj.get === "function" ? obj.get({ plain: true }) : obj;
@@ -20,7 +19,6 @@ module.exports = {
       title: "New Discount",
       discount: null,
       isEdit: false,
-      appliesToOptions: DISCOUNT_APPLIES_TO_LIST,
     });
   },
 
@@ -32,8 +30,7 @@ module.exports = {
         discount: req.body,
         isEdit: false,
         error: result.errors[0].message,
-        appliesToOptions: DISCOUNT_APPLIES_TO_LIST,
-      });
+        });
     }
     try {
       await discountService.create(result.data);
@@ -44,8 +41,7 @@ module.exports = {
           discount: req.body,
           isEdit: false,
           error: err.message,
-          appliesToOptions: DISCOUNT_APPLIES_TO_LIST,
-        });
+            });
       }
       throw err;
     }
@@ -63,7 +59,6 @@ module.exports = {
       title: "Edit Discount",
       discount: toPlain(discount),
       isEdit: true,
-      appliesToOptions: DISCOUNT_APPLIES_TO_LIST,
     });
   },
 
@@ -76,8 +71,7 @@ module.exports = {
         discount: { id, ...req.body },
         isEdit: true,
         error: result.errors[0].message,
-        appliesToOptions: DISCOUNT_APPLIES_TO_LIST,
-      });
+        });
     }
     try {
       await discountService.update(id, result.data);
@@ -92,8 +86,7 @@ module.exports = {
           discount: { id, ...req.body },
           isEdit: true,
           error: err.message,
-          appliesToOptions: DISCOUNT_APPLIES_TO_LIST,
-        });
+            });
       }
       throw err;
     }

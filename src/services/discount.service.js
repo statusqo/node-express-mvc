@@ -1,6 +1,6 @@
 const discountRepo = require("../repos/discount.repo");
 const orderDiscountRepo = require("../repos/orderDiscount.repo");
-const { DISCOUNT_TYPE, DISCOUNT_APPLIES_TO } = require("../constants/discount");
+const { DISCOUNT_TYPE } = require("../constants/discount");
 
 // ---------------------------------------------------------------------------
 // Pure helpers (no DB — fully unit-testable)
@@ -29,25 +29,6 @@ function localDateStr() {
  */
 function roundMoney(value) {
   return Math.round(value * 100) / 100;
-}
-
-/**
- * Filters order lines to those the discount applies to.
- * Each line must carry an `eventId` field (null for non-event products).
- *
- * @param {object} discount   - Discount instance with applicableTo field
- * @param {Array}  orderLines - Lines with { price, quantity, vatRate, stripeTaxRateId, eventId }
- * @returns {Array} filtered subset
- */
-function getApplicableLines(discount, orderLines) {
-  const scope = discount.applicableTo || DISCOUNT_APPLIES_TO.ALL;
-  if (scope === DISCOUNT_APPLIES_TO.EVENTS) {
-    return orderLines.filter((l) => l.eventId != null);
-  }
-  if (scope === DISCOUNT_APPLIES_TO.PRODUCTS) {
-    return orderLines.filter((l) => l.eventId == null);
-  }
-  return orderLines; // 'all'
 }
 
 /**
@@ -179,17 +160,11 @@ async function validateCode(code, applicableTotal, options = {}) {
     return { ok: false, error: "Invalid discount code." };
   }
 
-  // minOrderAmount is checked against the applicable subtotal — not the full cart total.
   // Specific message here because the customer needs actionable feedback.
   const total = Number(applicableTotal) || 0;
   if (discount.minOrderAmount != null && total < Number(discount.minOrderAmount)) {
     const min = Number(discount.minOrderAmount).toFixed(2);
-    const scopeLabel = discount.applicableTo === "events"
-      ? "event registrations"
-      : discount.applicableTo === "products"
-        ? "product purchases"
-        : "your order";
-    return { ok: false, error: `A minimum of €${min} in ${scopeLabel} is required for this discount.` };
+    return { ok: false, error: `A minimum order of €${min} is required for this discount.` };
   }
 
   const amountDeducted = calculateDeduction(discount, total);
@@ -253,27 +228,20 @@ async function applyToOrder(orderId, code, orderLines, vatEnabled, options = {})
     throw err;
   }
 
-  // Filter lines to those the discount applies to, then validate and compute.
-  const applicableLines = getApplicableLines(discount, orderLines);
-  const lineTotal = applicableLines.reduce(
+  const lineTotal = orderLines.reduce(
     (acc, line) => acc + (Number(line.price) || 0) * (Number(line.quantity) || 1),
     0,
   );
 
   if (discount.minOrderAmount != null && lineTotal < Number(discount.minOrderAmount)) {
     const min = Number(discount.minOrderAmount).toFixed(2);
-    const scopeLabel = discount.applicableTo === "events"
-      ? "event registrations"
-      : discount.applicableTo === "products"
-        ? "product purchases"
-        : "your order";
-    const err = new Error(`A minimum of €${min} in ${scopeLabel} is required for this discount.`);
+    const err = new Error(`A minimum order of €${min} is required for this discount.`);
     err.status = 400;
     throw err;
   }
 
   const amountDeducted = calculateDeduction(discount, lineTotal);
-  const vatDistribution = calculateVatDistribution(amountDeducted, applicableLines, vatEnabled);
+  const vatDistribution = calculateVatDistribution(amountDeducted, orderLines, vatEnabled);
 
   await orderDiscountRepo.create(
     {
@@ -282,7 +250,6 @@ async function applyToOrder(orderId, code, orderLines, vatEnabled, options = {})
       code: discount.code,
       type: discount.type,
       value: discount.value,
-      applicableTo: discount.applicableTo || "all",
       amountDeducted,
       vatDistribution,
     },
@@ -349,7 +316,6 @@ module.exports = {
   // Pure helpers (exported for unit testing)
   calculateDeduction,
   calculateVatDistribution,
-  getApplicableLines,
   // Validation (read-only)
   validateCode,
   // Application (transactional)

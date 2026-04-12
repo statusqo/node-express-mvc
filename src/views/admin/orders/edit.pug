@@ -109,20 +109,12 @@ block content
                                             tr
                                                 th(scope='col') Code
                                                 th(scope='col') Type &amp; value
-                                                th(scope='col') Applies to
                                                 th(scope='col') Amount deducted
                                         tbody
                                             tr
                                                 td
                                                     code(style='font-size:0.9rem;letter-spacing:0.04em')= orderDiscount.code
                                                 td= orderDiscount.type === 'percentage' ? Number(orderDiscount.value) + '% off' : '€' + Number(orderDiscount.value).toFixed(2) + ' off'
-                                                td
-                                                    if orderDiscount.applicableTo === 'events'
-                                                        span.da-badge.da-badge--info Events only
-                                                    else if orderDiscount.applicableTo === 'products'
-                                                        span.da-badge.da-badge--neutral Products only
-                                                    else
-                                                        span All products &amp; events
                                                 td(style='font-weight:600;color:var(--ds-success,#22C55E)')
                                                     | −€#{Number(orderDiscount.amountDeducted).toFixed(2)}
 

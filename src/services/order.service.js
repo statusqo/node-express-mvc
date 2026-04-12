@@ -719,7 +719,6 @@ async function createOrderFromCart(userId, sessionId, opts = {}) {
         quantity: Number(l.quantity) || 1,
         vatRate: l.vatRate != null ? Number(l.vatRate) : null,
         stripeTaxRateId: l.stripeTaxRateId || null,
-        // Required by discount.service.getApplicableLines to filter by applicableTo.
         eventId: l.eventId || null,
       }));
       const amountDeducted = await discountService.applyToOrder(
@@ -1111,32 +1110,14 @@ async function refundCancelledEventPortionForOrder(orderId, eventId) {
   const orderDiscount = await orderDiscountRepo.findByOrder(orderId);
   if (orderDiscount && toMoneyNumber(orderDiscount.amountDeducted) > ADMIN_REFUND_MONEY_EPS) {
     const amountDeducted = toMoneyNumber(orderDiscount.amountDeducted);
-    const applicableTo = orderDiscount.applicableTo || "all";
-
-    if (applicableTo === "all") {
-      // Discount was spread across all lines proportionally.
-      // grossTotal = order.total + amountDeducted (order.total is set once at creation and never modified).
-      const grossTotal = toMoneyNumber(order.total) + amountDeducted;
-      if (grossTotal > ADMIN_REFUND_MONEY_EPS) {
-        const factor = toMoneyNumber(order.total) / grossTotal;
-        for (const g of lineGroups) {
-          g.want = Math.round(g.want * factor * 100) / 100;
-        }
-      }
-    } else if (applicableTo === "events") {
-      // Discount was applied only to event lines.
-      const allLines = await orderLineRepo.findByOrder(orderId);
-      const grossEventTotal = allLines
-        .filter((l) => l.eventId != null)
-        .reduce((s, l) => s + toMoneyNumber(l.price) * (Number(l.quantity) || 1), 0);
-      if (grossEventTotal > ADMIN_REFUND_MONEY_EPS) {
-        const factor = Math.max(0, grossEventTotal - amountDeducted) / grossEventTotal;
-        for (const g of lineGroups) {
-          g.want = Math.round(g.want * factor * 100) / 100;
-        }
+    // grossTotal = order.total + amountDeducted (order.total is set once at creation and never modified).
+    const grossTotal = toMoneyNumber(order.total) + amountDeducted;
+    if (grossTotal > ADMIN_REFUND_MONEY_EPS) {
+      const factor = toMoneyNumber(order.total) / grossTotal;
+      for (const g of lineGroups) {
+        g.want = Math.round(g.want * factor * 100) / 100;
       }
     }
-    // applicableTo === "products": events are not discounted — no adjustment needed.
   }
 
   const remainingBudget = await getRemainingRefundableAmount(orderId);

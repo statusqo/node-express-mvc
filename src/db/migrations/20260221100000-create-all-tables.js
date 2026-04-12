@@ -508,8 +508,6 @@ module.exports = {
       validUntil: { type: Sequelize.DATEONLY, allowNull: true },
       active: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: true },
       description: { type: Sequelize.TEXT, allowNull: true },
-      // Controls which order lines the discount applies to: all | events | products
-      applicableTo: { type: Sequelize.ENUM("all", "events", "products"), allowNull: false, defaultValue: "all" },
       ...ts,
     });
 
@@ -522,8 +520,6 @@ module.exports = {
       type: { type: Sequelize.ENUM("percentage", "fixed_amount"), allowNull: false },
       value: { type: Sequelize.DECIMAL(10, 2), allowNull: false },
       amountDeducted: { type: Sequelize.DECIMAL(10, 2), allowNull: false },
-      // Snapshotted at order time for audit — matches discount.applicableTo at redemption.
-      applicableTo: { type: Sequelize.ENUM("all", "events", "products"), allowNull: false, defaultValue: "all" },
       // Pre-computed VAT distribution array, consumed by stripe.gateway to create
       // correctly VAT-attributed negative InvoiceItems on the Stripe invoice.
       // Shape: Array<{ vatRate: number|null, stripeTaxRateId: string|null, amount: number }>

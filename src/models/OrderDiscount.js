@@ -1,6 +1,6 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../db/client");
-const { DISCOUNT_TYPE_LIST, DISCOUNT_APPLIES_TO_LIST } = require("../constants/discount");
+const { DISCOUNT_TYPE_LIST } = require("../constants/discount");
 
 const OrderDiscount = sequelize.define("OrderDiscount", {
   id: {
@@ -34,12 +34,6 @@ const OrderDiscount = sequelize.define("OrderDiscount", {
   amountDeducted: {
     type: DataTypes.DECIMAL(10, 2),
     allowNull: false,
-  },
-  // Snapshotted at order time — matches discount.applicableTo at redemption.
-  applicableTo: {
-    type: DataTypes.ENUM(...DISCOUNT_APPLIES_TO_LIST),
-    allowNull: false,
-    defaultValue: "all",
   },
   // Pre-computed VAT distribution, consumed by stripe.gateway to create
   // correctly VAT-attributed negative InvoiceItems on the Stripe invoice.

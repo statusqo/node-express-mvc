@@ -291,23 +291,10 @@ module.exports = {
         const orderDiscount = await orderDiscountRepo.findByOrder(order.id);
         if (orderDiscount && Number(orderDiscount.amountDeducted) > MONEY_EPS) {
           const amountDeducted = Number(orderDiscount.amountDeducted);
-          const applicableTo = orderDiscount.applicableTo || "all";
-          if (applicableTo === "all") {
-            const grossTotal = Number(order.total) + amountDeducted;
-            if (grossTotal > MONEY_EPS) {
-              effectiveLinePrice = Math.round(linePrice * (Number(order.total) / grossTotal) * 100) / 100;
-            }
-          } else if (applicableTo === "events") {
-            const allLines = await orderLineRepo.findByOrder(order.id);
-            const grossEventTotal = allLines
-              .filter((l) => l.eventId != null)
-              .reduce((s, l) => s + (Number(l.price) || 0) * (Number(l.quantity) || 1), 0);
-            if (grossEventTotal > MONEY_EPS) {
-              const factor = Math.max(0, grossEventTotal - amountDeducted) / grossEventTotal;
-              effectiveLinePrice = Math.round(linePrice * factor * 100) / 100;
-            }
+          const grossTotal = Number(order.total) + amountDeducted;
+          if (grossTotal > MONEY_EPS) {
+            effectiveLinePrice = Math.round(linePrice * (Number(order.total) / grossTotal) * 100) / 100;
           }
-          // applicableTo === "products": event lines are not discounted — no adjustment.
         }
         const refundAmount = Math.min(effectiveLinePrice, remainingRefundable);
         const transactions = await orderService.getTransactionsForOrder(order.id);

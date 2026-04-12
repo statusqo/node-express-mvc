@@ -1,6 +1,6 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../db/client");
-const { DISCOUNT_TYPE_LIST, DISCOUNT_APPLIES_TO_LIST } = require("../constants/discount");
+const { DISCOUNT_TYPE_LIST } = require("../constants/discount");
 
 const Discount = sequelize.define("Discount", {
   id: {
@@ -58,15 +58,6 @@ const Discount = sequelize.define("Discount", {
   description: {
     type: DataTypes.TEXT,
     allowNull: true,
-  },
-  // Controls which order lines the discount is applied to.
-  // 'all' (default) → entire order total
-  // 'events'        → only event-tied product variant lines
-  // 'products'      → only non-event product variant lines
-  applicableTo: {
-    type: DataTypes.ENUM(...DISCOUNT_APPLIES_TO_LIST),
-    allowNull: false,
-    defaultValue: "all",
   },
 }, {
   timestamps: true,
