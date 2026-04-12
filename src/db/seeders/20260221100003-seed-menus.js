@@ -42,6 +42,7 @@ module.exports = {
       dash: crypto.randomUUID(),
       users: crypto.randomUUID(),
       events: crypto.randomUUID(),
+      evEvents: crypto.randomUUID(),
       products: crypto.randomUUID(),
       orders: crypto.randomUUID(),
       collections: crypto.randomUUID(),
@@ -50,9 +51,6 @@ module.exports = {
       menus: crypto.randomUUID(),
       settings: crypto.randomUUID(),
       logout: crypto.randomUUID(),
-      evWeb: crypto.randomUUID(),
-      evSem: crypto.randomUUID(),
-      evClass: crypto.randomUUID(),
       prPt: crypto.randomUUID(),
       prPc: crypto.randomUUID(),
       prTax: crypto.randomUUID(),
@@ -85,7 +83,7 @@ module.exports = {
     const adminParents = [
       row(I.dash, "Dashboard", "/", 0, null),
       row(I.users, "Users", "/users", 10, null),
-      row(I.events, "Events", "/events", 20, null),
+      row(I.events, "Event Timeline", "/event-timeline", 20, null),
       row(I.products, "Products", "/products", 30, null),
       row(I.orders, "Orders", "/orders", 40, null),
       row(I.collections, "Collections", "/collections", 50, null),
@@ -97,9 +95,7 @@ module.exports = {
     ];
 
     const adminChildren = [
-      row(I.evWeb, "Webinars", "/webinars", 0, I.events),
-      row(I.evSem, "Seminars", "/seminars", 1, I.events),
-      row(I.evClass, "Classrooms", "/classrooms", 2, I.events),
+      row(I.evEvents, "Events", "/events", 21, null),
       row(I.prPt, "Product Types", "/product-types", 0, I.products),
       row(I.prPc, "Product Categories", "/product-categories", 1, I.products),
       row(I.prTax, "Tax Rates", "/tax-rates", 2, I.products),
@@ -125,9 +121,10 @@ module.exports = {
     if (headerItemCount === 0) {
       const headerItems = [
         { label: "Products", url: "/products", order: 0 },
-        { label: "Webinars", url: "/webinars", order: 10 },
-        { label: "Seminars", url: "/seminars", order: 20 },
-        { label: "Classrooms", url: "/classrooms", order: 30 },
+        { label: "Events", url: "/events", order: 5 },
+        { label: "Webinars", url: "/events/webinars", order: 10 },
+        { label: "Seminars", url: "/events/seminars", order: 20 },
+        { label: "Classrooms", url: "/events/classrooms", order: 30 },
         { label: "Blog", url: "/blog", order: 40 },
         { label: "Contact", url: "/contact", order: 50 },
         { label: "Account", url: "/account", order: 90, icon: "fa-user", slug: "account" },

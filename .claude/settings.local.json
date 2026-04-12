@@ -18,7 +18,14 @@
       "Bash(ls -la d:/DEFY/projects/node-express-mvc/src/views/admin/*/index.pug)",
       "Bash(node -e ':*)",
       "Bash(grep -n \"createLineFromVariant\" /d/DEFY/projects/node-express-mvc/src/repos/*.js)",
-      "Bash(grep -r \"/delete\\\\|\\\\.delete\" /d/DEFY/projects/node-express-mvc/src/controllers/admin/*.js)"
+      "Bash(grep -r \"/delete\\\\|\\\\.delete\" /d/DEFY/projects/node-express-mvc/src/controllers/admin/*.js)",
+      "Bash(mv \"d:/DEFY/projects/node-express-mvc/src/controllers/admin/events.controller.js\" \"d:/DEFY/projects/node-express-mvc/src/controllers/admin/event-timeline.controller.js\")",
+      "Bash(mv \"d:/DEFY/projects/node-express-mvc/src/routes/admin/events.routes.js\" \"d:/DEFY/projects/node-express-mvc/src/routes/admin/event-timeline.routes.js\")",
+      "Bash(mv \"d:/DEFY/projects/node-express-mvc/src/public/css/admin-events-timeline.css\" \"d:/DEFY/projects/node-express-mvc/src/public/css/admin-event-timeline.css\")",
+      "Bash(mv \"d:/DEFY/projects/node-express-mvc/src/public/js/admin-events-timeline.js\" \"d:/DEFY/projects/node-express-mvc/src/public/js/admin-event-timeline.js\")",
+      "Bash(mv \"d:/DEFY/projects/node-express-mvc/src/views/admin/events\" \"d:/DEFY/projects/node-express-mvc/src/views/admin/event-timeline\")",
+      "Bash(xargs ls:*)",
+      "Bash(grep -E \"\\\\.js$\")"
     ]
   }
 }

@@ -16,9 +16,7 @@ const menuItemsController = require("../../controllers/admin/menuItems.controlle
 const ordersController = require("../../controllers/admin/orders.controller");
 const refundRequestsController = require("../../controllers/admin/refundRequests.controller");
 const refundTransactionsController = require("../../controllers/admin/refundTransactions.controller");
-const webinarsRoutes = require("./webinars.routes");
-const seminarsRoutes = require("./seminars.routes");
-const classroomsRoutes = require("./classrooms.routes");
+const eventTimelineRoutes = require("./event-timeline.routes");
 const eventsRoutes = require("./events.routes");
 const zoomController = require("../../controllers/admin/zoom.controller");
 const settingsController = require("../../controllers/admin/settings.controller");
@@ -117,13 +115,11 @@ router.get("/products/:id/edit", asyncHandler(productsController.editForm));
 router.post("/products/:id/edit", asyncHandler(productsController.update));
 router.post("/products/:id/delete", asyncHandler(productsController.delete));
 
-// Events overview — all events across all types, with registrant lists
-router.use("/events", eventsRoutes);
+// Event Timeline — all events across all types, chronological view with registrant lists
+router.use("/event-timeline", eventTimelineRoutes);
 
-// Event-type product sections (Webinars, Classrooms) — list products, manage events per product. Seminars: admin/seminars.routes.js
-router.use("/webinars", webinarsRoutes);
-router.use("/seminars", seminarsRoutes);
-router.use("/classrooms", classroomsRoutes);
+// Events — all event-type products and per-product event management
+router.use("/events", eventsRoutes);
 
 // Collections CRUD
 router.get("/collections", asyncHandler(collectionsController.index));

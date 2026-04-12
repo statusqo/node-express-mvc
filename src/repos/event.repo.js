@@ -1,10 +1,24 @@
-const { Op } = require("sequelize");
+const { Op, Sequelize } = require("sequelize");
 const { Event, EventMeeting, Registration, ProductVariant, Product, ProductType, ProductCategory } = require("../models");
 const { EVENT_STATUS } = require("../constants/event");
 
 module.exports = {
   async findById(id, options = {}) {
     return await Event.findByPk(id, options);
+  },
+
+  async countStatusByProductIds(productIds) {
+    if (!productIds || !productIds.length) return [];
+    return await Event.findAll({
+      where: { productId: { [Op.in]: productIds } },
+      attributes: [
+        "productId",
+        "eventStatus",
+        [Sequelize.fn("COUNT", Sequelize.col("id")), "count"],
+      ],
+      group: ["productId", "eventStatus"],
+      raw: true,
+    });
   },
 
   async findByProductId(productId, options = {}) {

@@ -150,6 +150,10 @@ module.exports = {
     return await eventRepo.findByProductId(productId, options);
   },
 
+  async countStatusByProductIds(productIds) {
+    return await eventRepo.countStatusByProductIds(productIds);
+  },
+
   /**
    * Active events only (for storefront). Excludes cancelled and orphaned.
    */

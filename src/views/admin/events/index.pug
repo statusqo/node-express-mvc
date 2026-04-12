@@ -1,47 +1,68 @@
 extends ../../layouts/admin
 
-include ../../fragments/admin/events/timeline-components
-
 block append links
-    link(rel='stylesheet' href='/public/css/admin-events-timeline.css')
-
-block append scripts
-    script(src='/public/js/admin-events-timeline.js' defer)
+    link(rel='stylesheet' href='/public/css/admin-dark.css')
+    link(rel='preconnect' href='https://fonts.googleapis.com')
+    link(rel='preconnect' href='https://fonts.gstatic.com' crossorigin)
 
 block content
-    .da-page.da-events-timeline-page
+    .da-page
 
         //- ── Page header ─────────────────────────────────────────────
-        - var subtitle = (events ? events.length : 0) + ' event' + ((events && events.length !== 1) ? 's' : '')
-        +pageHeader('Events', subtitle)
+        .da-page-header
+            .da-page-header-left
+                h1.da-page-title= typeLabel ? typeLabel: 'Event Products'
+                p.da-page-subtitle= (products ? products.length : 0) + ' product' + ((products && products.length !== 1) ? 's' : '')
 
-        //- ── Upcoming / Past + jump to today ─────────────────────────
-        .da-events-view-controls
-            .da-view-toggle(role='tablist' aria-label='Event view')
-                a.da-view-toggle__btn(
-                    href=(adminPrefix || '') + '/events?view=upcoming'
-                    role='tab'
-                    aria-selected=(view === 'upcoming' ? 'true' : 'false')
-                    class=(view === 'upcoming' ? 'da-view-toggle__btn--active' : '')
-                ) Upcoming
-                a.da-view-toggle__btn(
-                    href=(adminPrefix || '') + '/events?view=past'
-                    role='tab'
-                    aria-selected=(view === 'past' ? 'true' : 'false')
-                    class=(view === 'past' ? 'da-view-toggle__btn--active' : '')
-                ) Past
-            if view === 'upcoming' && timelineHasToday
-                button.da-btn.da-btn--secondary.da-events-scroll-today(
-                    type='button'
-                    data-admin-events-scroll-today
-                ) Skoči na danas
+        p.da-events-type-hint
+            | #{typeLabel} are managed under&nbsp;
+            a.da-events-type-hint-link(href=(adminPrefix || '') + '/products') Products
+            | . Set product type to&nbsp;
+            strong Event
+            | &nbsp;and category to&nbsp;
+            strong= typeLabel
+            | &nbsp;to have them appear here.
 
-        //- ── Timeline or empty ───────────────────────────────────────
-        - var emptyMsg = view === 'past' ? 'No past events found.' : 'No upcoming events found.'
-        if timeline && timeline.length
-            .da-panel.da-events-timeline-panel
-                +eventsTimeline(timeline, adminPrefix)
-        else
-            .da-panel.da-events-timeline-panel
-                .da-events-timeline-empty(role='status')
-                    p.da-events-timeline-empty__text= emptyMsg
+        //- ── Products table ───────────────────────────────────────────
+        .da-section
+            .da-section-header
+                h2.da-section-title= typeLabel ? typeLabel + ' products' : 'Event products'
+                span.da-count= products ? products.length : 0
+            .da-panel
+                .da-table-scroll
+                    table.da-table(role='table' aria-label=(typeLabel ? typeLabel + 's' : 'Event products') + ' list')
+                        thead
+                            tr
+                                th(scope='col') Title
+                                th(scope='col') Type
+                                th(scope='col') Category
+                                th.da-col-price(scope='col') Default Price
+                                th(scope='col' style='text-align:right') Actions
+                        tbody
+                            if products && products.length
+                                each p in products
+                                    tr
+                                        td
+                                            span.da-cell-primary= p.title
+                                        td
+                                            span.da-cell-secondary= p.ProductType ? p.ProductType.name : '—'
+                                        td
+                                            span.da-cell-secondary= p.ProductCategory ? p.ProductCategory.name : '—'
+                                        td.da-col-price
+                                            span.da-cell-secondary= p.priceAmount != null ? (p.currency || 'USD') + ' ' + Number(p.priceAmount).toFixed(2) : '—'
+                                        td
+                                            .da-cell-actions
+                                                a.da-row-btn.da-row-btn--edit(
+                                                    href=(adminPrefix || '') + '/' + sectionPath + '/' + p.slug + '/events'
+                                                    aria-label='Manage events for ' + p.title
+                                                ) Events
+                            else
+                                tr
+                                    td(colspan='5')
+                                        .da-table-empty
+                                            svg(xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true' style='color:var(--ds-text-3)')
+                                                rect(x='3' y='4' width='18' height='18' rx='2' ry='2')
+                                                line(x1='16' y1='2' x2='16' y2='6')
+                                                line(x1='8' y1='2' x2='8' y2='6')
+                                                line(x1='3' y1='10' x2='21' y2='10')
+                                            span No #{typeLabel} products yet.

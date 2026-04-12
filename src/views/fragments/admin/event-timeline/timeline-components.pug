@@ -36,12 +36,12 @@ mixin eventsTimelineEventCard(ev, adminPrefix, dateFormatted)
 
                 .da-events-card__actions
                     a.da-row-btn.da-row-btn--edit(
-                        href=(adminPrefix || '') + '/events/' + ev.id + '/registrants'
+                        href=(adminPrefix || '') + '/event-timeline/' + ev.id + '/registrants'
                         aria-label='View registrants for ' + productTitle + ' on ' + dateFormatted
                     ) Registrants
                     if categorySlug && ev.Product && ev.Product.slug
                         a.da-row-btn.da-row-btn--edit(
-                            href=(adminPrefix || '') + '/' + categorySlug + '/' + ev.Product.slug + '/events/' + ev.id + '/edit'
+                            href=(adminPrefix || '') + '/events/' + categorySlug + '/' + ev.Product.slug + '/events/' + ev.id + '/edit'
                             aria-label='Edit event ' + productTitle + ' on ' + dateFormatted
                         ) Edit
 

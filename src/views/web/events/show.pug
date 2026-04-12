@@ -8,7 +8,7 @@ block content
     - const variant = product.ProductVariants && product.ProductVariants[0]
     - const priceRow = variant && variant.ProductPrices && variant.ProductPrices[0]
     - const priceAmount = priceRow ? Number(priceRow.amount) : null
-    - const currency = priceRow ? priceRow.currency : 'USD'
+    - const currency = priceRow ? priceRow.currency : 'EUR'
     if priceAmount != null
       p(style="font-size:1.25rem") #{Number(priceAmount).toFixed(2)} #{currency}
 
@@ -31,14 +31,10 @@ block content
               span(style="margin-left:0.5rem; color:#666") Seats remaining: #{seatsRemaining}
             if ev.productVariantId
               if hasStock
-                form.js-add-to-cart-form(action="/cart/add" method="post" style="display:inline; margin-left:auto")
-                  input(type="hidden" name="productVariantId" value=ev.productVariantId)
-                  input(type="hidden" name="quantity" value="1")
-                  button(type="submit" class="button" style="padding:0.35rem 0.75rem; font-size:0.9rem") Add to cart
-                a.button(href="/" + sectionPath + "/" + product.slug + "/register?eventId=" + ev.id style="margin-left:0.5rem; padding:0.35rem 0.75rem; font-size:0.9rem; display:inline-block") Register now
+                a.button(href="/" + sectionPath + "/" + product.slug + "/register?eventId=" + ev.id style="margin-left:auto; padding:0.35rem 0.75rem; font-size:0.9rem; display:inline-block") Register now
               else
                 span(style="margin-left:auto; color:#999; font-size:0.9rem") Sold out
     else
       p(style="margin-top:1rem") No sessions scheduled yet. Check back later.
 
-  a(href="/" + sectionPath) Back to #{typeLabel}
+  a(href="/events/" + categorySlug) Back to Events

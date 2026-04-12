@@ -1,7 +1,6 @@
 /**
- * Public controller for event-type product sections (Webinars, Classrooms).
- * Seminars use src/controllers/web/seminars.controller.js (catalog + inquiry only, no Zoom).
- * Expects req.categorySlug and req.sectionPath set by route middleware (e.g. categorySlug: 'webinar', sectionPath: 'webinars').
+ * Public controller for event-type products (webinars, classrooms, seminars, etc.).
+ * All routes are under /events. categorySlug comes from req.params.categorySlug.
  */
 const productService = require("../../services/product.service");
 const eventService = require("../../services/event.service");
@@ -18,80 +17,120 @@ function toPlain(obj) {
   return obj && typeof obj.get === "function" ? obj.get({ plain: true }) : obj;
 }
 
-function getTypeLabel(sectionPath) {
-  const labels = { webinars: "Webinars", classrooms: "Classrooms" };
-  return labels[sectionPath] || sectionPath;
-}
-
 module.exports = {
+  /**
+   * GET /events
+   * Category picker — groups all active event products by ProductCategory.
+   */
   async index(req, res) {
-    const categorySlug = req.categorySlug;
-    const sectionPath = req.sectionPath;
-    if (!categorySlug || !sectionPath) return res.redirect("/");
-    const products = await productService.findAllByCategorySlug(categorySlug);
-    const list = (products || []).map((p) => {
+    const products = await productService.findAllByTypeSlug("event");
+    const categoryMap = {};
+    for (const p of products || []) {
       const plain = toPlain(p);
-      const variant = plain.ProductVariants && plain.ProductVariants[0];
-      const priceRow = variant?.ProductPrices?.[0];
-      return {
-        ...plain,
-        priceAmount: priceRow ? Number(priceRow.amount) : null,
-        currency: DEFAULT_CURRENCY,
-      };
-    }).filter((p) => p.active);
-    res.render("web/event-type-products/index", {
-      title: getTypeLabel(sectionPath),
-      products: list,
-      sectionPath,
-      typeLabel: getTypeLabel(sectionPath),
-    });
+      if (!plain.active) continue;
+      const cat = plain.ProductCategory;
+      if (!cat) continue;
+      if (!categoryMap[cat.slug]) {
+        categoryMap[cat.slug] = { name: cat.name, slug: cat.slug };
+      }
+    }
+    const categories = Object.values(categoryMap);
+    res.render("web/events/index", { title: "Events", categories });
   },
 
-  async show(req, res) {
-    const { slug } = req.params;
-    const sectionPath = req.sectionPath;
-    const product = await productService.findActiveBySlugWithTypeAndCategory(slug);
-    if (!product) {
-      res.setFlash("error", "Product not found.");
-      return res.redirect("/" + sectionPath);
+  /**
+   * GET /events/:categorySlug
+   * Product listing for a single event category.
+   */
+  async categoryListing(req, res) {
+    const { categorySlug } = req.params;
+    const products = await productService.findAllByCategorySlug(categorySlug);
+    const activeProducts = (products || []).filter((p) => {
+      const plain = toPlain(p);
+      return plain.active && plain.ProductType && plain.ProductType.slug === "event";
+    });
+    if (!activeProducts.length) {
+      return res.redirect("/events");
     }
-    const plain = toPlain(product);
-    const productCategorySlug = plain.ProductCategory && plain.ProductCategory.slug;
-    if (productCategorySlug !== req.categorySlug) {
-      res.setFlash("error", "Product not found.");
-      return res.redirect("/" + sectionPath);
-    }
-    const events = await eventService.findActiveByProductIdWithVariant(product.id);
-    const eventsPlain = (events || []).map(toPlain);
-    res.render("web/event-type-products/show", {
-      title: plain.title,
-      product: plain,
-      events: eventsPlain,
-      sectionPath,
-      typeLabel: getTypeLabel(sectionPath),
+    const categoryName = toPlain(activeProducts[0]).ProductCategory
+      ? toPlain(activeProducts[0]).ProductCategory.name
+      : categorySlug;
+
+    // Fetch active sessions for all products in parallel, attach product info to each
+    const sessionsByProduct = await Promise.all(
+      activeProducts.map(async (p) => {
+        const plain = toPlain(p);
+        const events = await eventService.findActiveByProductIdWithVariant(plain.id);
+        return (events || []).map(toPlain).map((ev) => ({
+          ...ev,
+          productTitle: plain.title,
+          productSlug: plain.slug,
+          seatsRemaining: ev.ProductVariant && ev.ProductVariant.quantity != null
+            ? Number(ev.ProductVariant.quantity)
+            : 0,
+        }));
+      })
+    );
+    const sessions = sessionsByProduct.flat();
+
+    res.render("web/events/category", {
+      title: categoryName,
+      categoryName,
+      categorySlug,
+      sessions,
     });
   },
 
   /**
-   * GET /:slug/register?eventId= — Event checkout page; session is fixed by eventId (no session picker).
+   * GET /events/:categorySlug/:productSlug
+   * Product detail page.
+   */
+  async show(req, res) {
+    const { categorySlug, productSlug } = req.params;
+    const sectionPath = "events/" + categorySlug;
+    const product = await productService.findActiveBySlugWithTypeAndCategory(productSlug);
+    if (!product) {
+      res.setFlash("error", "Product not found.");
+      return res.redirect("/events");
+    }
+    const plain = toPlain(product);
+    const productCategorySlug = plain.ProductCategory && plain.ProductCategory.slug;
+    if (productCategorySlug !== categorySlug) {
+      res.setFlash("error", "Product not found.");
+      return res.redirect("/events");
+    }
+    const events = await eventService.findActiveByProductIdWithVariant(product.id);
+    const eventsPlain = (events || []).map(toPlain);
+    res.render("web/events/show", {
+      title: plain.title,
+      product: plain,
+      events: eventsPlain,
+      sectionPath,
+      categorySlug,
+    });
+  },
+
+  /**
+   * GET /events/:categorySlug/:productSlug/register?eventId=
+   * Event registration / checkout page.
    */
   async registerForm(req, res) {
-    const { slug } = req.params;
-    const sectionPath = req.sectionPath;
+    const { categorySlug, productSlug } = req.params;
+    const sectionPath = "events/" + categorySlug;
     const eventId = req.query.eventId ? String(req.query.eventId).trim() : null;
     if (!eventId) {
       res.setFlash("error", "Please select a session.");
-      return res.redirect("/" + sectionPath + "/" + slug);
+      return res.redirect("/" + sectionPath + "/" + productSlug);
     }
-    const product = await productService.findActiveBySlugWithTypeAndCategory(slug);
+    const product = await productService.findActiveBySlugWithTypeAndCategory(productSlug);
     if (!product) {
       res.setFlash("error", "Product not found.");
-      return res.redirect("/" + sectionPath);
+      return res.redirect("/events");
     }
     const plain = toPlain(product);
-    if (plain.ProductCategory && plain.ProductCategory.slug !== req.categorySlug) {
+    if (plain.ProductCategory && plain.ProductCategory.slug !== categorySlug) {
       res.setFlash("error", "Product not found.");
-      return res.redirect("/" + sectionPath);
+      return res.redirect("/events");
     }
     const event = await eventService.findByIdWithVariant(eventId);
     if (!event || String(event.productId) !== String(product.id)) {
@@ -114,8 +153,6 @@ module.exports = {
       res.setFlash("error", "This session is sold out.");
       return res.redirect("/" + sectionPath + "/" + plain.slug);
     }
-    // Use the event's own variant price — this is what will actually be charged and is the
-    // authoritative value for determining whether the session is free (priceAmount === 0).
     const eventPriceRow = await eventService.getPriceForEvent(eventPlain);
     const priceAmount = eventPriceRow ? Number(eventPriceRow.amount) : null;
     const currency = DEFAULT_CURRENCY;
@@ -129,13 +166,13 @@ module.exports = {
     }
     const userPlain = req.user && typeof req.user.get === "function" ? req.user.get({ plain: true }) : req.user || null;
     const checkoutVatEnabled = await storeSettingService.isCheckoutVatEnabled();
-    res.render("web/event-type-products/register", {
+    res.render("web/events/register", {
       title: "Register: " + plain.title,
       product: plain,
       event: eventPlain,
       seatsRemaining,
       sectionPath,
-      typeLabel: getTypeLabel(sectionPath),
+      categorySlug,
       priceAmount,
       currency,
       stripePublishableKey: config.stripe?.publishableKey || "",
@@ -146,17 +183,17 @@ module.exports = {
   },
 
   /**
-   * POST /:slug/place-order — Create order from event + PaymentIntent; return { clientSecret, orderId } (no redirect).
+   * POST /events/:categorySlug/:productSlug/place-order
+   * Create order from event + PaymentIntent; returns { clientSecret, orderId }.
    */
   async placeOrder(req, res) {
-    const { slug } = req.params;
-    const sectionPath = req.sectionPath;
-    const product = await productService.findActiveBySlugWithTypeAndCategory(slug);
+    const { categorySlug, productSlug } = req.params;
+    const product = await productService.findActiveBySlugWithTypeAndCategory(productSlug);
     if (!product) {
       return res.status(404).json({ error: "Product not found." });
     }
     const plain = toPlain(product);
-    if (plain.ProductCategory && plain.ProductCategory.slug !== req.categorySlug) {
+    if (plain.ProductCategory && plain.ProductCategory.slug !== categorySlug) {
       return res.status(404).json({ error: "Product not found." });
     }
     const validation = validateEventRegister(req.body || {});
@@ -187,7 +224,6 @@ module.exports = {
     if (!userId && !email) {
       return res.status(400).json({ error: "Email is required for guest checkout." });
     }
-    // Require billing address for paid sessions (check variant price).
     const eventPriceRow = await eventService.getPriceForEvent(event);
     const isPaid = eventPriceRow && Number(eventPriceRow.amount) > 0;
     if (isPaid && (!billingLine1 || !billingCity || !billingPostcode || !billingCountry)) {
@@ -197,7 +233,7 @@ module.exports = {
     try {
       order = await orderService.createOrderFromEvent(eventId, userId, sessionId, {
         email, forename, surname, billingLine1, billingLine2, billingCity, billingState, billingPostcode, billingCountry,
-        personType: req.user?.personType || 'private',
+        personType: req.user?.personType || "private",
         companyName: req.user?.companyName || null,
         companyOib: req.user?.companyOib || null,
       });
@@ -240,7 +276,6 @@ module.exports = {
     try {
       const result = await gateway.createInvoiceForOrder(order.id, userId, sessionId, gatewayOptions);
       if (!result) {
-        // Treat a missing result the same as a thrown error so the catch handles cleanup.
         throw new Error("Could not create payment.");
       }
       if (result.alreadyPaid) {
@@ -260,11 +295,10 @@ module.exports = {
   },
 
   /**
-   * GET /:slug/buy — Redirect to register page (legacy link support).
+   * GET /events/:categorySlug/:productSlug/buy — legacy redirect to register page.
    */
   redirectBuyToRegister(req, res) {
-    const { slug } = req.params;
-    const sectionPath = req.sectionPath;
-    return res.redirect(302, "/" + sectionPath + "/" + slug + "/register");
+    const { categorySlug, productSlug } = req.params;
+    return res.redirect(302, "/events/" + categorySlug + "/" + productSlug + "/register");
   },
 };

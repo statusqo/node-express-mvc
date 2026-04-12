@@ -1,0 +1,11 @@
+extends ../../layouts/main
+
+block content
+  h1 Events
+  if categories && categories.length
+    ul(style="list-style:none; padding:0")
+      each cat in categories
+        li(style="padding:0.5rem 0")
+          a(href="/events/" + cat.slug)= cat.name
+  else
+    p No events available at the moment.

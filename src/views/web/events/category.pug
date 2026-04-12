@@ -1,0 +1,31 @@
+extends ../../layouts/main
+
+block content
+  h1= categoryName
+  if sessions && sessions.length
+    ul(style="list-style:none; padding:0")
+      each ev in sessions
+        - var dateParts = ev.startDate ? String(ev.startDate).substring(0, 10).split('-') : null
+        - var dateStr = dateParts && dateParts.length === 3 ? dateParts[2] + '/' + dateParts[1] + '/' + dateParts[0] : '—'
+        - var timeStr = ev.startTime ? String(ev.startTime).substring(0, 5) : null
+        - var hasStock = ev.productVariantId && ev.seatsRemaining > 0
+        li(style="border:1px solid #ddd; padding:1rem; margin-bottom:0.5rem")
+          strong= ev.productTitle
+          span(style="margin-left:0.5rem")= dateStr
+          if timeStr
+            span(style="margin-left:0.25rem")= timeStr
+          if ev.location
+            span(style="margin-left:0.5rem; color:#666")= ev.location
+          if ev.seatsRemaining != null
+            span(style="margin-left:0.5rem; color:#666") #{ev.seatsRemaining} seats left
+          if hasStock
+            form.js-add-to-cart-form(action="/cart/add" method="post" style="display:inline; margin-left:0.5rem")
+              input(type="hidden" name="productVariantId" value=ev.productVariantId)
+              input(type="hidden" name="quantity" value="1")
+              button(type="submit") Add to cart
+          else if ev.productVariantId
+            span(style="margin-left:0.5rem; color:#999") Sold out
+          a(href="/events/" + categorySlug + "/" + ev.productSlug style="margin-left:0.5rem") View details
+  else
+    p No upcoming sessions in this category.
+  a(href="/events") Back to Events

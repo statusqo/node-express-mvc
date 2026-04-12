@@ -1,0 +1,21 @@
+//- ─────────────────────────────────────────────────────────────────────────
+//- Reusable admin components for event-type product sections.
+//- Include this file in any admin page that needs event category cards.
+//- ─────────────────────────────────────────────────────────────────────────
+
+mixin eventCategoryCard(cat, adminPrefix)
+    a.da-category-card(href=(adminPrefix || '') + '/events/' + cat.slug)
+        .da-category-card__body
+            span.da-category-card__name= cat.name
+            .da-category-card__stats
+                if cat.active > 0
+                    span.da-category-card__stat.da-category-card__stat--active= cat.active + ' active'
+                if cat.orphaned > 0
+                    span.da-category-card__stat.da-category-card__stat--warning= cat.orphaned + ' orphaned'
+                if cat.cancelled > 0
+                    span.da-category-card__stat.da-category-card__stat--muted= cat.cancelled + ' cancelled'
+                if !cat.active && !cat.orphaned && !cat.cancelled
+                    span.da-category-card__stat.da-category-card__stat--muted No events yet
+        .da-category-card__arrow
+            svg(xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true')
+                polyline(points='9 18 15 12 9 6')

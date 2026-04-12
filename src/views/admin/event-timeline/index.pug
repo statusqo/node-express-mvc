@@ -1,0 +1,47 @@
+extends ../../layouts/admin
+
+include ../../fragments/admin/event-timeline/timeline-components
+
+block append links
+    link(rel='stylesheet' href='/public/css/admin-event-timeline.css')
+
+block append scripts
+    script(src='/public/js/admin-event-timeline.js' defer)
+
+block content
+    .da-page.da-events-timeline-page
+
+        //- ── Page header ─────────────────────────────────────────────
+        - var subtitle = (events ? events.length : 0) + ' event' + ((events && events.length !== 1) ? 's' : '')
+        +pageHeader('Events', subtitle)
+
+        //- ── Upcoming / Past + jump to today ─────────────────────────
+        .da-events-view-controls
+            .da-view-toggle(role='tablist' aria-label='Event view')
+                a.da-view-toggle__btn(
+                    href=(adminPrefix || '') + '/event-timeline?view=upcoming'
+                    role='tab'
+                    aria-selected=(view === 'upcoming' ? 'true' : 'false')
+                    class=(view === 'upcoming' ? 'da-view-toggle__btn--active' : '')
+                ) Upcoming
+                a.da-view-toggle__btn(
+                    href=(adminPrefix || '') + '/event-timeline?view=past'
+                    role='tab'
+                    aria-selected=(view === 'past' ? 'true' : 'false')
+                    class=(view === 'past' ? 'da-view-toggle__btn--active' : '')
+                ) Past
+            if view === 'upcoming' && timelineHasToday
+                button.da-btn.da-btn--secondary.da-events-scroll-today(
+                    type='button'
+                    data-admin-events-scroll-today
+                ) Skoči na danas
+
+        //- ── Timeline or empty ───────────────────────────────────────
+        - var emptyMsg = view === 'past' ? 'No past events found.' : 'No upcoming events found.'
+        if timeline && timeline.length
+            .da-panel.da-events-timeline-panel
+                +eventsTimeline(timeline, adminPrefix)
+        else
+            .da-panel.da-events-timeline-panel
+                .da-events-timeline-empty(role='status')
+                    p.da-events-timeline-empty__text= emptyMsg
