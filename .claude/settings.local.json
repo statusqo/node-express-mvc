@@ -27,7 +27,14 @@
       "Bash(xargs ls:*)",
       "Bash(grep -E \"\\\\.js$\")",
       "Bash(grep -E \"\\\\.\\(js|pug\\)$\")",
-      "Bash(grep -r \"Post\" /d/DEFY/projects/node-express-mvc/src/db/migrations/*.js)"
+      "Bash(grep -r \"Post\" /d/DEFY/projects/node-express-mvc/src/db/migrations/*.js)",
+      "Bash(grep -E \"\\\\.\\(js\\)$\")",
+      "Bash(ls -la /d/DEFY/projects/node-express-mvc/*.js)",
+      "Bash(mkdir -p \"d:/DEFY/projects/node-express-mvc/data\")",
+      "Bash(mv \"d:/DEFY/projects/node-express-mvc/database.sqlite\" \"d:/DEFY/projects/node-express-mvc/data/database.sqlite\")",
+      "Bash(mv \"d:/DEFY/projects/node-express-mvc/database.sqlite-shm\" \"d:/DEFY/projects/node-express-mvc/data/database.sqlite-shm\")",
+      "Bash(mv \"d:/DEFY/projects/node-express-mvc/database.sqlite-wal\" \"d:/DEFY/projects/node-express-mvc/data/database.sqlite-wal\")",
+      "Bash(npm audit:*)"
     ]
   }
 }

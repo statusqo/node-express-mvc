@@ -1,4 +1,3 @@
-const path = require("path");
 const crypto = require("crypto");
 const fs = require("fs").promises;
 const multer = require("multer");
@@ -27,12 +26,9 @@ function getSafeExtension(originalname) {
 const storage = multer.diskStorage({
   async destination(req, file, cb) {
     const uploadsDir = config.uploads.dir;
-    const now = new Date();
-    const subdir = path.join(String(now.getUTCFullYear()), String(now.getUTCMonth() + 1).padStart(2, "0"));
-    const destDir = path.join(uploadsDir, subdir);
     try {
-      await fs.mkdir(destDir, { recursive: true });
-      cb(null, destDir);
+      await fs.mkdir(uploadsDir, { recursive: true });
+      cb(null, uploadsDir);
     } catch (err) {
       cb(err);
     }

@@ -34,7 +34,7 @@ app.set("view engine", "pug");
 const helmetOptions = {
   referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   hsts: {
-    maxAge: 15552000,
+    maxAge: 31536000, // 1 year — minimum required for HSTS preload list
     includeSubDomains: true,
     preload: true
   },
@@ -62,7 +62,7 @@ if (config.env === "development") {
 app.use(helmet(helmetOptions));
 
 app.use(compression());
-// app.use(requestLogger);
+app.use(requestLogger);
 
 // Only accept requests whose Host is in the allowed list (protects redirect/CSRF use of Host)
 app.use(allowHost);

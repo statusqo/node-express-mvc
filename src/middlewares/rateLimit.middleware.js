@@ -28,6 +28,17 @@ const contactLimiter = rateLimit({
     legacyHeaders: false
 });
 
+// Stricter limit for discount code apply to mitigate brute-force enumeration
+const discountLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (req, res) => {
+        res.status(429).json({ error: "Too many attempts. Please try again later." });
+    },
+});
+
 // Stricter limit for auth endpoints to mitigate brute-force
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
@@ -45,4 +56,4 @@ const authLimiter = rateLimit({
     },
 });
 
-module.exports = { globalLimiter, contactLimiter, authLimiter };
+module.exports = { globalLimiter, contactLimiter, authLimiter, discountLimiter };

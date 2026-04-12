@@ -267,7 +267,7 @@ module.exports = {
       return res.redirect((req.adminPrefix || "") + "/orders");
     }
     try {
-      const result = await refundRequestService.approveRefundRequest(requestId, adminUserId);
+      const result = await refundRequestService.approveRefundRequest(requestId, adminUserId, orderId);
       const reqStatus = result && (result.get ? result.get("status") : result.status);
       if (reqStatus === "pending") {
         res.setFlash(
@@ -293,7 +293,7 @@ module.exports = {
       return res.redirect((req.adminPrefix || "") + "/orders");
     }
     try {
-      await refundRequestService.rejectRefundRequest(requestId, adminUserId);
+      await refundRequestService.rejectRefundRequest(requestId, adminUserId, orderId);
       res.setFlash("success", "Refund request rejected.");
     } catch (err) {
       const msg = err.status === 404 ? "Refund request not found." : err.message || "Could not reject.";

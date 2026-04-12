@@ -123,9 +123,14 @@ async function getRefundRequestStatusByOrderIds(orderIds) {
  * @param {string} requestId
  * @param {string} processedByUserId
  */
-async function approveRefundRequest(requestId, processedByUserId) {
+async function approveRefundRequest(requestId, processedByUserId, orderId) {
   const request = await refundRequestRepo.findById(requestId);
   if (!request) {
+    const err = new Error("Refund request not found.");
+    err.status = 404;
+    throw err;
+  }
+  if (orderId && String(request.orderId) !== String(orderId)) {
     const err = new Error("Refund request not found.");
     err.status = 404;
     throw err;
@@ -268,9 +273,14 @@ async function approveRefundRequest(requestId, processedByUserId) {
 /**
  * Reject a refund request.
  */
-async function rejectRefundRequest(requestId, processedByUserId) {
+async function rejectRefundRequest(requestId, processedByUserId, orderId) {
   const request = await refundRequestRepo.findById(requestId);
   if (!request) {
+    const err = new Error("Refund request not found.");
+    err.status = 404;
+    throw err;
+  }
+  if (orderId && String(request.orderId) !== String(orderId)) {
     const err = new Error("Refund request not found.");
     err.status = 404;
     throw err;

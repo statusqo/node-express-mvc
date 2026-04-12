@@ -18,7 +18,7 @@ const config = {
   // Core template defaults to sqlite database.
   db: {
     dialect: getEnv("DB_DIALECT", "sqlite"), // sqlite | postgres | mysql
-    storage: getEnv("DB_STORAGE", "database.sqlite"), // for sqlite
+    storage: getEnv("DB_STORAGE", "data/database.sqlite"), // for sqlite
     url: getEnv("DATABASE_URL", ""), // for others
   },
 
@@ -76,7 +76,7 @@ const config = {
 
   // Uploaded media files (admin only)
   uploads: {
-    dir: path.resolve(path.join(__dirname, "..", "uploads")),
+    dir: path.resolve(getEnv("UPLOAD_DIR", path.join(__dirname, "..", "..", "data", "uploads"))),
     urlPath: "/uploads",
     maxFileSizeBytes: Number(getEnv("UPLOAD_MAX_SIZE_BYTES", "20971520")), // 20 MB default
     allowedMimeTypes: [

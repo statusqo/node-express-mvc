@@ -48,12 +48,12 @@ node_modules/
 .parcel-cache
 
 # SQLite database files
-database.sqlite
-database.sqlite-shm
-database.sqlite-wal
+data/database.sqlite
+data/database.sqlite-shm
+data/database.sqlite-wal
 
 # Uploaded media (admin uploads)
-src/uploads/
+data/uploads/
 
 # Planning / internal docs
 docs/
