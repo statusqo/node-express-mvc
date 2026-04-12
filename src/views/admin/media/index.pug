@@ -14,20 +14,32 @@ block content
         .da-section
             .da-section-header
                 h2.da-section-title Upload
-            .da-card(style='max-width: 640px;')
+            .da-card
                 .da-card-header
                     h2.da-card-title Upload a file
                 form(method='post' action=(adminPrefix || '') + '/media/upload' enctype='multipart/form-data')
                     .da-card-body
                         p.da-card-desc Add images, PDFs and other media for products and collections.
-                        label.admin-upload-zone(for='media-file')
-                            .admin-upload-zone-icon-wrap(aria-hidden='true')
-                                svg.admin-upload-zone-icon(viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5' aria-hidden='true')
-                                    path(stroke-linecap='round' stroke-linejoin='round' d='M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z')
-                            p.admin-upload-zone-label Upload your files
-                            p.admin-upload-zone-hint JPG, PNG, GIF, WebP, SVG · PDF
-                            p.admin-upload-zone-size Max 20 MB
-                            p#upload-selected.admin-upload-zone-selected
+                        .admin-upload-zone-wrap
+                            label.admin-upload-zone(for='media-file')
+                                //- Default state — shown before a file is chosen
+                                .admin-upload-zone-default
+                                    .admin-upload-zone-icon-wrap(aria-hidden='true')
+                                        svg.admin-upload-zone-icon(viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5' aria-hidden='true')
+                                            path(stroke-linecap='round' stroke-linejoin='round' d='M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z')
+                                    p.admin-upload-zone-label Upload your files
+                                    p.admin-upload-zone-hint JPG, PNG, GIF, WebP, SVG · PDF
+                                    p.admin-upload-zone-size Max 20 MB
+                                //- Preview state — shown after a file is chosen (JS-controlled)
+                                .admin-upload-zone-preview(aria-hidden='true')
+                                    img.admin-upload-zone-preview-img(alt='')
+                                    .admin-upload-zone-preview-placeholder
+                                    p.admin-upload-zone-preview-name
+                                    p.admin-upload-zone-preview-hint Click to change file
+                            button.admin-upload-zone-clear(type='button' aria-label='Discard selected file')
+                                svg(viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' aria-hidden='true')
+                                    path(stroke-linecap='round' stroke-linejoin='round' d='M6 18L18 6M6 6l12 12')
+                                | Discard
                         input#media-file.admin-upload-file-input(
                             type='file'
                             name='file'
@@ -55,6 +67,7 @@ block content
                                 th(scope='col') Type
                                 th(scope='col') Size
                                 th(scope='col') Alt
+                                th(scope='col') Path
                                 th(scope='col' style='text-align:right') Actions
                         tbody
                             if media && media.length
@@ -74,11 +87,15 @@ block content
                                             span.da-cell-secondary= m.size != null ? (m.size < 1024 ? m.size + ' B' : (m.size < 1048576 ? (m.size / 1024).toFixed(1) + ' KB' : (m.size / 1048576).toFixed(1) + ' MB')) : '—'
                                         td
                                             span.da-cell-muted= m.alt || '—'
+                                        td.da-col-path
+                                            .da-cell-path
+                                                code.da-path-value= m.urlPath
+                                                button.da-copy-btn(type='button' data-copy=m.urlPath) Copy
                                         td
                                             .da-cell-actions
                                                 +inlineDelete((adminPrefix || '') + '/media/' + m.id + '/delete', m.filename || m.path)
                             else
-                                +tableEmpty('No media yet. Upload a file above.', 6)
+                                +tableEmpty('No media yet. Upload a file above.', 7)
 
 block append scripts
     script(src='/public/js/admin-media-upload.js')

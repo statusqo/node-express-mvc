@@ -2427,8 +2427,6 @@ tr.da-row--entering {
 
 /* ══════════════════════════════════════════════════════════════════
    MEDIA PAGE — upload zone & preview (fully self-contained dark styles)
-   admin.css is not loaded in the admin layout, so all base styles
-   for upload zone components are defined here.
    ══════════════════════════════════════════════════════════════════ */
 
 /* Drop zone — clickable label wrapping the hidden file input */
@@ -2499,15 +2497,163 @@ tr.da-row--entering {
     margin: 0 0 0.625rem 0;
 }
 
-.da-page .admin-upload-zone-selected {
+/* Wrapper — needed so the Discard button sits outside the <label> */
+.da-page .admin-upload-zone-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+/* Default inner block — icon + text shown before file is chosen */
+.da-page .admin-upload-zone-default {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+
+/* Preview inner block — hidden until JS adds --has-file */
+.da-page .admin-upload-zone-preview {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.25rem 0;
+}
+
+/* State: a file has been chosen */
+.da-page .admin-upload-zone--has-file .admin-upload-zone-default {
+    display: none;
+}
+.da-page .admin-upload-zone--has-file .admin-upload-zone-preview {
+    display: flex;
+}
+.da-page .admin-upload-zone--has-file {
+    border-color: var(--ds-accent);
+    background: var(--ds-accent-dim);
+}
+
+/* Preview image */
+.da-page .admin-upload-zone-preview-img {
+    display: none; /* JS sets display:block when image */
+    max-width: 100%;
+    max-height: 200px;
+    object-fit: contain;
+    border-radius: 6px;
+    border: 1px solid var(--ds-border);
+}
+
+/* Non-image file type badge */
+.da-page .admin-upload-zone-preview-placeholder {
+    display: none; /* JS sets display:flex for non-images */
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    background: var(--ds-surface-3);
+    border: 1px solid var(--ds-border);
+    border-radius: 8px;
+    color: var(--ds-text-2);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.da-page .admin-upload-zone-preview-name {
     font-size: 0.82rem;
     font-weight: 500;
-    color: var(--ds-accent);
+    color: var(--ds-text-1);
     margin: 0;
-    max-width: 30ch;
+    text-align: center;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.da-page .admin-upload-zone-preview-hint {
+    font-size: 0.75rem;
+    color: var(--ds-text-3);
+    margin: 0;
+}
+
+/* Discard button — sits centred below the zone label */
+.da-page .admin-upload-zone-clear {
+    display: none; /* JS sets display:inline-flex when file is chosen */
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--ds-danger);
+    background: var(--ds-danger-dim);
+    border: 1px solid color-mix(in srgb, var(--ds-danger) 35%, transparent);
+    padding: 0.4rem 0.875rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 140ms var(--ds-ease), border-color 140ms var(--ds-ease);
+}
+.da-page .admin-upload-zone-clear svg {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+}
+.da-page .admin-upload-zone-clear:hover {
+    background: color-mix(in srgb, var(--ds-danger) 18%, transparent);
+    border-color: color-mix(in srgb, var(--ds-danger) 55%, transparent);
+}
+
+/* ── Path column ──────────────────────────────────────────────────── */
+/* td keeps default table-cell display so it stretches to full row height */
+.da-page .da-col-path {
+    vertical-align: middle;
+}
+/* Inner div is the flex row — code pill + copy button */
+.da-page .da-cell-path {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    max-width: 260px;
+}
+
+.da-page .da-path-value {
+    font-family: ui-monospace, 'Cascadia Code', 'Fira Mono', monospace;
+    font-size: 11px;
+    color: var(--ds-text-2);
+    background: var(--ds-surface-3);
+    border: 1px solid var(--ds-border);
+    border-radius: 4px;
+    padding: 2px 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 180px;
+    display: block;
+}
+
+.da-page .da-copy-btn {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--ds-text-3);
+    background: none;
+    border: 1px solid var(--ds-border);
+    border-radius: 4px;
+    padding: 2px 7px;
+    cursor: pointer;
+    transition: color 140ms var(--ds-ease), border-color 140ms var(--ds-ease), background 140ms var(--ds-ease);
+    white-space: nowrap;
+}
+.da-page .da-copy-btn:hover {
+    color: var(--ds-text-1);
+    border-color: var(--ds-border-accent);
+}
+.da-page .da-copy-btn--copied {
+    color: #22C55E;
+    border-color: #22C55E;
+    background: color-mix(in srgb, #22C55E 10%, transparent);
 }
 
 /* Visually hidden file input — still submits with the form */

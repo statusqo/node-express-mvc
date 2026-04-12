@@ -1,4 +1,5 @@
 const path = require("path");
+const fs = require("fs").promises;
 const mediaService = require("../../services/media.service");
 const config = require("../../config");
 
@@ -50,6 +51,9 @@ module.exports = {
       });
       res.setFlash("success", "File uploaded.");
     } catch (err) {
+      // DB insert failed — remove the file multer already wrote so the admin
+      // can retry without leaving orphaned files on disk.
+      try { await fs.unlink(req.file.path); } catch (_) {}
       next(err);
       return;
     }
