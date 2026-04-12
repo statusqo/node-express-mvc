@@ -2,6 +2,8 @@
  * Public controller for event-type products (webinars, classrooms, seminars, etc.).
  * All routes are under /events. categorySlug comes from req.params.categorySlug.
  */
+const path = require("path");
+const fs = require("fs");
 const productService = require("../../services/product.service");
 const eventService = require("../../services/event.service");
 const orderService = require("../../services/order.service");
@@ -12,6 +14,21 @@ const config = require("../../config");
 const { DEFAULT_CURRENCY } = require("../../config/constants");
 const logger = require("../../config/logger");
 const storeSettingService = require("../../services/storeSetting.service");
+
+const VIEWS_ROOT = path.join(__dirname, "../../views");
+
+/**
+ * Returns a category-specific view path if the file exists, otherwise the default.
+ * e.g. resolveEventView("webinars", "show") → "web/events/webinars/show"
+ *      falls back to                          "web/events/show"
+ */
+function resolveEventView(categorySlug, viewName) {
+  const specific = path.join(VIEWS_ROOT, "web/events", categorySlug, viewName + ".pug");
+  if (fs.existsSync(specific)) {
+    return "web/events/" + categorySlug + "/" + viewName;
+  }
+  return "web/events/" + viewName;
+}
 
 function toPlain(obj) {
   return obj && typeof obj.get === "function" ? obj.get({ plain: true }) : obj;
@@ -73,7 +90,7 @@ module.exports = {
     );
     const sessions = sessionsByProduct.flat();
 
-    res.render("web/events/category", {
+    res.render(resolveEventView(categorySlug, "category"), {
       title: categoryName,
       categoryName,
       categorySlug,
@@ -101,7 +118,7 @@ module.exports = {
     }
     const events = await eventService.findActiveByProductIdWithVariant(product.id);
     const eventsPlain = (events || []).map(toPlain);
-    res.render("web/events/show", {
+    res.render(resolveEventView(categorySlug, "show"), {
       title: plain.title,
       product: plain,
       events: eventsPlain,
@@ -166,7 +183,7 @@ module.exports = {
     }
     const userPlain = req.user && typeof req.user.get === "function" ? req.user.get({ plain: true }) : req.user || null;
     const checkoutVatEnabled = await storeSettingService.isCheckoutVatEnabled();
-    res.render("web/events/register", {
+    res.render(resolveEventView(categorySlug, "register"), {
       title: "Register: " + plain.title,
       product: plain,
       event: eventPlain,
